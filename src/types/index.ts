@@ -1,0 +1,115 @@
+export type UserRole = 'student' | 'teacher' | 'admin';
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatar?: string | null;
+  section?: string | null;
+  stars_balance: number;
+}
+
+export type QuizDifficulty = 'madali' | 'katamtaman' | 'mahirap';
+
+export interface QuizAvailabilityItem {
+  is_locked: boolean;
+  pass_score: number;
+}
+
+export interface Category {
+  id: number;
+  slug: string;
+  name: string;
+  title: string;
+  description?: string | null;
+  cover_image?: string | null;
+  color: string;
+  flashcards_count?: number;
+  quiz_availabilities?: Record<QuizDifficulty, QuizAvailabilityItem>;
+  flashcards?: Flashcard[];
+}
+
+export interface Flashcard {
+  id: number;
+  category_id: number;
+  name: string;
+  filipino_name: string;
+  english_name?: string | null;
+  description?: string | null;
+  image_url: string;
+  audio_url?: string | null;
+  is_published: boolean;
+  sort_order: number;
+}
+
+export interface ChoiceItem {
+  id: string;
+  image_url: string;
+  text: string;
+}
+
+export interface QuizQuestion {
+  id: number;
+  flashcard_id?: number | null;
+  question_text?: string;
+  audio_url?: string | null;
+  target_image_url: string;
+  target_item_name?: string;
+  choices: ChoiceItem[];
+  correct_answer: string;
+  points: number;
+  difficulty: QuizDifficulty;
+}
+
+export interface QuizResultSession {
+  id: number;
+  score: number;
+  total_questions: number;
+  correct_count: number;
+  wrong_count: number;
+  passed: boolean;
+  stars_awarded: number;
+  stars_balance: number;
+}
+
+export interface MiniGame {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  cover_image: string;
+  bg_color: string;
+  tag: string;
+}
+
+export interface Collectible {
+  id: number;
+  slug: string;
+  name: string;
+  filipino_name: string;
+  description: string;
+  image_url?: string | null;
+  audio_url?: string | null;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  required_stars: number;
+  is_unlocked: boolean;
+  unlocked_at?: string | null;
+}
+
+export interface StudentMonitoringItem {
+  id: number;
+  name: string;
+  email: string;
+  avatar?: string | null;
+  section?: string | null;
+  stars_balance: number;
+  quizzes_passed: number;
+  games_played: number;
+  collectibles_count: number;
+  is_online: boolean;
+  current_activity: string;
+  current_screen?: string | null;
+  current_game_or_quiz?: string | null;
+  last_active_at: string;
+}

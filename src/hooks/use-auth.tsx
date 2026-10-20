@@ -1,0 +1,123 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { ApiClient, authService } from '../services/api';
+import { User } from '../types';
+
+interface AuthContextType {
+  user: User | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  isTeacher: boolean;
+  isStudent: boolean;
+  login: (email: string, password: string, role?: string) => Promise<User>;
+  register: (name: string, email: string, password: string, role?: 'student' | 'teacher', section?: string) => Promise<User>;
+  logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  updateUserStars: (newBalance: number) => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Restore authenticated session securely on app startup
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        await ApiClient.init();
+        const token = ApiClient.getToken();
+        if (token) {
+          const res = await authService.getMe();
+          setUser(res.user);
+        }
+      } catch (err) {
+        // Token expired or network failure
+        await ApiClient.setToken(null);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
+
+  const login = async (email: string, password: string, role?: string): Promise<User> => {
+    setIsLoading(true);
+    try {
+      const res = await authService.login({ email, password, role });
+      setUser(res.user);
+      return res.user;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    role?: 'student' | 'teacher',
+    section?: string
+  ): Promise<User> => {
+    setIsLoading(true);
+    try {
+      const res = await authService.register({ name, email, password, role, section });
+      setUser(res.user);
+      return res.user;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      await authService.logout();
+    } catch {
+      // Ignore network errors on logout
+    } finally {
+      setUser(null);
+      setIsLoading(false);
+    }
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const res = await authService.getMe();
+      setUser(res.user);
+    } catch {}
+  };
+
+  const updateUserStars = (newBalance: number) => {
+    setUser((prev) => (prev ? { ...prev, stars_balance: newBalance } : null));
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAuthenticated: !!user,
+        isTeacher: user?.role === 'teacher' || user?.role === 'admin',
+        isStudent: user?.role === 'student',
+        login,
+        register,
+        logout,
+        refreshProfile,
+        updateUserStars,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

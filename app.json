@@ -1,18 +1,20 @@
 {
   "expo": {
-    "name": "WikaPlayMobile",
-    "slug": "WikaPlayMobile",
+    "name": "WikaPlay",
+    "slug": "wikaplay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "wikaplaymobile",
-    "userInterfaceStyle": "automatic",
+    "scheme": "wikaplay",
+    "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.wikaplay.mobile"
     },
     "android": {
+      "package": "com.wikaplay.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#38BDF8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,11 +30,19 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#38BDF8",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 120
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Payagan ang WikaPlay na gamitin ang mikropono para sa pag-record ng boses.",
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
