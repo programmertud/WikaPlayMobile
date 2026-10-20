@@ -87,21 +87,20 @@ export default function StudentLayout() {
       {/* Hidden subroutes from tabs */}
       <Tabs.Screen
         name="category/[slug]"
-        options={{
-          href: null,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="flashcards/[slug]"
-        options={{
-          href: null,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="quiz/[slug]/[difficulty]"
-        options={{
-          href: null,
-        }}
+        options={{ href: null }}
+      />
+      {/* Game sub-screens */}
+      <Tabs.Screen
+        name="games/[slug]"
+        options={{ href: null }}
       />
     </Tabs>
   );

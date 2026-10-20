@@ -8,7 +8,7 @@
     "scheme": "wikaplay",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.wikaplay.mobile"
     },
     "android": {

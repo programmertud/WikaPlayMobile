@@ -11,7 +11,7 @@ import { Colors, Shadows, Typography } from '../theme';
 
 interface PrimaryButtonProps extends TouchableOpacityProps {
   title: string;
-  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning';
+  variant?: 'primary' | 'secondary' | 'outline' | 'success' | 'danger' | 'warning' | 'disabled';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   icon?: React.ReactNode;
@@ -32,6 +32,7 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
     if (disabled) return Colors.textMuted;
     switch (variant) {
       case 'secondary':
+      case 'outline':
         return Colors.white;
       case 'success':
         return Colors.grassGreen;
@@ -39,6 +40,8 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
         return Colors.coralPink;
       case 'warning':
         return Colors.sunYellow;
+      case 'disabled':
+        return Colors.textMuted;
       case 'primary':
       default:
         return Colors.skyBlue;
@@ -46,8 +49,9 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   };
 
   const getTextColor = () => {
-    if (variant === 'secondary') return Colors.skyBlueDark;
+    if (variant === 'secondary' || variant === 'outline') return Colors.skyBlueDark;
     if (variant === 'warning') return '#78350F';
+    if (variant === 'disabled' || disabled) return Colors.white;
     return Colors.white;
   };
 
@@ -59,7 +63,7 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
         styles.button,
         styles[size],
         { backgroundColor: getBgColor() },
-        variant === 'secondary' && styles.secondaryBorder,
+        (variant === 'secondary' || variant === 'outline') && styles.outlineBorder,
         style,
       ]}
       {...props}
@@ -105,6 +109,10 @@ const styles = StyleSheet.create({
   },
   secondaryBorder: {
     borderColor: Colors.skyBlue,
+  },
+  outlineBorder: {
+    borderColor: Colors.skyBlue,
+    borderWidth: 3,
   },
   text: {
     fontSize: Typography.sizes.md,

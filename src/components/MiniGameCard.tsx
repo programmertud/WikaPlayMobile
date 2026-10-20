@@ -16,9 +16,10 @@ const CARD_WIDTH = (width - 48) / 2;
 interface MiniGameCardProps {
   game: MiniGame;
   onPress: () => void;
+  emoji?: string;
 }
 
-export const MiniGameCard: React.FC<MiniGameCardProps> = ({ game, onPress }) => {
+export const MiniGameCard: React.FC<MiniGameCardProps> = ({ game, onPress, emoji }) => {
   return (
     <TouchableOpacity
       activeOpacity={0.88}
@@ -41,7 +42,7 @@ export const MiniGameCard: React.FC<MiniGameCardProps> = ({ game, onPress }) => 
           />
         ) : (
           <View style={styles.placeholder}>
-            <Text style={styles.placeholderEmoji}>🎮</Text>
+            <Text style={styles.placeholderEmoji}>{emoji ?? '🎮'}</Text>
           </View>
         )}
       </View>
