@@ -6,13 +6,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import { EmptyState } from '../../components/EmptyState';
-import { ErrorView } from '../../components/ErrorView';
-import { LoadingView } from '../../components/LoadingView';
-import { usePresence } from '../../hooks/use-presence';
-import { rewardService } from '../../services/api';
-import { Colors, Shadows, Typography } from '../../theme';
-import { Collectible } from '../../types';
+import { EmptyState } from '../../../components/EmptyState';
+import { ErrorView } from '../../../components/ErrorView';
+import { LoadingView } from '../../../components/LoadingView';
+import { usePresence } from '../../../hooks/use-presence';
+import { rewardService } from '../../../services/api';
+import { Colors, Shadows, Typography } from '../../../theme';
+import { Collectible } from '../../../types';
 
 const { width } = Dimensions.get('window');
 

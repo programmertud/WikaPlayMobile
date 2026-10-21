@@ -8,13 +8,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { CategoryCard } from '../../components/CategoryCard';
-import { LoadingView } from '../../components/LoadingView';
-import { useAuth } from '../../hooks/use-auth';
-import { usePresence } from '../../hooks/use-presence';
-import { Colors, Shadows, Typography } from '../../theme';
-import { LEARNING_CATEGORIES } from '../../data/categories';
-import { Category } from '../../types';
+import { CategoryCard } from '../../../components/CategoryCard';
+import { LoadingView } from '../../../components/LoadingView';
+import { useAuth } from '../../../hooks/use-auth';
+import { usePresence } from '../../../hooks/use-presence';
+import { Colors, Shadows, Typography } from '../../../theme';
+import { LEARNING_CATEGORIES } from '../../../data/categories';
+import { Category } from '../../../types';
 
 export default function StudentDashboardScreen() {
   const { user, refreshProfile } = useAuth();

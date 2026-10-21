@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { MiniGameCard } from '../../components/MiniGameCard';
-import { usePresence } from '../../hooks/use-presence';
-import { Colors, Shadows, Typography } from '../../theme';
-import { MiniGame } from '../../types';
+import { MiniGameCard } from '../../../components/MiniGameCard';
+import { usePresence } from '../../../hooks/use-presence';
+import { Colors, Shadows, Typography } from '../../../theme';
+import { MiniGame } from '../../../types';
 
 // Static mini-game definitions — cover images use emoji fallbacks until
 // real assets are placed at assets/images/minigame_*.png

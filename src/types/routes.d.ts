@@ -19,6 +19,11 @@ declare module 'expo-router' {
     '/(teacher)/profile': undefined;
     '/(student)': undefined;
     '/(student)/index': undefined;
+    '/(student)/(tabs)': undefined;
+    '/(student)/(tabs)/index': undefined;
+    '/(student)/(tabs)/gantimpala': undefined;
+    '/(student)/(tabs)/nakolekta': undefined;
+    '/(student)/(tabs)/profile': undefined;
     '/(student)/minigames': undefined;
     '/(student)/gantimpala': undefined;
     '/(student)/nakolekta': undefined;

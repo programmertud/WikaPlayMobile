@@ -7,12 +7,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import { LoadingView } from '../../components/LoadingView';
-import { PrimaryButton } from '../../components/PrimaryButton';
-import { useAuth } from '../../hooks/use-auth';
-import { usePresence } from '../../hooks/use-presence';
-import { authService, quizService, rewardService } from '../../services/api';
-import { Colors, Shadows, Typography } from '../../theme';
+import { LoadingView } from '../../../components/LoadingView';
+import { PrimaryButton } from '../../../components/PrimaryButton';
+import { useAuth } from '../../../hooks/use-auth';
+import { usePresence } from '../../../hooks/use-presence';
+import { authService, quizService, rewardService } from '../../../services/api';
+import { Colors, Shadows, Typography } from '../../../theme';
 
 interface StatsData {
   stars_balance: number;
