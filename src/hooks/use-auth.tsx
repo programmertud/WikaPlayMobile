@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { ApiClient, authService } from '../services/api';
 import { User } from '../types';
 
@@ -94,21 +94,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser((prev) => (prev ? { ...prev, stars_balance: newBalance } : null));
   };
 
+  // Memoize the context value so consumers only re-render when user or isLoading
+  // actually change — prevents the infinite setState/update-depth loops
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      isTeacher: user?.role === 'teacher' || user?.role === 'admin',
+      isStudent: user?.role === 'student',
+      login,
+      register,
+      logout,
+      refreshProfile,
+      updateUserStars,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, isLoading]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        isTeacher: user?.role === 'teacher' || user?.role === 'admin',
-        isStudent: user?.role === 'student',
-        login,
-        register,
-        logout,
-        refreshProfile,
-        updateUserStars,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

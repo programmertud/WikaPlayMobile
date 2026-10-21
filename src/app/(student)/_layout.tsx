@@ -1,21 +1,29 @@
 import { Stack, router } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/use-auth';
 import { usePresence } from '../../hooks/use-presence';
 
 export default function StudentLayout() {
-  const { isStudent, isAuthenticated } = useAuth();
+  const { isStudent, isAuthenticated, isLoading } = useAuth();
+  const didRedirect = useRef(false);
 
   // Send background student heartbeat to update teacher's live dashboard
   usePresence('Nag-aaral sa Dashboard', 'student_main');
 
   useEffect(() => {
+    // Wait for auth state to settle before deciding where to redirect
+    if (isLoading) return;
+    // Only redirect once per mount — avoids infinite loop
+    if (didRedirect.current) return;
+
     if (!isAuthenticated) {
+      didRedirect.current = true;
       router.replace('/login');
     } else if (!isStudent) {
-      router.replace('/(teacher)');
+      didRedirect.current = true;
+      router.replace('/(teacher)' as any);
     }
-  }, [isAuthenticated, isStudent]);
+  }, [isLoading, isAuthenticated, isStudent]);
 
   return (
     <Stack

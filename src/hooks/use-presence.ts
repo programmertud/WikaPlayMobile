@@ -6,12 +6,14 @@ export function usePresence(activity: string = 'Nag-aaral', screenName: string =
   const { user, isStudent } = useAuth();
   const activityRef = useRef(activity);
   const screenRef = useRef(screenName);
+  // Use primitive userId to avoid re-triggering effect when user object reference changes
+  const userId = user?.id ?? null;
 
   activityRef.current = activity;
   screenRef.current = screenName;
 
   useEffect(() => {
-    if (!user || !isStudent) return;
+    if (!userId || !isStudent) return;
 
     // Send initial heartbeat
     presenceService.heartbeat({
@@ -28,5 +30,5 @@ export function usePresence(activity: string = 'Nag-aaral', screenName: string =
     }, 25000);
 
     return () => clearInterval(interval);
-  }, [user, isStudent]);
+  }, [userId, isStudent]);
 }
