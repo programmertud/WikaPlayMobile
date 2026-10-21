@@ -4,12 +4,16 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '../hooks/use-auth';
 
+import { bgm } from '../services/audio/bgm-service';
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   useEffect(() => {
     // Hide splash screen after initialization
     SplashScreen.hideAsync().catch(() => {});
+    // Start background music (happy.mp3)
+    bgm.init();
   }, []);
 
   return (

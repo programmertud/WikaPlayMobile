@@ -47,7 +47,7 @@ export default function LoginScreen() {
       if (loggedUser.role === 'teacher' || loggedUser.role === 'admin') {
         router.replace('/(teacher)');
       } else {
-        router.replace('/(student)');
+        router.replace('/');
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Nabigong mag-login. Pakisubukang muli.');

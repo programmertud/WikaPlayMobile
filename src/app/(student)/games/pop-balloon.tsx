@@ -4,7 +4,7 @@
  * from the selected category. The student pops the balloon matching the target prompt.
  */
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
@@ -18,7 +18,12 @@ import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { minigameService } from '../../../services/api';
-import { getFeedbackAudio, playLocalSound } from '../../../services/audio/sound-service';
+import {
+  getFeedbackAudio,
+  playLocalSound,
+  playVocabularyItem,
+  useBgmDuck,
+} from '../../../services/audio/sound-service';
 import { Shadows } from '../../../theme';
 import { VocabularyItem } from '../../../types';
 
@@ -51,6 +56,7 @@ function buildRound(items: VocabularyItem[], targetIdx: number): {
 }
 
 export default function PopBalloon() {
+  useBgmDuck();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const items = getCategoryVocabulary(category.slug);
@@ -70,6 +76,12 @@ export default function PopBalloon() {
 
   const target = roundData.target;
   const balloonOptions = roundData.options;
+
+  useEffect(() => {
+    if (target && !gameOver) {
+      playVocabularyItem(target);
+    }
+  }, [currentIdx, gameOver]);
 
   const handlePop = (option: BalloonOption) => {
     if (locked || option.popped) return;
@@ -154,14 +166,18 @@ export default function PopBalloon() {
           />
         </View>
 
-        {/* Prompt Card */}
-        <View style={[styles.promptCard, Shadows.card]}>
+        {/* Prompt Card with Audio Replay */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => playVocabularyItem(target)}
+          style={[styles.promptCard, Shadows.card]}
+        >
           <Text style={styles.promptLabel}>Pumutok ng lobo na may:</Text>
           <Text style={[styles.targetWord, { color: category.color }]}>
-            {`"${target.filipino}"`}
+            {`"${target.filipino}"`} 🔊
           </Text>
           <Text style={styles.targetEnglish}>({target.english})</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Floating Balloons Grid */}
         <View style={styles.balloonsGrid}>

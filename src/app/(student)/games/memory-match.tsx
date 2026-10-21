@@ -18,7 +18,7 @@ import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { minigameService } from '../../../services/api';
-import { playLocalSound } from '../../../services/audio/sound-service';
+import { playLocalSound, playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Shadows, Typography } from '../../../theme';
 import { VocabularyItem } from '../../../types';
 
@@ -49,6 +49,7 @@ function makeCards(items: VocabularyItem[]): CardItem[] {
 }
 
 export default function MemoryMatch() {
+  useBgmDuck();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const vocabulary = getCategoryVocabulary(category.slug);
@@ -109,7 +110,7 @@ export default function MemoryMatch() {
           const isMatch = firstCard.item.id === secondCard.item.id;
 
           if (isMatch) {
-            playLocalSound('tama');
+            playVocabularyItem(firstCard.item);
             setCards((prev) =>
               prev.map((c) =>
                 c.uid === firstUid || c.uid === secondUid

@@ -12,13 +12,14 @@ import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { playVocabularyItem } from '../../../services/audio/sound-service';
+import { playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
 import { Shadows } from '../../../theme';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = Math.min(width - 48, 320);
 
 export default function FlashcardsViewerScreen() {
+  useBgmDuck();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const category = getCategoryBySlug(slug);
   const items = category.items;

@@ -18,6 +18,8 @@ import MemoryMatch from './memory-match';
 import PaghahanapLarawan from './paghahanap-larawan';
 import PopBalloon from './pop-balloon';
 
+import { useBgmDuck } from '../../../services/audio/sound-service';
+
 type GameSlug =
   | 'memory-match'
   | 'paghahanap-larawan'
@@ -34,6 +36,7 @@ const GAME_MAP: Record<GameSlug, React.ComponentType> = {
 };
 
 export default function GameRouter() {
+  useBgmDuck();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const GameComponent = GAME_MAP[slug as GameSlug];
 

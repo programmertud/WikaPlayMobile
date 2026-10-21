@@ -15,9 +15,11 @@ import { usePresence } from '../../../hooks/use-presence';
 import { Colors, Shadows, Typography } from '../../../theme';
 import { LEARNING_CATEGORIES } from '../../../data/categories';
 import { Category } from '../../../types';
+import { bgm } from '../../../services/audio/bgm-service';
 
 export default function StudentDashboardScreen() {
   const { user, refreshProfile } = useAuth();
+  const [isMuted, setIsMuted] = useState<boolean>(bgm.getMuted());
 
   // Always use local categories — they contain all 151 vocabulary items
   const categories: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
@@ -48,7 +50,17 @@ export default function StudentDashboardScreen() {
   };
 
   useEffect(() => {
+    // When returning to home screen, ensure background music is restored to full volume
+    bgm.restore();
     loadData();
+
+    const unsubscribeMute = bgm.subscribeMute((muted) => {
+      setIsMuted(muted);
+    });
+
+    return () => {
+      unsubscribeMute();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -69,7 +81,7 @@ export default function StudentDashboardScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.skyBlueDark]} />
       }
     >
-      {/* Top Bar with Logo and Stars Pill */}
+      {/* Top Bar with Logo, Music Button and Stars Pill */}
       <View style={styles.topBar}>
         <View style={styles.brandingRow}>
           <View style={[styles.miniLogo, Shadows.soft]}>
@@ -83,15 +95,27 @@ export default function StudentDashboardScreen() {
           </View>
         </View>
 
-        {/* Live Stars Badge */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => router.push('/(student)/gantimpala')}
-          style={[styles.starsPill, Shadows.button]}
-        >
-          <Text style={styles.starIcon}>⭐</Text>
-          <Text style={styles.starsCount}>{user?.stars_balance ?? 0}</Text>
-        </TouchableOpacity>
+        <View style={styles.topBarActions}>
+          {/* Background Music Toggle */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => bgm.toggleMute()}
+            style={[styles.musicButton, Shadows.button, isMuted && styles.musicButtonMuted]}
+            accessibilityLabel={isMuted ? 'I-on ang tugtog' : 'I-off ang tugtog'}
+          >
+            <Text style={styles.musicIcon}>{isMuted ? '🔇' : '🎵'}</Text>
+          </TouchableOpacity>
+
+          {/* Live Stars Badge */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/gantimpala')}
+            style={[styles.starsPill, Shadows.button]}
+          >
+            <Text style={styles.starIcon}>⭐</Text>
+            <Text style={styles.starsCount}>{user?.stars_balance ?? 0}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Section Title */}
@@ -168,6 +192,28 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 2,
     borderColor: Colors.sunYellowDark,
+  },
+  topBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  musicButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.skyBlue,
+  },
+  musicButtonMuted: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+  },
+  musicIcon: {
+    fontSize: 18,
   },
   starIcon: {
     fontSize: 18,

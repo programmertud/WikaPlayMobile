@@ -11,7 +11,7 @@ export default function TeacherLayout() {
     if (!isAuthenticated) {
       router.replace('/login');
     } else if (!isTeacher) {
-      router.replace('/(student)');
+      router.replace('/');
     }
   }, [isAuthenticated, isTeacher]);
 

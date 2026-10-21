@@ -1,70 +1,47 @@
 import { Asset } from 'expo-asset';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Platform } from 'react-native';
+import { bgm, useBgmDuck } from './bgm-service';
 
-// Local asset map for all packaged feedback and vocabulary sounds
-export const LOCAL_AUDIO_ASSETS: Record<string, any> = {
-  // Feedback sounds
-  'tama.mp3': require('../../../assets/audio/tama.mp3'),
-  'magaling.mp3': require('../../../assets/audio/magaling.mp3'),
-  'anggalingmo.mp3': require('../../../assets/audio/anggalingmo.mp3'),
-  'mali.mp3': require('../../../assets/audio/mali.mp3'),
-  'oopsmali.mp3': require('../../../assets/audio/oopsmali.mp3'),
+export { bgm, useBgmDuck };
 
-  // Hayop (Animals)
-  'hayop_aso.mp3': require('../../../assets/audio/hayop_aso.mp3'),
-  'hayop_pusa.mp3': require('../../../assets/audio/hayop_pusa.mp3'),
-  'hayop_ibon.mp3': require('../../../assets/audio/hayop_ibon.mp3'),
-  'hayop_kalabaw.mp3': require('../../../assets/audio/hayop_kalabaw.mp3'),
-
-  // Prutas (Fruits)
-  'prutas_mangga.mp3': require('../../../assets/audio/prutas_mangga.mp3'),
-  'prutas_mansanas.mp3': require('../../../assets/audio/prutas_mansanas.mp3'),
-  'prutas_pakwan.mp3': require('../../../assets/audio/prutas_pakwan.mp3'),
-  'prutas_saging.mp3': require('../../../assets/audio/prutas_saging.mp3'),
-
-  // Gulay (Vegetables)
-  'gulay_kalabasa.mp3': require('../../../assets/audio/gulay_kalabasa.mp3'),
-  'gulay_kamatis.mp3': require('../../../assets/audio/gulay_kamatis.mp3'),
-  'gulay_sitaw.mp3': require('../../../assets/audio/gulay_sitaw.mp3'),
-  'gulay_talong.mp3': require('../../../assets/audio/gulay_talong.mp3'),
-
-  // Kulay (Colors)
-  'kulay_pula.mp3': require('../../../assets/audio/kulay_pula.mp3'),
-  'kulay_asul.mp3': require('../../../assets/audio/kulay_asul.mp3'),
-  'kulay_dilaw.mp3': require('../../../assets/audio/kulay_dilaw.mp3'),
-  'kulay_berde.mp3': require('../../../assets/audio/kulay_berde.mp3'),
-
-  // Hugis (Shapes)
-  'hugis_bilog.mp3': require('../../../assets/audio/hugis_bilog.mp3'),
-  'hugis_parisukat.mp3': require('../../../assets/audio/hugis_parisukat.mp3'),
-  'hugis_tatsulok.mp3': require('../../../assets/audio/hugis_tatsulok.mp3'),
-  'hugis_parihaba.mp3': require('../../../assets/audio/hugis_parihaba.mp3'),
-
-  // Bilang (Numbers)
-  'bilang_isa.mp3': require('../../../assets/audio/bilang_isa.mp3'),
-  'bilang_dalawa.mp3': require('../../../assets/audio/bilang_dalawa.mp3'),
-  'bilang_tatlo.mp3': require('../../../assets/audio/bilang_tatlo.mp3'),
-  'bilang_apat.mp3': require('../../../assets/audio/bilang_apat.mp3'),
-
-  // Katawan (Body parts)
-  'katawan_mata.mp3': require('../../../assets/audio/katawan_mata.mp3'),
-  'katawan_ilong.mp3': require('../../../assets/audio/katawan_ilong.mp3'),
-  'katawan_bibig.mp3': require('../../../assets/audio/katawan_bibig.mp3'),
-  'katawan_kamay.mp3': require('../../../assets/audio/katawan_kamay.mp3'),
-
-  // Pagbati (Greetings)
-  'pagbati_kamusta.mp3': require('../../../assets/audio/pagbati_kamusta.mp3'),
-  'pagbati_salamat.mp3': require('../../../assets/audio/pagbati_salamat.mp3'),
-  'pagbati_umaga.mp3': require('../../../assets/audio/pagbati_umaga.mp3'),
-  'pagbati_paalam.mp3': require('../../../assets/audio/pagbati_paalam.mp3'),
+// Map all 20 animal audio recordings from assets/audio/HAYOP
+export const HAYOP_AUDIO_ASSETS: Record<string, any> = {
+  ahas: require('../../../assets/audio/HAYOP/Ahas.mp3'),
+  aso: require('../../../assets/audio/HAYOP/Aso.mp3'),
+  baboy: require('../../../assets/audio/HAYOP/Baboy.mp3'),
+  bubuyog: require('../../../assets/audio/HAYOP/Bubuyog.mp3'),
+  daga: require('../../../assets/audio/HAYOP/Daga.mp3'),
+  gagamba: require('../../../assets/audio/HAYOP/Gagamba.mp3'),
+  ibon: require('../../../assets/audio/HAYOP/Ibon.mp3'),
+  isda: require('../../../assets/audio/HAYOP/Isda.mp3'),
+  kabayo: require('../../../assets/audio/HAYOP/Kabayo.mp3'),
+  kalabaw: require('../../../assets/audio/HAYOP/Kalabaw.mp3'),
+  kambing: require('../../../assets/audio/HAYOP/Kambing.mp3'),
+  leon: require('../../../assets/audio/HAYOP/Leon.mp3'),
+  manok: require('../../../assets/audio/HAYOP/Manok.mp3'),
+  pagong: require('../../../assets/audio/HAYOP/Pagong.mp3'),
+  palaka: require('../../../assets/audio/HAYOP/Palaka.mp3'),
+  pating: require('../../../assets/audio/HAYOP/Pating.mp3'),
+  pugita: require('../../../assets/audio/HAYOP/Pugita.mp3'),
+  pusa: require('../../../assets/audio/HAYOP/Pusa.mp3'),
+  tigre: require('../../../assets/audio/HAYOP/Tigre.mp3'),
+  unggoy: require('../../../assets/audio/HAYOP/Unggoy.mp3'),
 };
 
-// Also index without .mp3 extension for convenience
-Object.keys(LOCAL_AUDIO_ASSETS).forEach((key) => {
-  if (key.endsWith('.mp3')) {
-    LOCAL_AUDIO_ASSETS[key.replace(/\.mp3$/, '')] = LOCAL_AUDIO_ASSETS[key];
-  }
+// Aliases for matching by id (e.g. 'hayop_aso'), file names (e.g. 'Aso.mp3'), etc.
+export const LOCAL_AUDIO_ASSETS: Record<string, any> = {};
+
+Object.entries(HAYOP_AUDIO_ASSETS).forEach(([key, asset]) => {
+  LOCAL_AUDIO_ASSETS[key] = asset;
+  LOCAL_AUDIO_ASSETS[`${key}.mp3`] = asset;
+  LOCAL_AUDIO_ASSETS[`hayop_${key}`] = asset;
+  LOCAL_AUDIO_ASSETS[`hayop_${key}.mp3`] = asset;
+
+  // Capitalized variants
+  const cap = key.charAt(0).toUpperCase() + key.slice(1);
+  LOCAL_AUDIO_ASSETS[cap] = asset;
+  LOCAL_AUDIO_ASSETS[`${cap}.mp3`] = asset;
 });
 
 let isAudioModeConfigured = false;
@@ -84,6 +61,77 @@ export async function setupAudioSession() {
 }
 
 /**
+ * Web Audio synthesizer for feedback sounds (chimes for correct, gentle tone for wrong)
+ */
+function playSynthesizedFeedback(isCorrect: boolean, onFinished?: () => void) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        if (isCorrect) {
+          // Cheerful ascending arpeggio chime (C5 -> E5 -> G5)
+          const notes = [523.25, 659.25, 783.99];
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+
+            gain.gain.setValueAtTime(0, now + idx * 0.1);
+            gain.gain.linearRampToValueAtTime(0.25, now + idx * 0.1 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.35);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(now + idx * 0.1);
+            osc.stop(now + idx * 0.1 + 0.4);
+          });
+          setTimeout(() => {
+            try {
+              ctx.close();
+            } catch {}
+            onFinished?.();
+          }, 600);
+          return;
+        } else {
+          // Gentle low double-tone for wrong answer
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.setValueAtTime(196, now + 0.12);
+
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(now);
+          osc.stop(now + 0.4);
+
+          setTimeout(() => {
+            try {
+              ctx.close();
+            } catch {}
+            onFinished?.();
+          }, 450);
+          return;
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback to speech feedback
+  const feedbackWord = isCorrect ? 'Tama!' : 'Subukan muli';
+  speakWordWeb(feedbackWord, onFinished);
+}
+
+/**
  * Resolve an audio key or URL to a playable source
  */
 export function resolveAudioSource(source: string | any): any {
@@ -92,7 +140,7 @@ export function resolveAudioSource(source: string | any): any {
 
   // Extract base filename if it has path elements (e.g. "audio/hayop_aso.mp3" -> "hayop_aso.mp3")
   const filename = source.split('/').pop() || source;
-  const noExt = filename.replace(/\.mp3$/, '');
+  const noExt = filename.replace(/\.mp3$/i, '').toLowerCase();
 
   if (LOCAL_AUDIO_ASSETS[filename]) {
     return LOCAL_AUDIO_ASSETS[filename];
@@ -101,8 +149,19 @@ export function resolveAudioSource(source: string | any): any {
     return LOCAL_AUDIO_ASSETS[noExt];
   }
 
+  // Strip prefix "hayop_" if passed
+  const stripped = noExt.replace(/^hayop_/, '');
+  if (LOCAL_AUDIO_ASSETS[stripped]) {
+    return LOCAL_AUDIO_ASSETS[stripped];
+  }
+
   // If it's a valid remote or absolute data URL, return it directly
-  if (source.startsWith('http://') || source.startsWith('https://') || source.startsWith('data:') || source.startsWith('blob:')) {
+  if (
+    source.startsWith('http://') ||
+    source.startsWith('https://') ||
+    source.startsWith('data:') ||
+    source.startsWith('blob:')
+  ) {
     return source;
   }
 
@@ -144,7 +203,7 @@ export async function playSound(
 ): Promise<() => void> {
   await setupAudioSession();
 
-  // Stop any currently active playback
+  // Stop any currently active voice playback
   stopCurrentSound();
 
   let isCancelled = false;
@@ -167,16 +226,29 @@ export async function playSound(
   };
 
   try {
+    // Check if it's a feedback sound (tama, mali, magaling, etc.)
+    if (typeof source === 'string') {
+      const lower = source.toLowerCase();
+      if (lower.includes('tama') || lower.includes('magaling') || lower.includes('anggalingmo')) {
+        playSynthesizedFeedback(true, onFinished);
+        return cleanup;
+      }
+      if (lower.includes('mali') || lower.includes('oopsmali')) {
+        playSynthesizedFeedback(false, onFinished);
+        return cleanup;
+      }
+    }
+
     const resolvedSource = resolveAudioSource(source);
 
     // If source could not be resolved from local assets or valid URL
     if (!resolvedSource) {
-      // Fallback: If it's a string, try Web Speech API
+      // Fallback: If it's a string word, pronounce it via Web Speech API
       if (typeof source === 'string') {
-        const speechCleaner = speakWordWeb(source.replace(/\.mp3$/, ''), onFinished);
+        const cleanWord = source.split('/').pop()?.replace(/\.mp3$/i, '').replace(/^hayop_/, '') || source;
+        const speechCleaner = speakWordWeb(cleanWord, onFinished);
         if (speechCleaner) return speechCleaner;
       }
-      // Otherwise immediately complete so student is never stuck
       setTimeout(() => {
         if (!isCancelled) onFinished?.();
       }, 300);
@@ -188,7 +260,6 @@ export async function playSound(
       if (typeof resolvedSource === 'string') {
         webUri = resolvedSource;
       } else {
-        // Resolve require module to URI using expo-asset
         try {
           const asset = Asset.fromModule(resolvedSource);
           webUri = asset.uri || asset.localUri || '';
@@ -199,6 +270,7 @@ export async function playSound(
 
       if (webUri) {
         const audio = new Audio(webUri);
+        audio.volume = 1.0;
         audio.onended = () => {
           if (!isCancelled) onFinished?.();
         };
@@ -221,18 +293,17 @@ export async function playSound(
     player = createAudioPlayer(resolvedSource);
     currentActivePlayer = player;
 
-    // Safety fallback: ensure callback fires within 3.5s
     fallbackTimer = setTimeout(() => {
       if (!isCancelled) {
         cleanup();
         onFinished?.();
       }
-    }, 3500);
+    }, 4000);
 
     player.play();
 
-    const durationSec = player.duration || 1.2;
-    const durationMs = Math.max(800, durationSec * 1000);
+    const durationSec = player.duration || 1.4;
+    const durationMs = Math.max(900, durationSec * 1000);
 
     setTimeout(() => {
       if (!isCancelled) {
@@ -266,7 +337,7 @@ export async function playLocalSound(soundName: string, onFinished?: () => void)
 }
 
 /**
- * Pronounce a vocabulary item: plays its audio asset if bundled,
+ * Pronounce a vocabulary item: plays its assigned animal MP3 from HAYOP/,
  * or speaks its Filipino word via TTS.
  */
 export async function playVocabularyItem(
@@ -276,33 +347,33 @@ export async function playVocabularyItem(
   if (item.audioUri) {
     return playSound(item.audioUri, onFinished);
   }
-  // Try item id (e.g. 'hayop_aso')
-  const resolved = resolveAudioSource(item.id);
-  if (resolved) {
-    return playSound(resolved, onFinished);
+
+  // 1. Try Filipino word (e.g. 'aso')
+  const byWord = resolveAudioSource(item.filipino);
+  if (byWord) {
+    return playSound(byWord, onFinished);
   }
-  // Fall back to pronouncing Filipino word
+
+  // 2. Try item ID (e.g. 'hayop_aso')
+  const byId = resolveAudioSource(item.id);
+  if (byId) {
+    return playSound(byId, onFinished);
+  }
+
+  // 3. Fall back to speech pronunciation of the Filipino word
   return playSound(item.filipino, onFinished);
 }
 
 /**
- * Exact streak feedback audio resolver:
- * Correct Streak:
- * - 1st: tama.mp3
- * - 2nd: magaling.mp3
- * - 3rd+: anggalingmo.mp3
- *
- * Wrong Streak:
- * - 1st: mali.mp3
- * - 2nd+: oopsmali.mp3
+ * Streak feedback audio resolver
  */
 export function getFeedbackAudio(isCorrect: boolean, streak: number): string {
   if (isCorrect) {
-    if (streak <= 1) return 'tama.mp3';
-    if (streak === 2) return 'magaling.mp3';
-    return 'anggalingmo.mp3';
+    if (streak <= 1) return 'tama';
+    if (streak === 2) return 'magaling';
+    return 'anggalingmo';
   } else {
-    if (streak <= 1) return 'mali.mp3';
-    return 'oopsmali.mp3';
+    if (streak <= 1) return 'mali';
+    return 'oopsmali';
   }
 }

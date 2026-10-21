@@ -19,7 +19,12 @@ import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { minigameService } from '../../../services/api';
-import { getFeedbackAudio, playLocalSound } from '../../../services/audio/sound-service';
+import {
+  getFeedbackAudio,
+  playLocalSound,
+  playVocabularyItem,
+  useBgmDuck,
+} from '../../../services/audio/sound-service';
 import { Colors, Shadows, Typography } from '../../../theme';
 import { VocabularyItem } from '../../../types';
 
@@ -46,6 +51,7 @@ function scrambleWord(word: string): ShuffleTile[] {
 }
 
 export default function GuLongLetra() {
+  useBgmDuck();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const items = getCategoryVocabulary(category.slug);
@@ -111,8 +117,7 @@ export default function GuLongLetra() {
       setCorrectStreak(newStreak);
       setWrongStreak(0);
       setCorrect((c) => c + 1);
-      const soundKey = getFeedbackAudio(true, newStreak);
-      playLocalSound(soundKey);
+      playVocabularyItem(currentItem);
     } else {
       setFeedback('wrong');
       const newStreak = wrongStreak + 1;

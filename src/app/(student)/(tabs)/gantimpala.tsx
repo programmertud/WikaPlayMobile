@@ -193,7 +193,7 @@ export default function GantimpalaScreen() {
             size="md"
             onPress={() => {
               setRevealedCollectible(null);
-              router.push('/(student)/nakolekta');
+              router.push('/nakolekta');
             }}
             style={{ marginTop: 12 }}
           />
@@ -222,7 +222,7 @@ export default function GantimpalaScreen() {
           </View>
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => router.push('/(student)/nakolekta')}
+            onPress={() => router.push('/nakolekta')}
             style={styles.seeAllBtn}
           >
             <Text style={styles.seeAllText}>Tingnan Lahat ng Koleksyon →</Text>

@@ -39,7 +39,7 @@ export default function RegisterScreen() {
 
     try {
       await register(name.trim(), email.trim(), password, 'student', section);
-      router.replace('/(student)');
+      router.replace('/');
     } catch (err: any) {
       setErrorMessage(err.message || 'Nabigong magrehistro.');
     } finally {

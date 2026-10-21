@@ -25,7 +25,7 @@ export default function IndexGateway() {
     if (isTeacher) {
       return <Redirect href="/(teacher)" />;
     }
-    return <Redirect href="/(student)" />;
+    return <Redirect href="/" />;
   }
 
   return <Redirect href="/login" />;

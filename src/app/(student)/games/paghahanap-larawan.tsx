@@ -4,7 +4,7 @@
  * student picks the matching picture from 4 choices.
  */
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
@@ -19,7 +19,12 @@ import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { minigameService } from '../../../services/api';
-import { getFeedbackAudio, playLocalSound } from '../../../services/audio/sound-service';
+import {
+  getFeedbackAudio,
+  playLocalSound,
+  playVocabularyItem,
+  useBgmDuck,
+} from '../../../services/audio/sound-service';
 import { Colors, Shadows } from '../../../theme';
 import { VocabularyItem } from '../../../types';
 
@@ -35,6 +40,7 @@ function buildRound(items: VocabularyItem[], targetIndex: number) {
 }
 
 export default function PaghahanapLarawan() {
+  useBgmDuck();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const items = getCategoryVocabulary(category.slug);
@@ -51,6 +57,12 @@ export default function PaghahanapLarawan() {
   const totalRounds = Math.min(items.length, 8);
 
   const { target, choices } = buildRound(items, currentIdx % items.length);
+
+  useEffect(() => {
+    if (target && !gameOver) {
+      playVocabularyItem(target);
+    }
+  }, [currentIdx, gameOver]);
 
   usePresence(`Paghahanap ng Larawan (${category.name})`, 'minigame_paghahanap');
 
@@ -133,14 +145,18 @@ export default function PaghahanapLarawan() {
           />
         </View>
 
-        {/* Prompt Card */}
-        <View style={[styles.promptCard, Shadows.card]}>
+        {/* Prompt Card with Audio Replay */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => playVocabularyItem(target)}
+          style={[styles.promptCard, Shadows.card]}
+        >
           <Text style={styles.promptSub}>Hanapin ang larawan ng:</Text>
           <Text style={[styles.promptTarget, { color: category.color }]}>
-            {`"${target.filipino}"`}
+            {`"${target.filipino}"`} 🔊
           </Text>
           <Text style={styles.promptEnglish}>({target.english})</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* 4 Picture Choices Grid */}
         <View style={styles.choicesGrid}>

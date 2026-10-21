@@ -22,12 +22,14 @@ import { usePresence } from '../../../../hooks/use-presence';
 import { useQuiz } from '../../../../hooks/use-quiz';
 import { categoryService, quizService } from '../../../../services/api';
 import { Colors, Shadows, Typography } from '../../../../theme';
+import { useBgmDuck } from '../../../../services/audio/sound-service';
 import { ChoiceItem, QuizDifficulty, QuizQuestion, QuizResultSession } from '../../../../types';
 
 const { width } = Dimensions.get('window');
 const CHOICE_WIDTH = (width - 48) / 2;
 
 export default function QuizGameplayScreen() {
+  useBgmDuck();
   const { slug, difficulty } = useLocalSearchParams<{ slug: string; difficulty: QuizDifficulty }>();
   const { updateUserStars } = useAuth();
 
