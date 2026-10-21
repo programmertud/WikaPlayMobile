@@ -17,12 +17,24 @@ import { useAuth } from '../../hooks/use-auth';
 import { usePresence } from '../../hooks/use-presence';
 import { categoryService } from '../../services/api';
 import { Colors, Shadows, Typography } from '../../theme';
+import { LEARNING_CATEGORIES } from '../../data/categories';
 import { Category } from '../../types';
 
 export default function StudentDashboardScreen() {
   const { user, refreshProfile } = useAuth();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [categories, setCategories] = useState<Category[]>(() =>
+    LEARNING_CATEGORIES.map((c, idx) => ({
+      id: idx + 1,
+      slug: c.slug,
+      name: c.name,
+      title: c.name,
+      description: c.description,
+      color: c.color,
+      cover_image: null,
+      flashcards_count: c.items.length,
+    }))
+  );
+  const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +44,14 @@ export default function StudentDashboardScreen() {
     try {
       setError(null);
       const [cats] = await Promise.all([
-        categoryService.getAll(),
-        refreshProfile(),
+        categoryService.getAll().catch(() => null),
+        refreshProfile().catch(() => null),
       ]);
-      setCategories(cats);
-    } catch (err: any) {
-      setError(err.message || 'Nabigong kunin ang mga kategorya.');
+      if (cats && cats.length > 0) {
+        setCategories(cats);
+      }
+    } catch {
+      // Offline fallback already populated
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -53,12 +67,8 @@ export default function StudentDashboardScreen() {
     loadData();
   };
 
-  if (loading && !refreshing) {
+  if (loading && !refreshing && categories.length === 0) {
     return <LoadingView message="Kinukuha ang mga aralin sa WikaPlay..." />;
-  }
-
-  if (error && categories.length === 0) {
-    return <ErrorView message={error} onRetry={loadData} />;
   }
 
   return (
@@ -93,24 +103,6 @@ export default function StudentDashboardScreen() {
           <Text style={styles.starsCount}>{user?.stars_balance ?? 0}</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Mini-Games Hero Banner */}
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => router.push('/(student)/minigames')}
-        style={[styles.heroBanner, Shadows.card]}
-      >
-        <View style={styles.heroTextContainer}>
-          <View style={styles.heroTag}>
-            <Text style={styles.heroTagText}>🎉 MASAYANG LARO</Text>
-          </View>
-          <Text style={styles.heroTitle}>Maglaro at Matuto!</Text>
-          <Text style={styles.heroSubtitle}>
-            Memory Match, Pop Balloon, at marami pang iba!
-          </Text>
-        </View>
-        <Text style={styles.heroEmoji}>🎮🎈</Text>
-      </TouchableOpacity>
 
       {/* Section Title */}
       <View style={styles.sectionHeader}>

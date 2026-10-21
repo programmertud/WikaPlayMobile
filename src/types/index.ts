@@ -47,6 +47,7 @@ export interface ChoiceItem {
   id: string;
   image_url: string;
   text: string;
+  vocabularyItem?: VocabularyItem;
 }
 
 export interface QuizQuestion {
@@ -56,6 +57,7 @@ export interface QuizQuestion {
   audio_url?: string | null;
   target_image_url: string;
   target_item_name?: string;
+  targetItem?: VocabularyItem;
   choices: ChoiceItem[];
   correct_answer: string;
   points: number;
@@ -113,3 +115,29 @@ export interface StudentMonitoringItem {
   current_game_or_quiz?: string | null;
   last_active_at: string;
 }
+
+export type VocabularyItem = {
+  id: string;
+  categoryId: string;
+  filipino: string;
+  english: string;
+  image?: any;
+  imageUri?: string;
+  audio?: any;
+  audioUri?: string;
+  colorCode?: string;
+  shapeType?: string;
+  quantity?: number;
+  emoji?: string;
+};
+
+export type LearningCategory = {
+  id: string;
+  slug: string;
+  name: string;
+  englishName: string;
+  color: string;
+  icon: string;
+  description?: string;
+  items: VocabularyItem[];
+};

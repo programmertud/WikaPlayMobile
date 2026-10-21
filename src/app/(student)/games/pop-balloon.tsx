@@ -1,261 +1,418 @@
 /**
  * Pop Balloon Mini-Game
- * Multiple balloons float on screen. A word/audio prompt is given and student must
- * pop only the balloon with the matching picture/label.
+ * Category-based: Displays selectable balloons labeled with vocabulary items
+ * from the selected category. The student pops the balloon matching the target prompt.
  */
-import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
 import {
-  Animated,
   Dimensions,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { LoadingView } from '../../../components/LoadingView';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { getFeedbackAudio, playSound, stopCurrentSound } from '../../../services/audio/sound-service';
 import { minigameService } from '../../../services/api';
-import { Colors, Shadows, Typography } from '../../../theme';
-import type { Flashcard } from '../../../types';
+import { getFeedbackAudio, playLocalSound } from '../../../services/audio/sound-service';
+import { Shadows } from '../../../theme';
+import { VocabularyItem } from '../../../types';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+const BALLOON_SIZE = Math.min((width - 64) / 2, 140);
 const BALLOON_COLORS = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
-const EMOJI_FALLBACKS = ['🐶','🐱','🐄','🐷','🍎','🍌','🥕','🌽','🔴','🔵','⭕','🔷'];
 
-interface Balloon {
-  id: number;
-  flashcard: Flashcard;
+interface BalloonOption {
+  item: VocabularyItem;
   color: string;
-  x: Animated.Value;
-  y: Animated.Value;
   popped: boolean;
-  emoji: string;
 }
 
-function buildBalloons(flashcards: Flashcard[], targetIdx: number): Balloon[] {
-  const targets = flashcards.slice(0, 5);
-  return targets.map((fc, i) => ({
-    id: fc.id,
-    flashcard: fc,
-    color: BALLOON_COLORS[i % BALLOON_COLORS.length],
-    x: new Animated.Value(30 + (i % 3) * ((width - 100) / 2)),
-    y: new Animated.Value(height * 0.45 - i * 90),
+function buildRound(items: VocabularyItem[], targetIdx: number): {
+  target: VocabularyItem;
+  options: BalloonOption[];
+} {
+  const target = items[targetIdx];
+  const others = items.filter((_, i) => i !== targetIdx);
+  const shuffled = [...others].sort(() => 0.5 - Math.random()).slice(0, 3);
+  const selectedItems = [target, ...shuffled].sort(() => 0.5 - Math.random());
+
+  const options: BalloonOption[] = selectedItems.map((item, idx) => ({
+    item,
+    color: BALLOON_COLORS[idx % BALLOON_COLORS.length],
     popped: false,
-    emoji: EMOJI_FALLBACKS[fc.id % EMOJI_FALLBACKS.length],
   }));
+
+  return { target, options };
 }
 
 export default function PopBalloon() {
-  const [items, setItems] = useState<Flashcard[]>([]);
+  const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
+  const category = getCategoryBySlug(categorySlug);
+  const items = getCategoryVocabulary(category.slug);
+
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [balloons, setBalloons] = useState<Balloon[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [choicesDisabled, setChoicesDisabled] = useState(true);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [correct, setCorrect] = useState(0);
-  const [wrong, setWrong] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  const [starsAwarded, setStarsAwarded] = useState(10);
   const [correctStreak, setCorrectStreak] = useState(0);
   const [wrongStreak, setWrongStreak] = useState(0);
-  const roundRef = useRef(0);
-  const popAnims = useRef<Record<number, Animated.Value>>({});
+  const [locked, setLocked] = useState(false);
 
-  usePresence('Naglalaro ng Pop Balloon', 'minigame_pop_balloon');
+  const totalRounds = Math.min(items.length, 8);
+  const [roundData, setRoundData] = useState(() => buildRound(items, 0));
 
-  useEffect(() => {
-    minigameService.getContent('pop_balloon')
-      .then((res) => {
-        const all = res.items;
-        setItems(all);
-        const bl = buildBalloons(all, 0);
-        bl.forEach((b) => { popAnims.current[b.id] = new Animated.Value(1); });
-        setBalloons(bl);
-      })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  }, []);
+  usePresence(`Pop Balloon (${category.name})`, 'minigame_pop_balloon');
 
-  // On new round: play audio for current target
-  useEffect(() => {
-    if (items.length === 0 || balloons.length === 0) return;
-    const thisRound = currentIdx;
-    roundRef.current = thisRound;
-    setChoicesDisabled(true);
-    stopCurrentSound();
+  const target = roundData.target;
+  const balloonOptions = roundData.options;
 
-    const t = setTimeout(async () => {
-      if (roundRef.current !== thisRound) return;
-      const targetItem = items[currentIdx];
-      if (!targetItem) return;
-      const audio = targetItem.audio_url ?? '';
-      if (!audio) { setChoicesDisabled(false); return; }
-      setIsPlayingAudio(true);
-      await playSound(audio, () => {
-        if (roundRef.current === thisRound) {
-          setIsPlayingAudio(false);
-          setChoicesDisabled(false);
-        }
-      });
-    }, 1500);
-    return () => { clearTimeout(t); stopCurrentSound(); };
-  }, [currentIdx, items, balloons.length]);
+  const handlePop = (option: BalloonOption) => {
+    if (locked || option.popped) return;
+    setLocked(true);
 
-  const handlePopBalloon = async (balloon: Balloon) => {
-    if (choicesDisabled || balloon.popped) return;
-    setChoicesDisabled(true);
+    const isCorrect = option.item.id === target.id;
 
-    const targetItem = items[currentIdx];
-    const isCorrect = balloon.id === targetItem?.id;
+    // Pop the tapped balloon
+    setRoundData((prev) => ({
+      ...prev,
+      options: prev.options.map((b) => (b.item.id === option.item.id ? { ...b, popped: true } : b)),
+    }));
 
-    // Pop animation
-    Animated.sequence([
-      Animated.timing(popAnims.current[balloon.id], { toValue: 1.5, duration: 100, useNativeDriver: true }),
-      Animated.timing(popAnims.current[balloon.id], { toValue: 0, duration: 150, useNativeDriver: true }),
-    ]).start();
-    setBalloons((prev) => prev.map((b) => b.id === balloon.id ? { ...b, popped: true } : b));
+    if (isCorrect) {
+      const newStreak = correctStreak + 1;
+      setCorrectStreak(newStreak);
+      setWrongStreak(0);
+      setCorrect((c) => c + 1);
+      const soundKey = getFeedbackAudio(true, newStreak);
+      playLocalSound(soundKey);
+    } else {
+      const newStreak = wrongStreak + 1;
+      setWrongStreak(newStreak);
+      setCorrectStreak(0);
+      const soundKey = getFeedbackAudio(false, newStreak);
+      playLocalSound(soundKey);
+    }
 
-    let newCs = correctStreak, newWs = wrongStreak;
-    if (isCorrect) { newCs++; newWs = 0; setCorrect((c) => c + 1); }
-    else { newWs++; newCs = 0; setWrong((w) => w + 1); }
-    setCorrectStreak(newCs); setWrongStreak(newWs);
-
-    const sound = getFeedbackAudio(isCorrect, isCorrect ? newCs : newWs);
-    await playSound(sound, () => {
-      const next = currentIdx + 1;
-      if (next < items.length) {
-        setCurrentIdx(next);
-        const bl = buildBalloons(items, next);
-        bl.forEach((b) => { popAnims.current[b.id] = new Animated.Value(1); });
-        setBalloons(bl);
-      } else {
+    setTimeout(() => {
+      if (currentIdx + 1 >= totalRounds) {
         setGameOver(true);
+        submitFinalScore(correct + (isCorrect ? 1 : 0));
+      } else {
+        const nextIdx = currentIdx + 1;
+        setCurrentIdx(nextIdx);
+        setRoundData(buildRound(items, nextIdx % items.length));
+        setLocked(false);
       }
-    });
+    }, 1100);
   };
 
-  const handleSubmit = async () => {
-    if (submitting) return;
-    setSubmitting(true);
+  const submitFinalScore = async (finalScore: number) => {
     try {
-      const total = correct + wrong;
-      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-      const res = await minigameService.submitResult({ game_type: 'pop_balloon', score, metadata: { correct, wrong } });
-      setStarsAwarded(res.session.stars_awarded);
-    } catch { } finally { setSubmitting(false); }
+      const percent = Math.round((finalScore / totalRounds) * 100);
+      const res = await minigameService.submitResult({
+        game_type: 'pop_balloon',
+        score: percent,
+        metadata: { category: category.slug, correct: finalScore, total: totalRounds },
+      });
+      if (res?.session?.stars_awarded) {
+        setStarsAwarded(res.session.stars_awarded);
+      }
+    } catch {
+      // offline fallback
+    }
   };
 
-  useEffect(() => { if (gameOver) handleSubmit(); }, [gameOver]);
-
-  if (loading) return <LoadingView message="Inihahanda ang Pop Balloon..." />;
-
-  if (gameOver || items.length === 0) {
-    return (
-      <View style={styles.container}>
-        <ScreenHeader title="Pop Balloon" bgColor="#EF4444" />
-        <View style={styles.result}>
-          <Text style={styles.resultEmoji}>🎈</Text>
-          <Text style={styles.resultTitle}>{correct >= wrong ? 'Napakagaling!' : 'Subukan Muli!'}</Text>
-          <Text style={styles.resultSub}>{correct} Tama | {wrong} Mali</Text>
-          {starsAwarded > 0 && (
-            <View style={[styles.starsPill, Shadows.button]}>
-              <Text style={styles.starsText}>+ {starsAwarded} Bituin! ⭐</Text>
-            </View>
-          )}
-          <PrimaryButton title="Bumalik" variant="primary" size="lg" onPress={() => router.back()} style={{ width: '100%', marginTop: 16 }} />
-        </View>
-      </View>
-    );
-  }
-
-  const targetItem = items[currentIdx];
+  const handleRestart = () => {
+    setCurrentIdx(0);
+    setCorrect(0);
+    setCorrectStreak(0);
+    setWrongStreak(0);
+    setGameOver(false);
+    setLocked(false);
+    setRoundData(buildRound(items, 0));
+  };
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Pop Balloon" subtitle={`${currentIdx + 1} ng ${items.length}`} bgColor="#EF4444" />
-      <View style={styles.game}>
-        <ProgressIndicator current={currentIdx + 1} total={items.length} color="#EF4444" />
+      <ScreenHeader
+        title={`Pop Balloon — ${category.name}`}
+        bgColor={category.color}
+      />
 
-        {/* Prompt */}
-        <View style={[styles.promptCard, Shadows.card]}>
-          <Text style={styles.promptEmoji}>{isPlayingAudio ? '🎶' : '🔊'}</Text>
-          <Text style={styles.promptText}>
-            {isPlayingAudio ? 'Makinig nang mabuti...' : choicesDisabled ? '⏳ Maghintay...' : 'I-pop ang tamang balloon!'}
-          </Text>
+      <View style={styles.content}>
+        {/* Progress Bar */}
+        <View style={styles.progressRow}>
+          <ProgressIndicator
+            current={currentIdx + 1}
+            total={totalRounds}
+            color={category.color}
+          />
         </View>
 
-        {/* Balloons */}
-        <View style={styles.balloonsArea}>
-          {balloons.map((balloon) => (
-            <Animated.View
-              key={balloon.id}
-              style={{
-                transform: [{ scale: popAnims.current[balloon.id] ?? new Animated.Value(1) }],
-                opacity: balloon.popped ? 0 : 1,
-              }}
-            >
+        {/* Prompt Card */}
+        <View style={[styles.promptCard, Shadows.card]}>
+          <Text style={styles.promptLabel}>Pumutok ng lobo na may:</Text>
+          <Text style={[styles.targetWord, { color: category.color }]}>
+            {`"${target.filipino}"`}
+          </Text>
+          <Text style={styles.targetEnglish}>({target.english})</Text>
+        </View>
+
+        {/* Floating Balloons Grid */}
+        <View style={styles.balloonsGrid}>
+          {balloonOptions.map((balloon) => {
+            if (balloon.popped) {
+              return (
+                <View key={balloon.item.id} style={styles.poppedPlaceholder}>
+                  <Text style={styles.popSplash}>💥</Text>
+                  <Text style={styles.popWord}>{balloon.item.filipino}</Text>
+                </View>
+              );
+            }
+
+            return (
               <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => handlePopBalloon(balloon)}
-                disabled={choicesDisabled || balloon.popped}
-                style={[styles.balloon, { backgroundColor: balloon.color }, Shadows.card]}
+                key={balloon.item.id}
+                activeOpacity={0.8}
+                disabled={locked}
+                onPress={() => handlePop(balloon)}
+                style={[
+                  styles.balloon,
+                  { backgroundColor: balloon.color },
+                  Shadows.card,
+                ]}
               >
-                <Text style={styles.balloonString}>|</Text>
-                <Text style={styles.balloonEmoji}>{balloon.emoji}</Text>
+                {/* Glossy Balloon Highlight */}
+                <View style={styles.balloonGloss} />
+
+                {/* Balloon Content (Emoji & Label) */}
+                <Text style={styles.balloonEmoji}>{balloon.item.emoji || '🎈'}</Text>
+                <Text style={styles.balloonLabel} numberOfLines={1}>
+                  {balloon.item.filipino}
+                </Text>
+
+                {/* Balloon Knot */}
+                <View style={[styles.balloonKnot, { borderBottomColor: balloon.color }]} />
               </TouchableOpacity>
-            </Animated.View>
-          ))}
+            );
+          })}
         </View>
       </View>
+
+      {/* GAME OVER MODAL */}
+      {gameOver && (
+        <View style={styles.overlay}>
+          <View style={[styles.victoryCard, Shadows.card]}>
+            <Text style={styles.victoryEmoji}>🎈🎉</Text>
+            <Text style={styles.victoryTitle}>Napakagaling!</Text>
+            <Text style={styles.victoryDesc}>
+              Naputok mo ang mga lobo sa {category.name} ({correct} / {totalRounds} tama)!
+            </Text>
+
+            <View style={styles.starsEarnedRow}>
+              <Text style={styles.starBig}>⭐</Text>
+              <Text style={styles.starsEarnedText}>+{starsAwarded} Bituin!</Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <PrimaryButton
+                title="Maglaro Ulit 🔄"
+                variant="success"
+                size="md"
+                onPress={handleRestart}
+                style={styles.btnAction}
+              />
+              <PrimaryButton
+                title="Bumalik sa Aralin 🏠"
+                variant="secondary"
+                size="md"
+                onPress={() => router.back()}
+                style={styles.btnAction}
+              />
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF1F2' },
-  game: { flex: 1, padding: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#F0F9FF',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+    alignItems: 'center',
+  },
+  progressRow: {
+    width: '100%',
+    marginBottom: 16,
+  },
   promptCard: {
-    backgroundColor: Colors.white, borderRadius: 20, borderWidth: 4,
-    borderColor: Colors.white, padding: 14, flexDirection: 'row',
-    alignItems: 'center', gap: 12, marginVertical: 12,
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  promptEmoji: { fontSize: 32 },
-  promptText: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.heavy,
-    color: Colors.text,
-    flex: 1,
+  promptLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
   },
-  balloonsArea: {
-    flex: 1,
+  targetWord: {
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 4,
+    textTransform: 'lowercase',
+  },
+  targetEnglish: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  balloonsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    alignContent: 'flex-start',
-    paddingTop: 20,
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
   },
   balloon: {
-    width: 100,
-    height: 130,
-    borderRadius: 50,
+    width: BALLOON_SIZE,
+    height: BALLOON_SIZE * 1.25,
+    borderRadius: BALLOON_SIZE * 0.5,
+    borderBottomLeftRadius: BALLOON_SIZE * 0.6,
+    borderBottomRightRadius: BALLOON_SIZE * 0.6,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 10,
-    borderWidth: 4,
-    borderColor: Colors.white,
+    position: 'relative',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  balloonString: { position: 'absolute', bottom: -14, fontSize: 20, color: '#94A3B8' },
-  balloonEmoji: { fontSize: 48 },
-  result: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  resultEmoji: { fontSize: 72, marginBottom: 12 },
-  resultTitle: { fontSize: Typography.sizes.hero, fontWeight: Typography.weights.heavy, color: Colors.text, marginBottom: 8 },
-  resultSub: { fontSize: Typography.sizes.md, color: Colors.textLight, marginBottom: 16 },
-  starsPill: { backgroundColor: '#FEF3C7', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 2, borderColor: '#F59E0B', marginBottom: 8 },
-  starsText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.heavy, color: '#B45309' },
+  balloonGloss: {
+    position: 'absolute',
+    top: 14,
+    left: 18,
+    width: BALLOON_SIZE * 0.22,
+    height: BALLOON_SIZE * 0.35,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 999,
+    transform: [{ rotate: '-30deg' }],
+  },
+  balloonEmoji: {
+    fontSize: 36,
+    marginBottom: 6,
+  },
+  balloonLabel: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    paddingHorizontal: 8,
+    textAlign: 'center',
+  },
+  balloonKnot: {
+    position: 'absolute',
+    bottom: -8,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  poppedPlaceholder: {
+    width: BALLOON_SIZE,
+    height: BALLOON_SIZE * 1.25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  popSplash: {
+    fontSize: 48,
+  },
+  popWord: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginTop: 4,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  victoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+  },
+  victoryEmoji: {
+    fontSize: 56,
+    marginBottom: 10,
+  },
+  victoryTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  victoryDesc: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  starsEarnedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF9C3',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+    gap: 8,
+  },
+  starBig: {
+    fontSize: 28,
+  },
+  starsEarnedText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#854D0E',
+  },
+  modalButtons: {
+    width: '100%',
+    gap: 10,
+  },
+  btnAction: {
+    width: '100%',
+  },
 });

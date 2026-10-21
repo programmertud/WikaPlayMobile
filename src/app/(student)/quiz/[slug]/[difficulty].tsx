@@ -11,10 +11,12 @@ import {
   View,
 } from 'react-native';
 import { ErrorView } from '../../../../components/ErrorView';
+import { ItemVisual } from '../../../../components/ItemVisual';
 import { LoadingView } from '../../../../components/LoadingView';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../../components/ScreenHeader';
+import { getCategoryBySlug, getRandomVocabularyChoices } from '../../../../data/categories';
 import { useAuth } from '../../../../hooks/use-auth';
 import { usePresence } from '../../../../hooks/use-presence';
 import { useQuiz } from '../../../../hooks/use-quiz';
@@ -56,7 +58,50 @@ export default function QuizGameplayScreen() {
       setCategoryColor(res.category.color || Colors.skyBlue);
       setQuestions(res.questions);
     } catch (err: any) {
-      setError(err.message || 'Nabigong kunin ang mga tanong para sa pagsusulit.');
+      // Fallback to local category data if offline or network failure
+      const cat = getCategoryBySlug(slug);
+      if (cat && cat.items && cat.items.length > 0) {
+        setCategoryName(cat.name);
+        setCategoryId(Number(cat.id.replace(/\D/g, '')) || 1);
+        setCategoryColor(cat.color || Colors.skyBlue);
+
+        // Build 5 dynamic offline quiz questions
+        const shuffledItems = [...cat.items].sort(() => 0.5 - Math.random());
+        const selectedTargets = shuffledItems.slice(0, Math.min(5, shuffledItems.length));
+        const offlineQuestions: QuizQuestion[] = selectedTargets.map((target, idx) => {
+          const choices = getRandomVocabularyChoices(cat.slug, target, 4);
+          const mappedChoices: ChoiceItem[] = choices.map((c) => ({
+            id: c.id,
+            image_url: c.imageUri || '',
+            text: c.filipino,
+            vocabularyItem: c,
+          }));
+
+          let qText = 'Ano ang tawag sa larawang ito?';
+          if (difficulty === 'katamtaman') {
+            qText = 'Pakinggan at piliin ang tamang larawan:';
+          } else if (difficulty === 'mahirap') {
+            qText = `Ano ang salitang Filipino para sa "${target.english}"?`;
+          }
+
+          return {
+            id: idx + 1,
+            target_image_url: target.imageUri || '',
+            target_item_name: target.filipino,
+            targetItem: target,
+            audio_url: target.audioUri || null,
+            choices: mappedChoices,
+            correct_answer: target.id,
+            points: difficulty === 'madali' ? 10 : difficulty === 'katamtaman' ? 15 : 20,
+            difficulty,
+            question_text: qText,
+          };
+        });
+
+        setQuestions(offlineQuestions);
+      } else {
+        setError(err.message || 'Nabigong kunin ang mga tanong para sa pagsusulit.');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,7 +124,34 @@ export default function QuizGameplayScreen() {
       setResultSession(res.session);
       updateUserStars(res.session.stars_balance);
     } catch (err: any) {
-      Alert.alert('Paalala', err.message || 'Nabigong i-save ang resulta ng quiz.');
+      // Local scoring fallback when offline
+      let correct = 0;
+      answers.forEach((ans) => {
+        const q = questions.find((item) => item.id === ans.question_id);
+        if (q && String(q.correct_answer) === String(ans.selected_answer)) {
+          correct += 1;
+        }
+      });
+      const total = questions.length;
+      const wrong = total - correct;
+      const pointsPerQ = difficulty === 'madali' ? 10 : difficulty === 'katamtaman' ? 15 : 20;
+      const totalScore = correct * pointsPerQ;
+      const passed = correct >= Math.ceil(total * 0.6);
+      const starsAwarded = passed ? (difficulty === 'madali' ? 1 : difficulty === 'katamtaman' ? 2 : 3) : 0;
+
+      const fallbackSession: QuizResultSession = {
+        id: Date.now(),
+        score: totalScore,
+        total_questions: total,
+        correct_count: correct,
+        wrong_count: wrong,
+        passed,
+        stars_awarded: starsAwarded,
+        stars_balance: starsAwarded,
+      };
+
+      setResultSession(fallbackSession);
+      updateUserStars(starsAwarded);
     } finally {
       setSubmitting(false);
     }
@@ -218,7 +290,13 @@ export default function QuizGameplayScreen() {
           ) : (
             // Madali or Mahirap format:
             <View style={styles.standardPrompt}>
-              {currentQuestion?.target_image_url ? (
+              {currentQuestion?.targetItem ? (
+                <ItemVisual
+                  item={currentQuestion.targetItem}
+                  size={130}
+                  style={{ marginBottom: 12 }}
+                />
+              ) : currentQuestion?.target_image_url ? (
                 <Image
                   source={{ uri: currentQuestion.target_image_url }}
                   style={styles.promptImage}
@@ -260,8 +338,14 @@ export default function QuizGameplayScreen() {
                   Shadows.card,
                 ]}
               >
-                {/* Large picture choice */}
-                {choice.image_url ? (
+                {/* Visual choice: ItemVisual if available, else Image or Emoji */}
+                {choice.vocabularyItem ? (
+                  <ItemVisual
+                    item={choice.vocabularyItem}
+                    size={CHOICE_WIDTH - 28}
+                    style={{ flex: 1 }}
+                  />
+                ) : choice.image_url ? (
                   <Image
                     source={{ uri: choice.image_url }}
                     style={styles.choiceImage}

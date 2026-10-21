@@ -1,6 +1,5 @@
-import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
@@ -9,164 +8,119 @@ import {
   View,
 } from 'react-native';
 import { AudioButton } from '../../../components/AudioButton';
-import { ErrorView } from '../../../components/ErrorView';
-import { LoadingView } from '../../../components/LoadingView';
-import { ProgressIndicator } from '../../../components/ProgressIndicator';
+import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { categoryService } from '../../../services/api';
-import { Colors, Shadows, Typography } from '../../../theme';
-import { Flashcard } from '../../../types';
+import { playLocalSound } from '../../../services/audio/sound-service';
+import { Shadows, Typography } from '../../../theme';
 
 const { width } = Dimensions.get('window');
+const CARD_SIZE = Math.min(width - 48, 320);
 
 export default function FlashcardsViewerScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
-  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
-  const [categoryName, setCategoryName] = useState<string>('Flashcards');
-  const [categoryColor, setCategoryColor] = useState<string>(Colors.skyBlue);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const category = getCategoryBySlug(slug);
+  const items = category.items;
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  usePresence(`Nagbabasa ng Flashcards sa ${categoryName}`, 'flashcards_view');
+  const currentItem = items[currentIndex] || items[0];
+  const isFirst = currentIndex === 0;
+  const isLast = currentIndex === items.length - 1;
 
-  const loadFlashcards = async () => {
-    if (!slug) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await categoryService.getFlashcards(slug);
-      setFlashcards(res.flashcards);
-      setCategoryName(res.category.name);
-      setCategoryColor(res.category.color || Colors.skyBlue);
-      setCurrentIndex(0);
-    } catch (err: any) {
-      setError(err.message || 'Nabigong kunin ang mga flashcard.');
-    } finally {
-      setLoading(false);
+  usePresence(`Nagbabasa ng Flashcards sa ${category.name}`, 'flashcards_view');
+
+  const handlePrev = () => {
+    if (!isFirst) {
+      setCurrentIndex((i) => i - 1);
     }
   };
 
-  useEffect(() => {
-    loadFlashcards();
-  }, [slug]);
-
-  if (loading) {
-    return <LoadingView message="Inihahanda ang mga flashcard..." />;
-  }
-
-  if (error || flashcards.length === 0) {
-    return (
-      <View style={{ flex: 1 }}>
-        <ScreenHeader title={categoryName} bgColor={categoryColor} />
-        <ErrorView
-          message={error || 'Walang nakitang flashcards para sa araling ito.'}
-          onRetry={loadFlashcards}
-        />
-      </View>
-    );
-  }
-
-  const currentCard = flashcards[currentIndex];
-  const isFirst = currentIndex === 0;
-  const isLast = currentIndex === flashcards.length - 1;
-
-  const handlePrev = () => {
-    if (!isFirst) setCurrentIndex((prev) => prev - 1);
-  };
-
   const handleNext = () => {
-    if (!isLast) setCurrentIndex((prev) => prev + 1);
+    if (!isLast) {
+      setCurrentIndex((i) => i + 1);
+    }
   };
 
   return (
     <View style={styles.container}>
+      {/* Header with Back button and Category Name */}
       <ScreenHeader
-        title={`${categoryName} (${currentIndex + 1}/${flashcards.length})`}
-        bgColor={categoryColor}
+        title={category.name.toUpperCase()}
+        bgColor={category.color}
       />
 
       <View style={styles.content}>
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <ProgressIndicator
-            current={currentIndex + 1}
-            total={flashcards.length}
-            color={categoryColor}
-          />
-        </View>
+        {/* Main Flashcard */}
+        <View style={[styles.flashcard, Shadows.card, { borderColor: category.color }]}>
+          {/* Card Visual / Illustration */}
+          <ItemVisual item={currentItem} size={CARD_SIZE * 0.72} style={styles.visualContainer} />
 
-        {/* Large Illustrated Flashcard */}
-        <View style={[styles.card, Shadows.card]}>
-          <View style={styles.imageWrapper}>
-            {currentCard.image_url ? (
-              <Image
-                source={{ uri: currentCard.image_url }}
-                style={styles.cardImage}
-                contentFit="contain"
-                transition={300}
-              />
-            ) : (
-              <Text style={styles.placeholderEmoji}>🖼️</Text>
-            )}
-          </View>
-
-          {/* Filipino Word Title */}
-          <Text style={styles.filipinoWord}>
-            {currentCard.filipino_name}
+          {/* Filipino Name (Prominently Highlighted) */}
+          <Text style={[styles.filipinoName, { color: category.color }]}>
+            {currentItem.filipino}
           </Text>
 
-          {/* English Translation */}
-          {currentCard.english_name ? (
-            <Text style={styles.englishWord}>
-              ({currentCard.english_name})
-            </Text>
-          ) : null}
+          {/* English Translation (Directly underneath, smaller) */}
+          <Text style={styles.englishName}>
+            {currentItem.english}
+          </Text>
 
-          {/* Audio Playback Button */}
-          <View style={styles.audioButtonRow}>
-            <AudioButton
-              audioUrl={currentCard.audio_url}
-              label={`Pakinggan ang ${currentCard.filipino_name}`}
-              size={72}
-            />
-            <Text style={styles.audioInstruction}>Pindutin para pakinggan</Text>
+          {/* Optional Audio Button */}
+          {currentItem.audioUri ? (
+            <View style={styles.audioContainer}>
+              <AudioButton audioUrl={currentItem.audioUri} size={54} />
+            </View>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => playLocalSound('tama')}
+              style={[styles.audioPill, { backgroundColor: category.color + '20' }]}
+            >
+              <Text style={styles.audioPillText}>🔊 Pakinggan</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Progress Indicator: e.g. 1 / 20 */}
+          <View style={styles.counterBadge}>
+            <Text style={styles.counterText}>
+              {currentIndex + 1} / {items.length}
+            </Text>
           </View>
         </View>
 
-        {/* Previous and Next Navigation Controls */}
-        <View style={styles.navRow}>
+        {/* Navigation Controls: Previous & Next */}
+        <View style={styles.controlsRow}>
           <TouchableOpacity
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             onPress={handlePrev}
             disabled={isFirst}
             style={[
               styles.navButton,
-              isFirst ? styles.navButtonDisabled : styles.navButtonActive,
+              styles.prevButton,
+              isFirst && styles.disabledButton,
               Shadows.button,
             ]}
           >
-            <Text style={styles.navIcon}>◀️</Text>
-            <Text style={[styles.navText, isFirst && styles.navTextDisabled]}>
-              Bumalik
+            <Text style={[styles.navButtonText, isFirst && styles.disabledText]}>
+              ⬅️ Nakaraan
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             onPress={handleNext}
             disabled={isLast}
             style={[
               styles.navButton,
-              isLast ? styles.navButtonDisabled : styles.navButtonActive,
+              styles.nextButton,
+              isLast && styles.disabledButton,
               Shadows.button,
             ]}
           >
-            <Text style={[styles.navText, isLast && styles.navTextDisabled]}>
-              Susunod
+            <Text style={[styles.navButtonText, isLast && styles.disabledText]}>
+              Susunod ➡️
             </Text>
-            <Text style={styles.navIcon}>▶️</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -181,101 +135,95 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
-  progressContainer: {
-    width: '100%',
+  flashcard: {
+    width: CARD_SIZE,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    borderWidth: 4,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  visualContainer: {
+    marginBottom: 20,
+  },
+  filipinoName: {
+    fontSize: 32,
+    fontWeight: '900',
+    textAlign: 'center',
+    textTransform: 'lowercase',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  englishName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
     marginBottom: 16,
   },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: Colors.white,
-    borderRadius: 32,
-    borderWidth: 4,
-    borderColor: Colors.white,
-    alignItems: 'center',
-    padding: 20,
-    flex: 1,
-    maxHeight: 460,
-    justifyContent: 'space-between',
+  audioContainer: {
+    marginBottom: 16,
   },
-  imageWrapper: {
-    width: '100%',
-    height: 220,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
+  audioPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 16,
   },
-  cardImage: {
-    width: '100%',
-    height: '100%',
+  audioPillText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0284C7',
   },
-  placeholderEmoji: {
-    fontSize: 72,
+  counterBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  filipinoWord: {
-    fontSize: 32,
-    fontWeight: Typography.weights.heavy,
-    color: '#0369A1',
-    textAlign: 'center',
-    marginTop: 10,
+  counterText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#475569',
   },
-  englishWord: {
-    fontSize: Typography.sizes.md,
-    color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
-    textAlign: 'center',
-  },
-  audioButtonRow: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  audioInstruction: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-    fontWeight: Typography.weights.bold,
-    marginTop: 6,
-  },
-  navRow: {
+  controlsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
-    maxWidth: 360,
-    marginTop: 16,
-    marginBottom: 10,
+    width: CARD_SIZE,
+    marginTop: 24,
+    gap: 16,
   },
   navButton: {
-    flexDirection: 'row',
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 20,
     borderWidth: 3,
-    borderColor: Colors.white,
-    minWidth: 140,
+    borderColor: '#FFFFFF',
   },
-  navButtonActive: {
-    backgroundColor: Colors.skyBlue,
+  prevButton: {
+    backgroundColor: '#94A3B8',
   },
-  navButtonDisabled: {
+  nextButton: {
+    backgroundColor: '#38BDF8',
+  },
+  disabledButton: {
     backgroundColor: '#E2E8F0',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
   },
-  navIcon: {
-    fontSize: 18,
-    marginHorizontal: 4,
+  navButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
-  navText: {
-    color: Colors.white,
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.heavy,
-  },
-  navTextDisabled: {
+  disabledText: {
     color: '#94A3B8',
   },
 });

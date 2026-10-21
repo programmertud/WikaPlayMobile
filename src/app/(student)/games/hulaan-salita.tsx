@@ -1,10 +1,10 @@
 /**
  * Hulaan ang Salita Mini-Game
- * Student sees a picture/emoji and types or picks letters to guess the Filipino word.
- * Uses multiple-choice letter options for kindergarten accessibility.
+ * Category-based: Displays visual clue from the selected category,
+ * student spells out or guesses the Filipino word using letter tiles.
  */
-import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -12,221 +12,410 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { LoadingView } from '../../../components/LoadingView';
+import { ItemVisual } from '../../../components/ItemVisual';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { getFeedbackAudio, playSound, stopCurrentSound } from '../../../services/audio/sound-service';
 import { minigameService } from '../../../services/api';
+import { getFeedbackAudio, playLocalSound } from '../../../services/audio/sound-service';
 import { Colors, Shadows, Typography } from '../../../theme';
-import type { Flashcard } from '../../../types';
+import { VocabularyItem } from '../../../types';
 
-const EMOJI_FALLBACKS = ['🐶','🐱','🐄','🐷','🍎','🍌','🥕','🌽','🔴','🔵','⭕','🔷'];
-const EXTRA_LETTERS = 'ABCDEFGHIJKLMNOPRSTUVWXYZ';
+const EXTRA_ALPHABET = 'AEIOUBKDGLMNPRSTW';
 
 function buildChoices(word: string): string[] {
-  const upper = word.toUpperCase().replace(/\s/g, '');
-  const unique = [...new Set(upper)];
+  const letters = word.toUpperCase().replace(/[^A-Z]/g, '').split('');
+  const unique = Array.from(new Set(letters));
   const extras: string[] = [];
-  for (const ch of EXTRA_LETTERS) {
+  for (const ch of EXTRA_ALPHABET) {
     if (extras.length >= 4) break;
     if (!unique.includes(ch)) extras.push(ch);
   }
-  return [...unique, ...extras].sort(() => Math.random() - 0.5);
+  return [...letters, ...extras].sort(() => 0.5 - Math.random());
 }
 
 export default function HulaanSalita() {
-  const [items, setItems] = useState<Flashcard[]>([]);
+  const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
+  const category = getCategoryBySlug(categorySlug);
+  const items = getCategoryVocabulary(category.slug);
+
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [inputLetters, setInputLetters] = useState<string[]>([]);
   const [correct, setCorrect] = useState(0);
-  const [wrong, setWrong] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState(0);
-  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [starsAwarded, setStarsAwarded] = useState(10);
   const [correctStreak, setCorrectStreak] = useState(0);
   const [wrongStreak, setWrongStreak] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<'correct' | 'wrong' | null>(null);
 
-  usePresence('Naglalaro ng Hulaan ang Salita', 'minigame_hulaan');
+  const totalRounds = Math.min(items.length, 8);
+  const currentItem: VocabularyItem = items[currentIdx % items.length];
+  const targetLetters = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
+  const [choices, setChoices] = useState<string[]>(() => buildChoices(targetLetters));
 
-  useEffect(() => {
-    minigameService.getContent('hulaan_salita')
-      .then((res) => setItems(res.items.slice(0, 8)))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  }, []);
+  usePresence(`Hulaan ang Salita (${category.name})`, 'minigame_hulaan');
 
-  const currentItem = items[currentIdx] ?? null;
-  const targetWord = currentItem ? (currentItem.filipino_name || currentItem.name).toUpperCase().replace(/\s/g, '') : '';
-  const letterChoices = currentItem ? buildChoices(targetWord) : [];
+  const handleLetterPress = (ch: string) => {
+    if (locked || inputLetters.length >= targetLetters.length) return;
+    const nextInput = [...inputLetters, ch];
+    setInputLetters(nextInput);
 
-  const handleLetterPress = (letter: string) => {
-    if (feedback) return;
-    if (inputLetters.length >= targetWord.length) return;
-    setInputLetters((prev) => [...prev, letter]);
+    // If fully filled, auto-verify
+    if (nextInput.length === targetLetters.length) {
+      verifyAnswer(nextInput.join(''));
+    }
   };
 
   const handleDelete = () => {
-    if (feedback) return;
+    if (locked || inputLetters.length === 0) return;
     setInputLetters((prev) => prev.slice(0, -1));
   };
 
-  const handleCheck = async () => {
-    if (!currentItem || feedback) return;
-    const guess = inputLetters.join('');
-    const isCorrect = guess === targetWord;
-    setFeedback(isCorrect ? 'correct' : 'wrong');
+  const verifyAnswer = (guess: string) => {
+    setLocked(true);
+    const isCorrect = guess === targetLetters;
 
-    let newCs = correctStreak, newWs = wrongStreak;
-    if (isCorrect) { newCs++; newWs = 0; setCorrect((c) => c + 1); }
-    else { newWs++; newCs = 0; setWrong((w) => w + 1); }
-    setCorrectStreak(newCs); setWrongStreak(newWs);
+    if (isCorrect) {
+      setFeedbackStatus('correct');
+      const newStreak = correctStreak + 1;
+      setCorrectStreak(newStreak);
+      setWrongStreak(0);
+      setCorrect((c) => c + 1);
+      const soundKey = getFeedbackAudio(true, newStreak);
+      playLocalSound(soundKey);
+    } else {
+      setFeedbackStatus('wrong');
+      const newStreak = wrongStreak + 1;
+      setWrongStreak(newStreak);
+      setCorrectStreak(0);
+      const soundKey = getFeedbackAudio(false, newStreak);
+      playLocalSound(soundKey);
+    }
 
-    const sound = getFeedbackAudio(isCorrect, isCorrect ? newCs : newWs);
-    await playSound(sound, () => {
-      setFeedback(null);
-      setInputLetters([]);
-      const next = currentIdx + 1;
-      if (next < items.length) setCurrentIdx(next);
-      else setGameOver(true);
-    });
+    setTimeout(() => {
+      if (currentIdx + 1 >= totalRounds) {
+        setGameOver(true);
+        submitFinalScore(correct + (isCorrect ? 1 : 0));
+      } else {
+        const nextIdx = currentIdx + 1;
+        setCurrentIdx(nextIdx);
+        const nextTarget = items[nextIdx % items.length].filipino.toUpperCase().replace(/[^A-Z]/g, '');
+        setChoices(buildChoices(nextTarget));
+        setInputLetters([]);
+        setFeedbackStatus(null);
+        setLocked(false);
+      }
+    }, 1200);
   };
 
-  const handleSubmit = async () => {
-    if (submitting) return;
-    setSubmitting(true);
+  const submitFinalScore = async (finalScore: number) => {
     try {
-      const total = correct + wrong;
-      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-      const res = await minigameService.submitResult({ game_type: 'hulaan_salita', score, metadata: { correct, wrong } });
-      setStarsAwarded(res.session.stars_awarded);
-    } catch { } finally { setSubmitting(false); }
+      const percent = Math.round((finalScore / totalRounds) * 100);
+      const res = await minigameService.submitResult({
+        game_type: 'hulaan_salita',
+        score: percent,
+        metadata: { category: category.slug, correct: finalScore, total: totalRounds },
+      });
+      if (res?.session?.stars_awarded) {
+        setStarsAwarded(res.session.stars_awarded);
+      }
+    } catch {
+      // offline fallback
+    }
   };
 
-  useEffect(() => { if (gameOver) handleSubmit(); }, [gameOver]);
-
-  if (loading) return <LoadingView message="Inihahanda ang laro..." />;
-
-  if (gameOver || items.length === 0) {
-    return (
-      <View style={styles.container}>
-        <ScreenHeader title="Hulaan ang Salita" bgColor="#10B981" />
-        <View style={styles.result}>
-          <Text style={styles.resultEmoji}>🎉</Text>
-          <Text style={styles.resultTitle}>{correct >= wrong ? 'Magaling!' : 'Subukan Muli!'}</Text>
-          <Text style={styles.resultSub}>{correct} Tama | {wrong} Mali</Text>
-          {starsAwarded > 0 && (
-            <View style={[styles.starsPill, Shadows.button]}>
-              <Text style={styles.starsText}>+ {starsAwarded} Bituin! ⭐</Text>
-            </View>
-          )}
-          <PrimaryButton title="Bumalik" variant="primary" size="lg" onPress={() => router.back()} style={{ width: '100%', marginTop: 16 }} />
-        </View>
-      </View>
-    );
-  }
+  const handleRestart = () => {
+    setCurrentIdx(0);
+    setInputLetters([]);
+    setCorrect(0);
+    setCorrectStreak(0);
+    setWrongStreak(0);
+    setGameOver(false);
+    setLocked(false);
+    setFeedbackStatus(null);
+    const firstTarget = items[0].filipino.toUpperCase().replace(/[^A-Z]/g, '');
+    setChoices(buildChoices(firstTarget));
+  };
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Hulaan ang Salita" subtitle={`${currentIdx + 1} ng ${items.length}`} bgColor="#10B981" />
+      <ScreenHeader
+        title={`Hulaan ang Salita — ${category.name}`}
+        bgColor={category.color}
+      />
+
       <ScrollView contentContainerStyle={styles.content}>
-        <ProgressIndicator current={currentIdx + 1} total={items.length} color="#10B981" />
-
-        {/* Picture clue */}
-        <View style={[styles.clueCard, Shadows.card]}>
-          <Text style={styles.clueEmoji}>{EMOJI_FALLBACKS[currentItem!.id % EMOJI_FALLBACKS.length]}</Text>
-          <Text style={styles.clueHint}>Ano ito?</Text>
+        {/* Progress Indicator */}
+        <View style={styles.progressRow}>
+          <ProgressIndicator
+            current={currentIdx + 1}
+            total={totalRounds}
+            color={category.color}
+          />
         </View>
 
-        {/* Input display */}
-        <View style={styles.inputRow}>
-          {Array.from({ length: targetWord.length }).map((_, i) => (
-            <View key={i} style={[styles.letterBox, feedback === 'correct' && styles.letterBoxCorrect, feedback === 'wrong' && styles.letterBoxWrong]}>
-              <Text style={styles.letterBoxText}>{inputLetters[i] ?? ''}</Text>
-            </View>
-          ))}
+        {/* Visual Card */}
+        <View style={[styles.visualCard, Shadows.card]}>
+          <ItemVisual item={currentItem} size={150} />
+          <Text style={styles.englishHint}>English: {currentItem.english}</Text>
         </View>
 
-        {feedback && (
-          <Text style={[styles.feedbackText, { color: feedback === 'correct' ? '#10B981' : '#EF4444' }]}>
-            {feedback === 'correct' ? '✅ Tama!' : `❌ Mali! (${targetWord})`}
-          </Text>
-        )}
+        {/* Word Slot Blanks */}
+        <View style={styles.slotsRow}>
+          {Array.from({ length: targetLetters.length }).map((_, i) => {
+            const letter = inputLetters[i];
+            const isFilled = !!letter;
 
-        {/* Letter choices */}
-        <View style={styles.letterGrid}>
-          {letterChoices.map((letter) => (
+            let slotBorder = '#CBD5E1';
+            let slotBg = '#FFFFFF';
+
+            if (feedbackStatus === 'correct') {
+              slotBorder = Colors.grassGreen;
+              slotBg = '#F0FDF4';
+            } else if (feedbackStatus === 'wrong') {
+              slotBorder = Colors.coralPink;
+              slotBg = '#FFF1F2';
+            }
+
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.slot,
+                  { borderColor: slotBorder, backgroundColor: slotBg },
+                  isFilled && Shadows.soft,
+                ]}
+              >
+                <Text style={styles.slotText}>{letter || ''}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Letter Choices Bank */}
+        <View style={styles.choicesGrid}>
+          {choices.map((ch, idx) => (
             <TouchableOpacity
-              key={letter}
+              key={`${ch}-${idx}`}
+              activeOpacity={0.8}
+              disabled={locked}
+              onPress={() => handleLetterPress(ch)}
               style={[styles.letterBtn, Shadows.soft]}
-              onPress={() => handleLetterPress(letter)}
-              disabled={!!feedback}
             >
-              <Text style={styles.letterBtnText}>{letter}</Text>
+              <Text style={styles.letterBtnText}>{ch}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Controls */}
-        <View style={styles.controls}>
-          <PrimaryButton title="⌫ Burahin" variant="outline" size="md" onPress={handleDelete} style={{ flex: 1, marginRight: 8 }} />
-          <PrimaryButton
-            title="Suriin ✓"
-            variant="primary"
-            size="md"
-            onPress={handleCheck}
-            disabled={inputLetters.length < targetWord.length || !!feedback}
-            style={{ flex: 1 }}
-          />
+        {/* Action Controls */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={locked || inputLetters.length === 0}
+            onPress={handleDelete}
+            style={[styles.actionBtn, styles.deleteBtn, Shadows.soft]}
+          >
+            <Text style={styles.actionBtnText}>⌫ Burahin</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* GAME OVER MODAL */}
+      {gameOver && (
+        <View style={styles.overlay}>
+          <View style={[styles.victoryCard, Shadows.card]}>
+            <Text style={styles.victoryEmoji}>💡🎉</Text>
+            <Text style={styles.victoryTitle}>Ang Galing Mo!</Text>
+            <Text style={styles.victoryDesc}>
+              Nahulaan mo ang mga salita sa {category.name} ({correct} / {totalRounds} tama)!
+            </Text>
+
+            <View style={styles.starsEarnedRow}>
+              <Text style={styles.starBig}>⭐</Text>
+              <Text style={styles.starsEarnedText}>+{starsAwarded} Bituin!</Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <PrimaryButton
+                title="Maglaro Muli 🔄"
+                variant="success"
+                size="md"
+                onPress={handleRestart}
+                style={styles.btnAction}
+              />
+              <PrimaryButton
+                title="Bumalik sa Aralin 🏠"
+                variant="secondary"
+                size="md"
+                onPress={() => router.back()}
+                style={styles.btnAction}
+              />
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F9FF' },
-  content: { padding: 16, paddingBottom: 32 },
-  clueCard: {
-    backgroundColor: Colors.white,
+  container: {
+    flex: 1,
+    backgroundColor: '#F0F9FF',
+  },
+  content: {
+    padding: 16,
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  progressRow: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  visualCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 4,
-    borderColor: Colors.white,
-    padding: 20,
+    borderColor: '#FFFFFF',
+    padding: 16,
     alignItems: 'center',
-    marginVertical: 16,
+    width: '100%',
+    marginBottom: 20,
   },
-  clueEmoji: { fontSize: 80, marginBottom: 8 },
-  clueHint: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.bold, color: Colors.textLight },
-  inputRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  letterBox: {
-    width: 42, height: 50, borderRadius: 12, borderWidth: 3,
-    borderColor: '#CBD5E1', backgroundColor: Colors.white,
-    justifyContent: 'center', alignItems: 'center',
+  englishHint: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 10,
   },
-  letterBoxCorrect: { borderColor: '#10B981', backgroundColor: '#D1FAE5' },
-  letterBoxWrong: { borderColor: '#EF4444', backgroundColor: '#FEE2E2' },
-  letterBoxText: { fontSize: Typography.sizes.lg, fontWeight: Typography.weights.heavy, color: Colors.text },
-  feedbackText: {
-    textAlign: 'center',
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.heavy,
-    marginBottom: 12,
+  slotsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+    width: '100%',
   },
-  letterGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 16 },
+  slot: {
+    width: 44,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  slotText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  choicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    width: '100%',
+    marginBottom: 16,
+  },
   letterBtn: {
-    width: 44, height: 44, borderRadius: 12, backgroundColor: '#8B5CF6',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.white,
+    width: 48,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#38BDF8',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  letterBtnText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.heavy, color: Colors.white },
-  controls: { flexDirection: 'row', marginTop: 8 },
-  result: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  resultEmoji: { fontSize: 72, marginBottom: 12 },
-  resultTitle: { fontSize: Typography.sizes.hero, fontWeight: Typography.weights.heavy, color: Colors.text, marginBottom: 8 },
-  resultSub: { fontSize: Typography.sizes.md, color: Colors.textLight, marginBottom: 16 },
-  starsPill: { backgroundColor: '#FEF3C7', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 2, borderColor: '#F59E0B', marginBottom: 8 },
-  starsText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.heavy, color: '#B45309' },
+  letterBtnText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0284C7',
+  },
+  actionsRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  actionBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  deleteBtn: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  actionBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  victoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+  },
+  victoryEmoji: {
+    fontSize: 56,
+    marginBottom: 10,
+  },
+  victoryTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  victoryDesc: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  starsEarnedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF9C3',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+    gap: 8,
+  },
+  starBig: {
+    fontSize: 28,
+  },
+  starsEarnedText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#854D0E',
+  },
+  modalButtons: {
+    width: '100%',
+    gap: 10,
+  },
+  btnAction: {
+    width: '100%',
+  },
 });

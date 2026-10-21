@@ -43,12 +43,7 @@ export default function StudentLayout() {
       <Tabs.Screen
         name="minigames"
         options={{
-          title: 'Mga Laro',
-          tabBarIcon: ({ focused }) => (
-            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
-              <Text style={styles.tabIcon}>🎮</Text>
-            </View>
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen

@@ -135,6 +135,10 @@ export function stopCurrentSound() {
   }
 }
 
+export async function playLocalSound(soundName: string, onFinished?: () => void) {
+  return playSound(soundName, onFinished);
+}
+
 /**
  * Exact streak feedback audio resolver:
  * Correct Streak:
