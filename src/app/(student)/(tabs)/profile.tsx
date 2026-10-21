@@ -22,7 +22,7 @@ interface StatsData {
 }
 
 export default function ProfileScreen() {
-  const { user, logout, updateUserStars } = useAuth();
+  const { user, logout } = useAuth();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -33,7 +33,8 @@ export default function ProfileScreen() {
     try {
       const res = await authService.getMe();
       setStats(res.stats);
-      updateUserStars(res.stats.stars_balance);
+      // Note: do NOT call updateUserStars here — that would trigger an auth
+      // context re-render on every mount, causing an infinite setState loop.
     } catch {
       // Non-critical; user info is still visible
     } finally {

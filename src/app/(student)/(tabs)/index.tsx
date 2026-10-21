@@ -18,7 +18,7 @@ import { Category } from '../../../types';
 import { bgm } from '../../../services/audio/bgm-service';
 
 export default function StudentDashboardScreen() {
-  const { user, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const [isMuted, setIsMuted] = useState<boolean>(bgm.getMuted());
 
   // Always use local categories — they contain all 151 vocabulary items
@@ -40,13 +40,11 @@ export default function StudentDashboardScreen() {
   usePresence('Nasa Bahay (Dashboard)', 'student_home');
 
   const loadData = async () => {
-    try {
-      // Only refresh the user profile (stars, etc.) — never overwrite category data
-      await refreshProfile().catch(() => null);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    // Categories are always loaded locally (LEARNING_CATEGORIES).
+    // Do NOT call refreshProfile() here — it triggers setUser in auth context
+    // which can cascade into an infinite re-render loop on web.
+    setLoading(false);
+    setRefreshing(false);
   };
 
   useEffect(() => {
