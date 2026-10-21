@@ -1,29 +1,34 @@
-import { Stack, router } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { Redirect, Stack } from 'expo-router';
+import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../../hooks/use-auth';
 import { usePresence } from '../../hooks/use-presence';
 
 export default function StudentLayout() {
   const { isStudent, isAuthenticated, isLoading } = useAuth();
-  const didRedirect = useRef(false);
 
   // Send background student heartbeat to update teacher's live dashboard
   usePresence('Nag-aaral sa Dashboard', 'student_main');
 
-  useEffect(() => {
-    // Wait for auth state to settle before deciding where to redirect
-    if (isLoading) return;
-    // Only redirect once per mount — avoids infinite loop
-    if (didRedirect.current) return;
+  // While auth is resolving, render a spinner — avoids premature redirect
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F9FF' }}>
+        <ActivityIndicator size="large" color="#0EA5E9" />
+      </View>
+    );
+  }
 
-    if (!isAuthenticated) {
-      didRedirect.current = true;
-      router.replace('/login');
-    } else if (!isStudent) {
-      didRedirect.current = true;
-      router.replace('/(teacher)' as any);
-    }
-  }, [isLoading, isAuthenticated, isStudent]);
+  // Use declarative <Redirect> instead of router.replace() in useEffect.
+  // Calling router.replace() inside a layout effect triggers expo-router's
+  // useNavigationTreeReducer on every render → infinite "Maximum update depth" loop on web.
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!isStudent) {
+    return <Redirect href="/(teacher)" />;
+  }
 
   return (
     <Stack

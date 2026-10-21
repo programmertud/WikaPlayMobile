@@ -1,19 +1,31 @@
-import { router, Tabs } from 'expo-router';
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Redirect, Tabs } from 'expo-router';
+import React from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../hooks/use-auth';
 import { Colors, Shadows, Typography } from '../../theme';
 
 export default function TeacherLayout() {
-  const { isAuthenticated, isTeacher } = useAuth();
+  const { isAuthenticated, isTeacher, isLoading } = useAuth();
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/login');
-    } else if (!isTeacher) {
-      router.replace('/');
-    }
-  }, [isAuthenticated, isTeacher]);
+  // While auth is resolving, render nothing (avoids premature redirect)
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.skyBlue} />
+      </View>
+    );
+  }
+
+  // Use declarative <Redirect> instead of router.replace() in useEffect.
+  // This avoids triggering expo-router's navigation tree reducer inside a
+  // layout effect, which causes the "Maximum update depth exceeded" loop on web.
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!isTeacher) {
+    return <Redirect href="/" />;
+  }
 
   return (
     <Tabs
@@ -74,6 +86,12 @@ export default function TeacherLayout() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+  },
   tabBar: {
     height: 70,
     backgroundColor: Colors.white,
