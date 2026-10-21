@@ -1,0 +1,20 @@
+# Ignore Laravel backend from Expo mobile build archive
+wikaplay-api/
+
+# Dependencies
+node_modules/
+
+# Expo & Web
+.expo/
+dist/
+web-build/
+
+# Local native builds
+/ios/
+/android/
+
+# Git
+.git/
+
+# Local env files
+.env*.local
