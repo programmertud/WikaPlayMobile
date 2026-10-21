@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Dimensions,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,10 +21,17 @@ interface CategoryCardProps {
 export const CategoryCard: React.FC<CategoryCardProps> = ({ category, onPress }) => {
   const icon = category.icon || '📚';
 
+  const handlePress = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement) {
+      (document.activeElement as HTMLElement).blur?.();
+    }
+    onPress();
+  };
+
   return (
     <TouchableOpacity
       activeOpacity={0.88}
-      onPress={onPress}
+      onPress={handlePress}
       style={[styles.card, Shadows.card]}
       accessibilityRole="button"
       accessibilityLabel={`Buksan ang kategoryang ${category.name}`}

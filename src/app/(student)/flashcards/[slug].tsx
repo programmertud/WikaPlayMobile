@@ -12,8 +12,8 @@ import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { playLocalSound } from '../../../services/audio/sound-service';
-import { Shadows, Typography } from '../../../theme';
+import { playVocabularyItem } from '../../../services/audio/sound-service';
+import { Shadows } from '../../../theme';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = Math.min(width - 48, 320);
@@ -74,7 +74,7 @@ export default function FlashcardsViewerScreen() {
           ) : (
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => playLocalSound('tama')}
+              onPress={() => playVocabularyItem(currentItem)}
               style={[styles.audioPill, { backgroundColor: category.color + '20' }]}
             >
               <Text style={styles.audioPillText}>🔊 Pakinggan</Text>

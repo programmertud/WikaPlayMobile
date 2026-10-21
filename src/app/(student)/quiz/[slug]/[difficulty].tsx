@@ -89,7 +89,7 @@ export default function QuizGameplayScreen() {
             target_image_url: target.imageUri || '',
             target_item_name: target.filipino,
             targetItem: target,
-            audio_url: target.audioUri || null,
+            audio_url: target.audioUri || `${target.id}.mp3`,
             choices: mappedChoices,
             correct_answer: target.id,
             points: difficulty === 'madali' ? 10 : difficulty === 'katamtaman' ? 15 : 20,

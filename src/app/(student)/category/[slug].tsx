@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +12,7 @@ import {
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { Colors, Shadows, Typography } from '../../../theme';
+import { Colors, Shadows } from '../../../theme';
 import { QuizDifficulty } from '../../../types';
 
 export default function CategoryDetailScreen() {
@@ -22,6 +23,12 @@ export default function CategoryDetailScreen() {
   const [gamesModalVisible, setGamesModalVisible] = useState(false);
 
   usePresence(`Tinitingnan ang ${category.name}`, 'category_detail');
+
+  const blurActiveElement = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement) {
+      (document.activeElement as HTMLElement).blur?.();
+    }
+  };
 
   const difficulties: {
     key: QuizDifficulty;
@@ -96,16 +103,23 @@ export default function CategoryDetailScreen() {
   ];
 
   const handleStartQuiz = (difficulty: QuizDifficulty) => {
+    blurActiveElement();
     setQuizModalVisible(false);
     router.push(`/(student)/quiz/${category.slug}/${difficulty}` as any);
   };
 
   const handleOpenGame = (gameSlug: string) => {
+    blurActiveElement();
     setGamesModalVisible(false);
     router.push({
       pathname: '/(student)/games/[slug]' as any,
       params: { slug: gameSlug, category: category.slug },
     });
+  };
+
+  const handleOpenFlashcards = () => {
+    blurActiveElement();
+    router.push(`/(student)/flashcards/${category.slug}` as any);
   };
 
   return (
@@ -131,7 +145,7 @@ export default function CategoryDetailScreen() {
         {/* Option 1: Flashcards */}
         <TouchableOpacity
           activeOpacity={0.88}
-          onPress={() => router.push(`/(student)/flashcards/${category.slug}` as any)}
+          onPress={handleOpenFlashcards}
           style={[styles.primaryCard, styles.flashcardsCard, Shadows.card]}
         >
           <View style={[styles.iconBox, { backgroundColor: '#E0F2FE' }]}>
