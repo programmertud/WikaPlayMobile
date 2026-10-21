@@ -48,7 +48,8 @@ export default function StudentDashboardScreen() {
   };
 
   useEffect(() => {
-    // When returning to home screen, ensure background music is restored to full volume
+    // Ensure background music is initialized and restored to full volume
+    bgm.init();
     bgm.restore();
     loadData();
 
@@ -59,7 +60,6 @@ export default function StudentDashboardScreen() {
     return () => {
       unsubscribeMute();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRefresh = () => {

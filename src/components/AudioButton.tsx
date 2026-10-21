@@ -7,7 +7,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { playSound } from '../services/audio/sound-service';
-import { Colors, Shadows, Typography } from '../theme';
+import { Colors, Shadows } from '../theme';
 
 interface AudioButtonProps {
   audioUrl?: string | null;
@@ -34,7 +34,7 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
     setIsPlaying(true);
     onPlayStart?.();
 
-    const cleanup = await playSound(audioUrl || 'tama.mp3', () => {
+    await playSound(audioUrl || 'tama.mp3', () => {
       setIsPlaying(false);
       onPlayEnd?.();
     });

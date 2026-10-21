@@ -5,44 +5,50 @@ import { bgm, useBgmDuck } from './bgm-service';
 
 export { bgm, useBgmDuck };
 
-// Map all 20 animal audio recordings from assets/audio/HAYOP
-export const HAYOP_AUDIO_ASSETS: Record<string, any> = {
-  ahas: require('../../../assets/audio/HAYOP/Ahas.mp3'),
-  aso: require('../../../assets/audio/HAYOP/Aso.mp3'),
-  baboy: require('../../../assets/audio/HAYOP/Baboy.mp3'),
-  bubuyog: require('../../../assets/audio/HAYOP/Bubuyog.mp3'),
-  daga: require('../../../assets/audio/HAYOP/Daga.mp3'),
-  gagamba: require('../../../assets/audio/HAYOP/Gagamba.mp3'),
-  ibon: require('../../../assets/audio/HAYOP/Ibon.mp3'),
-  isda: require('../../../assets/audio/HAYOP/Isda.mp3'),
-  kabayo: require('../../../assets/audio/HAYOP/Kabayo.mp3'),
-  kalabaw: require('../../../assets/audio/HAYOP/Kalabaw.mp3'),
-  kambing: require('../../../assets/audio/HAYOP/Kambing.mp3'),
-  leon: require('../../../assets/audio/HAYOP/Leon.mp3'),
-  manok: require('../../../assets/audio/HAYOP/Manok.mp3'),
-  pagong: require('../../../assets/audio/HAYOP/Pagong.mp3'),
-  palaka: require('../../../assets/audio/HAYOP/Palaka.mp3'),
-  pating: require('../../../assets/audio/HAYOP/Pating.mp3'),
-  pugita: require('../../../assets/audio/HAYOP/Pugita.mp3'),
-  pusa: require('../../../assets/audio/HAYOP/Pusa.mp3'),
-  tigre: require('../../../assets/audio/HAYOP/Tigre.mp3'),
-  unggoy: require('../../../assets/audio/HAYOP/Unggoy.mp3'),
-};
+import { LEARNING_CATEGORIES } from '../../data/categories';
 
-// Aliases for matching by id (e.g. 'hayop_aso'), file names (e.g. 'Aso.mp3'), etc.
+// Centralized dictionary of all local audio assets across all 8 learning categories
 export const LOCAL_AUDIO_ASSETS: Record<string, any> = {};
 
-Object.entries(HAYOP_AUDIO_ASSETS).forEach(([key, asset]) => {
-  LOCAL_AUDIO_ASSETS[key] = asset;
-  LOCAL_AUDIO_ASSETS[`${key}.mp3`] = asset;
-  LOCAL_AUDIO_ASSETS[`hayop_${key}`] = asset;
-  LOCAL_AUDIO_ASSETS[`hayop_${key}.mp3`] = asset;
+// Register every audio recording from all categories
+LEARNING_CATEGORIES.forEach((category) => {
+  category.items.forEach((item) => {
+    if (item.audio) {
+      LOCAL_AUDIO_ASSETS[item.id] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${item.id}.mp3`] = item.audio;
 
-  // Capitalized variants
-  const cap = key.charAt(0).toUpperCase() + key.slice(1);
-  LOCAL_AUDIO_ASSETS[cap] = asset;
-  LOCAL_AUDIO_ASSETS[`${cap}.mp3`] = asset;
+      const fil = item.filipino.toLowerCase().trim();
+      LOCAL_AUDIO_ASSETS[fil] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${fil}.mp3`] = item.audio;
+
+      // Handle hyphens and spaces
+      const noHyphen = fil.replace(/-/g, ' ');
+      LOCAL_AUDIO_ASSETS[noHyphen] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${noHyphen}.mp3`] = item.audio;
+
+      const withHyphen = fil.replace(/\s+/g, '-');
+      LOCAL_AUDIO_ASSETS[withHyphen] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${withHyphen}.mp3`] = item.audio;
+
+      // Also capitalize first letter
+      const cap = fil.charAt(0).toUpperCase() + fil.slice(1);
+      LOCAL_AUDIO_ASSETS[cap] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${cap}.mp3`] = item.audio;
+    }
+  });
 });
+
+// Backward-compatible HAYOP_AUDIO_ASSETS export
+export const HAYOP_AUDIO_ASSETS: Record<string, any> = {};
+const hayopCategory = LEARNING_CATEGORIES.find((c) => c.id === 'cat_hayop');
+if (hayopCategory) {
+  hayopCategory.items.forEach((item) => {
+    if (item.audio) {
+      const shortName = item.filipino.toLowerCase().trim();
+      HAYOP_AUDIO_ASSETS[shortName] = item.audio;
+    }
+  });
+}
 
 let isAudioModeConfigured = false;
 let currentActivePlayer: any = null;
@@ -140,7 +146,7 @@ export function resolveAudioSource(source: string | any): any {
 
   // Extract base filename if it has path elements (e.g. "audio/hayop_aso.mp3" -> "hayop_aso.mp3")
   const filename = source.split('/').pop() || source;
-  const noExt = filename.replace(/\.mp3$/i, '').toLowerCase();
+  const noExt = filename.replace(/\.mp3$/i, '').toLowerCase().trim();
 
   if (LOCAL_AUDIO_ASSETS[filename]) {
     return LOCAL_AUDIO_ASSETS[filename];
@@ -149,10 +155,13 @@ export function resolveAudioSource(source: string | any): any {
     return LOCAL_AUDIO_ASSETS[noExt];
   }
 
-  // Strip prefix "hayop_" if passed
-  const stripped = noExt.replace(/^hayop_/, '');
+  // Strip category prefix if passed (e.g. "prutas_abukado" -> "abukado")
+  const stripped = noExt.replace(/^(hayop|prutas|gulay|kulay|hugis|bilang|katawan|pagbati)_/, '');
   if (LOCAL_AUDIO_ASSETS[stripped]) {
     return LOCAL_AUDIO_ASSETS[stripped];
+  }
+  if (LOCAL_AUDIO_ASSETS[`${stripped}.mp3`]) {
+    return LOCAL_AUDIO_ASSETS[`${stripped}.mp3`];
   }
 
   // If it's a valid remote or absolute data URL, return it directly
@@ -259,6 +268,12 @@ export async function playSound(
       let webUri = '';
       if (typeof resolvedSource === 'string') {
         webUri = resolvedSource;
+      } else if (
+        typeof resolvedSource === 'object' &&
+        resolvedSource !== null &&
+        (resolvedSource.default || resolvedSource.uri)
+      ) {
+        webUri = resolvedSource.default || resolvedSource.uri;
       } else {
         try {
           const asset = Asset.fromModule(resolvedSource);
@@ -337,30 +352,38 @@ export async function playLocalSound(soundName: string, onFinished?: () => void)
 }
 
 /**
- * Pronounce a vocabulary item: plays its assigned animal MP3 from HAYOP/,
- * or speaks its Filipino word via TTS.
+ * Pronounce a vocabulary item: plays its assigned native MP3 recording from assets/audio/,
+ * or speaks its Filipino word via TTS as a last resort.
  */
 export async function playVocabularyItem(
-  item: { id: string; filipino: string; audioUri?: string | null },
+  item: { id?: string; filipino: string; audioUri?: string | null; audio?: any },
   onFinished?: () => void
 ) {
+  // 1. Direct audio asset attached to item (e.g. require('../../assets/audio/PRUTAS/Abukado.mp3'))
+  if (item.audio) {
+    return playSound(item.audio, onFinished);
+  }
+
+  // 2. Direct audioUri (URL or remote)
   if (item.audioUri) {
     return playSound(item.audioUri, onFinished);
   }
 
-  // 1. Try Filipino word (e.g. 'aso')
+  // 3. Try item ID lookup in LOCAL_AUDIO_ASSETS
+  if (item.id) {
+    const byId = resolveAudioSource(item.id);
+    if (byId) {
+      return playSound(byId, onFinished);
+    }
+  }
+
+  // 4. Try Filipino word lookup in LOCAL_AUDIO_ASSETS
   const byWord = resolveAudioSource(item.filipino);
   if (byWord) {
     return playSound(byWord, onFinished);
   }
 
-  // 2. Try item ID (e.g. 'hayop_aso')
-  const byId = resolveAudioSource(item.id);
-  if (byId) {
-    return playSound(byId, onFinished);
-  }
-
-  // 3. Fall back to speech pronunciation of the Filipino word
+  // 5. Fall back to speech pronunciation of the Filipino word
   return playSound(item.filipino, onFinished);
 }
 

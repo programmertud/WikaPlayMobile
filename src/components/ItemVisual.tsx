@@ -1,7 +1,6 @@
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { Colors } from '../theme';
 import { VocabularyItem } from '../types';
 
 interface ItemVisualProps {

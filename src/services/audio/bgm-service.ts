@@ -17,46 +17,66 @@ class BackgroundMusicManager {
   private isInitialized = false;
 
   public async init() {
-    if (this.isInitialized) return;
+    if (this.isInitialized && (this.webAudio || this.nativePlayer)) return;
     this.isInitialized = true;
 
     if (Platform.OS === 'web') {
       try {
-        const asset = Asset.fromModule(BGM_ASSET);
-        const uri = asset.uri || asset.localUri || '';
-        if (uri && typeof Audio !== 'undefined') {
+        let uri = '';
+        try {
+          const asset = Asset.fromModule(BGM_ASSET);
+          uri = asset.uri || asset.localUri || '';
+        } catch {
+          uri = '';
+        }
+
+        // Fallbacks for web if asset registry doesn't resolve direct URI
+        if (!uri) {
+          uri = '/audio/happy.mp3';
+        }
+
+        if (typeof Audio !== 'undefined') {
           this.webAudio = new Audio(uri);
           this.webAudio.loop = true;
-          this.webAudio.volume = this.currentVolume;
+          this.webAudio.volume = this.isMuted ? 0 : this.currentVolume;
 
-          // Attempt autoplay; if blocked by browser policy, start on first user interaction
-          const playPromise = this.webAudio.play();
-          if (playPromise !== undefined) {
-            playPromise
+          // If primary URI fails to load, fallback to API or relative path
+          this.webAudio.onerror = () => {
+            if (this.webAudio && !this.webAudio.src.includes('localhost:8000')) {
+              this.webAudio.src = 'http://localhost:8000/audio/happy.mp3';
+              if (!this.isMuted) {
+                this.webAudio.play().catch(() => {});
+              }
+            }
+          };
+
+          // Handle browser autoplay policy: modern browsers require a user gesture first
+          const startPlayback = () => {
+            if (!this.webAudio || this.isMuted) return;
+            this.webAudio
+              .play()
               .then(() => {
                 this.isPlaying = true;
               })
               .catch(() => {
-                // Browser prevented autoplay before user gesture
-                this.isPlaying = false;
-                const resumeOnInteraction = () => {
-                  if (this.webAudio && !this.isMuted) {
-                    this.webAudio
-                      .play()
-                      .then(() => {
-                        this.isPlaying = true;
-                      })
-                      .catch(() => {});
-                  }
-                  window.removeEventListener('click', resumeOnInteraction);
-                  window.removeEventListener('touchstart', resumeOnInteraction);
-                  window.removeEventListener('keydown', resumeOnInteraction);
-                };
-                window.addEventListener('click', resumeOnInteraction, { once: true });
-                window.addEventListener('touchstart', resumeOnInteraction, { once: true });
-                window.addEventListener('keydown', resumeOnInteraction, { once: true });
+                // Keep listening until a user gesture satisfies browser policy
               });
-          }
+          };
+
+          // 1. Try immediate autoplay
+          startPlayback();
+
+          // 2. Setup user interaction listeners to unlock audio on first tap/click anywhere
+          const unlockGesture = () => {
+            startPlayback();
+            ['pointerdown', 'touchstart', 'mousedown', 'click', 'keydown'].forEach((evt) => {
+              window.removeEventListener(evt, unlockGesture, true);
+            });
+          };
+
+          ['pointerdown', 'touchstart', 'mousedown', 'click', 'keydown'].forEach((evt) => {
+            window.addEventListener(evt, unlockGesture, { once: true, capture: true });
+          });
         }
       } catch {
         // Fallback gracefully
@@ -79,6 +99,19 @@ class BackgroundMusicManager {
     }
   }
 
+  public play() {
+    this.isMuted = false;
+    this.isPlaying = true;
+    if (Platform.OS === 'web' && this.webAudio) {
+      this.webAudio.volume = this.currentVolume;
+      this.webAudio.play().catch(() => {});
+    } else if (this.nativePlayer) {
+      try {
+        this.nativePlayer.play();
+      } catch {}
+    }
+  }
+
   public minimize() {
     this.currentVolume = VOLUME_MINIMIZED;
     this.applyVolume();
@@ -93,6 +126,12 @@ class BackgroundMusicManager {
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
+    if (!this.isMuted) {
+      this.isPlaying = true;
+      if (Platform.OS === 'web' && this.webAudio) {
+        this.webAudio.play().catch(() => {});
+      }
+    }
     this.applyVolume();
     this.muteListeners.forEach((fn) => fn(this.isMuted));
     return this.isMuted;
@@ -118,13 +157,22 @@ class BackgroundMusicManager {
 
     if (Platform.OS === 'web' && this.webAudio) {
       this.webAudio.volume = targetVol;
-      if (this.webAudio.paused && !this.isMuted && this.isPlaying) {
-        this.webAudio.play().catch(() => {});
+      if (!this.isMuted && this.webAudio.paused) {
+        this.webAudio.play().then(() => {
+          this.isPlaying = true;
+        }).catch(() => {});
+      } else if (this.isMuted && !this.webAudio.paused) {
+        this.webAudio.pause();
       }
     } else if (this.nativePlayer) {
       try {
         if (typeof this.nativePlayer.setVolume === 'function') {
           this.nativePlayer.setVolume(targetVol);
+        }
+        if (!this.isMuted) {
+          this.nativePlayer.play();
+        } else {
+          this.nativePlayer.pause();
         }
       } catch {}
     }
