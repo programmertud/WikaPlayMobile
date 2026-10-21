@@ -1,8 +1,6 @@
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,47 +9,38 @@ import {
   View,
 } from 'react-native';
 import { CategoryCard } from '../../components/CategoryCard';
-import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { useAuth } from '../../hooks/use-auth';
 import { usePresence } from '../../hooks/use-presence';
-import { categoryService } from '../../services/api';
 import { Colors, Shadows, Typography } from '../../theme';
 import { LEARNING_CATEGORIES } from '../../data/categories';
 import { Category } from '../../types';
 
 export default function StudentDashboardScreen() {
   const { user, refreshProfile } = useAuth();
-  const [categories, setCategories] = useState<Category[]>(() =>
-    LEARNING_CATEGORIES.map((c, idx) => ({
-      id: idx + 1,
-      slug: c.slug,
-      name: c.name,
-      title: c.name,
-      description: c.description,
-      color: c.color,
-      cover_image: null,
-      flashcards_count: c.items.length,
-    }))
-  );
+
+  // Always use local categories — they contain all 151 vocabulary items
+  const categories: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
+    id: idx + 1,
+    slug: c.slug,
+    name: c.name,
+    title: c.name,
+    description: c.description,
+    color: c.color,
+    cover_image: null,
+    icon: c.icon,
+    flashcards_count: c.items.length,
+  }));
+
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
   usePresence('Nasa Bahay (Dashboard)', 'student_home');
 
   const loadData = async () => {
     try {
-      setError(null);
-      const [cats] = await Promise.all([
-        categoryService.getAll().catch(() => null),
-        refreshProfile().catch(() => null),
-      ]);
-      if (cats && cats.length > 0) {
-        setCategories(cats);
-      }
-    } catch {
-      // Offline fallback already populated
+      // Only refresh the user profile (stars, etc.) — never overwrite category data
+      await refreshProfile().catch(() => null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -60,6 +49,7 @@ export default function StudentDashboardScreen() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRefresh = () => {
@@ -67,7 +57,7 @@ export default function StudentDashboardScreen() {
     loadData();
   };
 
-  if (loading && !refreshing && categories.length === 0) {
+  if (loading && !refreshing) {
     return <LoadingView message="Kinukuha ang mga aralin sa WikaPlay..." />;
   }
 

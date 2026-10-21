@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import React from 'react';
 import {
   Dimensions,
@@ -19,35 +18,28 @@ interface CategoryCardProps {
 }
 
 export const CategoryCard: React.FC<CategoryCardProps> = ({ category, onPress }) => {
+  const icon = category.icon || '📚';
+
   return (
     <TouchableOpacity
       activeOpacity={0.88}
       onPress={onPress}
-      style={[
-        styles.card,
-        { backgroundColor: category.color || Colors.skyBlue },
-        Shadows.card,
-      ]}
+      style={[styles.card, Shadows.card]}
       accessibilityRole="button"
       accessibilityLabel={`Buksan ang kategoryang ${category.name}`}
     >
-      <View style={styles.imageContainer}>
-        {category.cover_image ? (
-          <Image
-            source={{ uri: category.cover_image }}
-            style={styles.image}
-            contentFit="cover"
-            transition={300}
-          />
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Text style={styles.placeholderEmoji}>🎨</Text>
-          </View>
-        )}
+      {/* Colored header with large icon */}
+      <View style={[styles.iconArea, { backgroundColor: category.color || Colors.skyBlue }]}>
+        {/* Decorative circles */}
+        <View style={[styles.decorCircle, styles.decorCircle1]} />
+        <View style={[styles.decorCircle, styles.decorCircle2]} />
+        {/* Main icon */}
+        <Text style={styles.icon}>{icon}</Text>
       </View>
 
-      <View style={styles.contentContainer}>
-        <Text style={styles.title} numberOfLines={2}>
+      {/* Footer with name and badge */}
+      <View style={[styles.footer, { backgroundColor: category.color || Colors.skyBlue }]}>
+        <Text style={styles.title} numberOfLines={1}>
           {category.name}
         </Text>
 
@@ -71,42 +63,55 @@ const styles = StyleSheet.create({
     borderColor: Colors.white,
     overflow: 'hidden',
     marginBottom: 16,
+    backgroundColor: Colors.white,
   },
-  imageContainer: {
+  iconArea: {
     width: '100%',
     height: 110,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholderImage: {
-    width: '100%',
-    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  placeholderEmoji: {
-    fontSize: 42,
+  decorCircle: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  contentContainer: {
-    padding: 12,
+  decorCircle1: {
+    width: 80,
+    height: 80,
+    top: -20,
+    right: -20,
+  },
+  decorCircle2: {
+    width: 55,
+    height: 55,
+    bottom: -15,
+    left: -10,
+  },
+  icon: {
+    fontSize: 56,
+  },
+  footer: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(255,255,255,0.3)',
   },
   title: {
     color: Colors.white,
-    fontSize: Typography.sizes.md,
+    fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.heavy,
     textAlign: 'center',
-    marginBottom: 6,
-    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 2,
+    marginBottom: 5,
   },
   badge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,

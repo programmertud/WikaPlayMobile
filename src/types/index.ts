@@ -25,6 +25,7 @@ export interface Category {
   description?: string | null;
   cover_image?: string | null;
   color: string;
+  icon?: string;
   flashcards_count?: number;
   quiz_availabilities?: Record<QuizDifficulty, QuizAvailabilityItem>;
   flashcards?: Flashcard[];
