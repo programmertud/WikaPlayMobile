@@ -3,37 +3,41 @@
  * Category-based: Displays prompt for a vocabulary item from the selected category,
  * student picks the matching picture from 4 choices.
  */
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
+
 import { ItemVisual } from '../../../components/ItemVisual';
-import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { PressableScale } from '../../../components/PressableScale';
+import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
+import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
+import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { minigameService } from '../../../services/api';
 import {
-  getFeedbackAudio,
-  playLocalSound,
   playVocabularyItem,
   useBgmDuck,
 } from '../../../services/audio/sound-service';
-import { Colors, Shadows } from '../../../theme';
-import { VocabularyItem } from '../../../types';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import { Collectible, VocabularyItem } from '../../../types';
 
 const { width } = Dimensions.get('window');
 const CHOICE_SIZE = (width - 56) / 2;
 
 function buildRound(items: VocabularyItem[], targetIndex: number) {
-  const target = items[targetIndex];
-  const others = items.filter((_, i) => i !== targetIndex);
+  const target = items[targetIndex % items.length];
+  const others = items.filter((it) => it.id !== target.id);
   const shuffled = [...others].sort(() => 0.5 - Math.random()).slice(0, 3);
   const choices = [target, ...shuffled].sort(() => 0.5 - Math.random());
   return { target, choices };
@@ -44,19 +48,27 @@ export default function PaghahanapLarawan() {
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const items = getCategoryVocabulary(category.slug);
+  const { updateUserStars } = useAuth();
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [correct, setCorrect] = useState(0);
-  const [wrong, setWrong] = useState(0);
+  const [, setWrong] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState(10);
-  const [correctStreak, setCorrectStreak] = useState(0);
-  const [wrongStreak, setWrongStreak] = useState(0);
+  const [starsAwarded, setStarsAwarded] = useState(0);
   const [locked, setLocked] = useState(false);
-  const totalRounds = Math.min(items.length, 8);
+  const [showMysteryBox, setShowMysteryBox] = useState(false);
+  const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
 
-  const { target, choices } = buildRound(items, currentIdx % items.length);
+  // Exactly 20 questions / levels
+  const totalRounds = 20;
+
+  // Centralized voice-over streak manager
+  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+
+  const [roundData, setRoundData] = useState(() => buildRound(items, 0));
+  const target = roundData.target;
+  const choices = roundData.choices;
 
   useEffect(() => {
     if (target && !gameOver) {
@@ -66,7 +78,7 @@ export default function PaghahanapLarawan() {
 
   usePresence(`Paghahanap ng Larawan (${category.name})`, 'minigame_paghahanap');
 
-  const handleSelect = (choice: VocabularyItem) => {
+  const handleSelect = async (choice: VocabularyItem) => {
     if (locked) return;
     setLocked(true);
     setSelectedId(choice.id);
@@ -74,58 +86,70 @@ export default function PaghahanapLarawan() {
     const isCorrect = choice.id === target.id;
 
     if (isCorrect) {
-      const newStreak = correctStreak + 1;
-      setCorrectStreak(newStreak);
-      setWrongStreak(0);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setCorrect((c) => c + 1);
-      const soundKey = getFeedbackAudio(true, newStreak);
-      playLocalSound(soundKey);
     } else {
-      const newStreak = wrongStreak + 1;
-      setWrongStreak(newStreak);
-      setCorrectStreak(0);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setWrong((w) => w + 1);
-      const soundKey = getFeedbackAudio(false, newStreak);
-      playLocalSound(soundKey);
     }
 
-    setTimeout(() => {
+    await triggerFeedback(isCorrect, () => {
+      const finalCorrect = correct + (isCorrect ? 1 : 0);
       if (currentIdx + 1 >= totalRounds) {
-        setGameOver(true);
-        submitFinalScore(correct + (isCorrect ? 1 : 0));
+        submitFinalScore(finalCorrect);
       } else {
-        setCurrentIdx((i) => i + 1);
+        const nextIdx = currentIdx + 1;
+        setCurrentIdx(nextIdx);
         setSelectedId(null);
+        setRoundData(buildRound(items, nextIdx));
         setLocked(false);
       }
-    }, 1200);
+    });
   };
 
   const submitFinalScore = async (finalScore: number) => {
+    const sessionId = `paghahanap_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const percent = Math.round((finalScore / totalRounds) * 100);
       const res = await minigameService.submitResult({
         game_type: 'paghahanap_larawan',
-        score: percent,
+        score: finalScore,
+        session_id: sessionId,
         metadata: { category: category.slug, correct: finalScore, total: totalRounds },
       });
-      if (res?.session?.stars_awarded) {
-        setStarsAwarded(res.session.stars_awarded);
+
+      const awarded = res?.session?.stars_awarded ?? finalScore;
+      setStarsAwarded(awarded);
+
+      if (res?.session?.stars_balance !== undefined) {
+        updateUserStars(res.session.stars_balance);
+      }
+
+      // Check if student qualifies for collectible (15-20/20)
+      if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+        setAwardedCollectible(res.session.collectible);
+        setShowMysteryBox(true);
+      } else {
+        setGameOver(true);
       }
     } catch {
-      // offline fallback non-critical
+      // offline fallback
+      setStarsAwarded(finalScore);
+      updateUserStars(finalScore);
+      setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    resetStreaks();
     setCurrentIdx(0);
     setSelectedId(null);
     setCorrect(0);
     setWrong(0);
-    setCorrectStreak(0);
-    setWrongStreak(0);
     setGameOver(false);
+    setShowMysteryBox(false);
+    setAwardedCollectible(null);
     setLocked(false);
+    setRoundData(buildRound(items, 0));
   };
 
   return (
@@ -136,27 +160,30 @@ export default function PaghahanapLarawan() {
       />
 
       <View style={styles.content}>
-        {/* Progress Bar */}
+        {/* Animated Progress Bar */}
         <View style={styles.progressRow}>
           <ProgressIndicator
             current={currentIdx + 1}
             total={totalRounds}
-            color={category.color}
+            gradient={Gradients.grass}
+            height={10}
           />
         </View>
 
         {/* Prompt Card with Audio Replay */}
-        <TouchableOpacity
-          activeOpacity={0.8}
+        <PressableScale
           onPress={() => playVocabularyItem(target)}
           style={[styles.promptCard, Shadows.card]}
         >
           <Text style={styles.promptSub}>Hanapin ang larawan ng:</Text>
-          <Text style={[styles.promptTarget, { color: category.color }]}>
-            {`"${target.filipino}"`} 🔊
-          </Text>
+          <View style={styles.promptTargetRow}>
+            <Text style={[styles.promptTarget, { color: category.color || Colors.skyBlueDark }]}>
+              {`"${target.filipino}"`}
+            </Text>
+            <Ionicons name="volume-high" size={24} color={category.color || Colors.skyBlueDark} />
+          </View>
           <Text style={styles.promptEnglish}>({target.english})</Text>
-        </TouchableOpacity>
+        </PressableScale>
 
         {/* 4 Picture Choices Grid */}
         <View style={styles.choicesGrid}>
@@ -164,8 +191,8 @@ export default function PaghahanapLarawan() {
             const isSelected = selectedId === choice.id;
             const isCorrectChoice = choice.id === target.id;
 
-            let cardBorderColor = '#FFFFFF';
-            let cardBgColor = '#FFFFFF';
+            let cardBorderColor: string = 'rgba(0, 0, 0, 0.06)';
+            let cardBgColor: string = Colors.white;
 
             if (selectedId) {
               if (isCorrectChoice) {
@@ -177,59 +204,48 @@ export default function PaghahanapLarawan() {
               }
             }
 
+
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={choice.id}
-                activeOpacity={0.85}
                 disabled={locked}
                 onPress={() => handleSelect(choice)}
+                activeScale={0.95}
                 style={[
                   styles.choiceCard,
                   { borderColor: cardBorderColor, backgroundColor: cardBgColor },
-                  Shadows.card,
+                  Shadows.soft,
                 ]}
               >
-                <ItemVisual item={choice} size={CHOICE_SIZE * 0.75} />
-              </TouchableOpacity>
+                <ItemVisual item={choice} size={CHOICE_SIZE * 0.72} />
+              </PressableScale>
             );
           })}
         </View>
       </View>
 
-      {/* GAME OVER MODAL */}
-      {gameOver && (
-        <View style={styles.overlay}>
-          <View style={[styles.victoryCard, Shadows.card]}>
-            <Text style={styles.victoryEmoji}>🎯🎉</Text>
-            <Text style={styles.victoryTitle}>Mahusay!</Text>
-            <Text style={styles.victoryDesc}>
-              Nakatapos ka ng {correct} sa {totalRounds} tamang sagot ({wrong} mali) sa {category.name}!
-            </Text>
+      {/* WIN CELEBRATION OVERLAY */}
+      <CelebrationOverlay
+        visible={gameOver}
+        title="Tagumpay!"
+        subtitle={`Nakuha mo ang ${correct} sa ${totalRounds} tamang larawan!`}
+        scoreText={`+${starsAwarded} Bituin! ⭐`}
+        stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
+        continueText="Maglaro Ulit"
+        onContinue={handleRestart}
+      />
 
-            <View style={styles.starsEarnedRow}>
-              <Text style={styles.starBig}>⭐</Text>
-              <Text style={styles.starsEarnedText}>+{starsAwarded} Bituin!</Text>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <PrimaryButton
-                title="Subukan Muli 🔄"
-                variant="success"
-                size="md"
-                onPress={handleRestart}
-                style={styles.btnAction}
-              />
-              <PrimaryButton
-                title="Bumalik sa Aralin 🏠"
-                variant="secondary"
-                size="md"
-                onPress={() => router.back()}
-                style={styles.btnAction}
-              />
-            </View>
-          </View>
-        </View>
-      )}
+      {/* MYSTERY BOX REWARD MODAL */}
+      <MysteryBoxModal
+        visible={showMysteryBox}
+        score={correct}
+        starsAwarded={starsAwarded}
+        collectible={awardedCollectible}
+        onClose={() => {
+          setShowMysteryBox(false);
+          setGameOver(true);
+        }}
+      />
     </View>
   );
 }
@@ -242,116 +258,56 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
-    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   progressRow: {
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   promptCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    padding: 18,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    padding: 20,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   promptSub: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: Typography.sizes.sm,
+    color: Colors.textLight,
+    fontWeight: Typography.weights.semibold,
+    marginBottom: 4,
+  },
+  promptTargetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
   },
   promptTarget: {
     fontSize: 28,
-    fontWeight: '900',
-    marginTop: 4,
-    textTransform: 'lowercase',
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    textAlign: 'center',
   },
   promptEnglish: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#94A3B8',
-    marginTop: 2,
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
+    fontWeight: Typography.weights.medium,
   },
   choicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 14,
-    width: '100%',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   choiceCard: {
     width: CHOICE_SIZE,
     height: CHOICE_SIZE,
-    borderRadius: 22,
-    borderWidth: 4,
+    borderRadius: Radius.xl,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  victoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    padding: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-  },
-  victoryEmoji: {
-    fontSize: 56,
-    marginBottom: 10,
-  },
-  victoryTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  victoryDesc: {
-    fontSize: 14,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  starsEarnedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF9C3',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
-    gap: 8,
-  },
-  starBig: {
-    fontSize: 28,
-  },
-  starsEarnedText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#854D0E',
-  },
-  modalButtons: {
-    width: '100%',
-    gap: 10,
-  },
-  btnAction: {
-    width: '100%',
   },
 });

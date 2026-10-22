@@ -23,6 +23,24 @@ export const authService = {
     return data;
   },
 
+  studentLogin: async (name: string) => {
+    const data = await ApiClient.post<{ message: string; token: string; user: User }>(
+      'auth/student-login',
+      { name }
+    );
+    await ApiClient.setToken(data.token);
+    return data;
+  },
+
+  studentRegister: async (payload: { name: string; section?: string }) => {
+    const data = await ApiClient.post<{ message: string; token: string; user: User }>(
+      'auth/student-register',
+      payload
+    );
+    await ApiClient.setToken(data.token);
+    return data;
+  },
+
   register: async (payload: {
     name: string;
     email: string;
@@ -93,6 +111,7 @@ export const quizService = {
   submitQuiz: async (payload: {
     category_id: number;
     difficulty: QuizDifficulty;
+    session_id?: string;
     answers: { question_id: number; selected_answer: string }[];
   }) => {
     return ApiClient.post<{
@@ -119,6 +138,7 @@ export const minigameService = {
   submitResult: async (payload: {
     game_type: string;
     score: number;
+    session_id?: string;
     duration_seconds?: number;
     metadata?: any;
   }) => {
@@ -126,9 +146,13 @@ export const minigameService = {
       message: string;
       session: {
         id: number;
+        session_id?: string;
         score: number;
+        total_levels: number;
         stars_awarded: number;
         stars_balance: number;
+        qualifies_for_collectible?: boolean;
+        collectible?: Collectible & { is_duplicate?: boolean };
       };
     }>('minigames/submit', payload);
   },
@@ -154,7 +178,12 @@ export const rewardService = {
   },
 
   getStarsHistory: async () => {
-    return ApiClient.get<{ stars_balance: number; history: { data: any[] } }>('rewards/stars-history');
+    return ApiClient.get<{
+      stars_balance: number;
+      total_earned: number;
+      total_spent: number;
+      history: { data: any[] };
+    }>('rewards/stars-history');
   },
 };
 
@@ -225,5 +254,33 @@ export const teacherService = {
 
   uploadImage: async (formData: FormData) => {
     return ApiClient.uploadFile<{ message: string; path: string; url: string }>('teacher/upload-image', formData);
+  },
+
+  deleteQuizQuestion: async (id: number) => {
+    return ApiClient.delete(`teacher/quizzes/question/${id}`);
+  },
+
+  updateStudentStatus: async (studentId: number, status: 'active' | 'pending_approval' | 'disabled') => {
+    return ApiClient.put<{ message: string; student: User }>(`teacher/students/${studentId}/status`, { status });
+  },
+
+  getDashboardStats: async () => {
+    return ApiClient.get<{
+      stats: {
+        total_students: number;
+        online_students: number;
+        offline_students: number;
+        total_quiz_attempts: number;
+        average_quiz_score: number;
+        total_stars_awarded: number;
+      };
+      recent_activities: any[];
+      recent_quiz_results: any[];
+      active_students: any[];
+    }>('teacher/dashboard');
+  },
+
+  exportReportsCsv: async () => {
+    return ApiClient.get<{ csv: string; filename: string }>('teacher/reports/export-csv');
   },
 };

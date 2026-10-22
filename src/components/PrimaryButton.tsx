@@ -3,19 +3,38 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  TouchableOpacityProps,
+  View,
   ViewStyle,
+  StyleProp,
+  TextStyle,
 } from 'react-native';
-import { Colors, Shadows, Typography } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Gradients, Shadows, Typography, Radius } from '@/theme';
+import { PressableScale } from './PressableScale';
 
-interface PrimaryButtonProps extends TouchableOpacityProps {
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'outline'
+  | 'success'
+  | 'danger'
+  | 'warning'
+  | 'teacher'
+  | 'disabled';
+
+export interface PrimaryButtonProps {
   title: string;
-  variant?: 'primary' | 'secondary' | 'outline' | 'success' | 'danger' | 'warning' | 'disabled';
+  variant?: ButtonVariant;
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
-  icon?: React.ReactNode;
-  style?: ViewStyle;
+  icon?: keyof typeof Ionicons.glyphMap | React.ReactNode;
+  iconPosition?: 'left' | 'right';
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
+  disabled?: boolean;
+  gradient?: readonly [string, string, ...string[]];
+  onPress?: () => void;
 }
 
 export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
@@ -24,73 +43,172 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   size = 'md',
   loading = false,
   icon,
+  iconPosition = 'left',
   style,
+  textStyle,
   disabled,
-  ...props
+  gradient,
+  onPress,
 }) => {
-  const getBgColor = () => {
-    if (disabled) return Colors.textMuted;
+  const isDisabled = disabled || variant === 'disabled' || loading;
+
+  const getGradientColors = (): readonly [string, string, ...string[]] | null => {
+    if (gradient) return gradient;
+    if (isDisabled) return ['#94A3B8', '#64748B'] as const;
+
     switch (variant) {
+      case 'primary':
+        return Gradients.sky;
+      case 'success':
+        return Gradients.grass;
+      case 'danger':
+        return Gradients.candy;
+      case 'warning':
+        return Gradients.sun;
+      case 'teacher':
+        return Gradients.teacher;
       case 'secondary':
       case 'outline':
-        return Colors.white;
-      case 'success':
-        return Colors.grassGreen;
-      case 'danger':
-        return Colors.coralPink;
-      case 'warning':
-        return Colors.sunYellow;
-      case 'disabled':
-        return Colors.textMuted;
-      case 'primary':
       default:
-        return Colors.skyBlue;
+        return null;
     }
   };
 
   const getTextColor = () => {
+    if (isDisabled) return '#FFFFFF';
     if (variant === 'secondary' || variant === 'outline') return Colors.skyBlueDark;
     if (variant === 'warning') return '#78350F';
-    if (variant === 'disabled' || disabled) return Colors.white;
     return Colors.white;
   };
 
+  const getShadowStyle = () => {
+    if (isDisabled) return Shadows.subtle;
+    if (variant === 'secondary' || variant === 'outline') return Shadows.subtle;
+    switch (variant) {
+      case 'success':
+        return Shadows.colored(Colors.grassGreen, 0.28);
+      case 'danger':
+        return Shadows.colored(Colors.coralPink, 0.28);
+      case 'warning':
+        return Shadows.colored(Colors.sunYellowDark, 0.28);
+      case 'teacher':
+        return Shadows.colored(Colors.teacherPurple, 0.28);
+      case 'primary':
+      default:
+        return Shadows.colored(Colors.skyBlueDark, 0.28);
+    }
+  };
+
+  const gradientColors = getGradientColors();
+  const textColor = getTextColor();
+
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (typeof icon === 'string') {
+      const iconSize = size === 'sm' ? 18 : size === 'lg' ? 24 : 20;
+      return (
+        <Ionicons
+          name={icon as keyof typeof Ionicons.glyphMap}
+          size={iconSize}
+          color={textColor}
+          style={iconPosition === 'left' ? styles.iconLeft : styles.iconRight}
+        />
+      );
+    }
+    return <View style={iconPosition === 'left' ? styles.iconLeft : styles.iconRight}>{icon}</View>;
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.82}
-      disabled={disabled || loading}
+    <PressableScale
+      onPress={onPress}
+      disabled={isDisabled}
+      activeScale={0.97}
+      haptic={isDisabled ? false : 'light'}
       style={[
-        styles.button,
-        styles[size],
-        { backgroundColor: getBgColor() },
-        (variant === 'secondary' || variant === 'outline') && styles.outlineBorder,
+        styles.buttonWrapper,
+        getShadowStyle(),
         style,
       ]}
-      {...props}
     >
-      {loading ? (
-        <ActivityIndicator color={getTextColor()} />
+      {gradientColors ? (
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.inner, styles[size]]}
+        >
+          {loading ? (
+            <ActivityIndicator color={textColor} />
+          ) : (
+            <>
+              {iconPosition === 'left' && renderIcon()}
+              <Text
+                style={[
+                  styles.text,
+                  styles[`text_${size}`],
+                  { color: textColor },
+                  textStyle,
+                ]}
+              >
+                {title}
+              </Text>
+              {iconPosition === 'right' && renderIcon()}
+            </>
+          )}
+        </LinearGradient>
       ) : (
-        <>
-          {icon}
-          <Text style={[styles.text, { color: getTextColor() }, icon ? { marginLeft: 8 } : null]}>
-            {title}
-          </Text>
-        </>
+        <View
+          style={[
+            styles.inner,
+            styles[size],
+            styles.secondaryBg,
+            variant === 'outline' && styles.outlineBorder,
+          ]}
+        >
+          {loading ? (
+            <ActivityIndicator color={textColor} />
+          ) : (
+            <>
+              {iconPosition === 'left' && renderIcon()}
+              <Text
+                style={[
+                  styles.text,
+                  styles[`text_${size}`],
+                  { color: textColor },
+                  textStyle,
+                ]}
+              >
+                {title}
+              </Text>
+              {iconPosition === 'right' && renderIcon()}
+            </>
+          )}
+        </View>
       )}
-    </TouchableOpacity>
+    </PressableScale>
   );
 };
 
 const styles = StyleSheet.create({
-  button: {
+  buttonWrapper: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+  },
+  inner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    ...Shadows.button,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  secondaryBg: {
+    backgroundColor: Colors.white,
+    borderColor: Colors.border,
+  },
+  outlineBorder: {
+    borderColor: Colors.skyBlue,
+    borderWidth: 1.5,
   },
   sm: {
     paddingVertical: 8,
@@ -98,25 +216,33 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   md: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 13,
+    paddingHorizontal: 22,
     minHeight: 52,
   },
   lg: {
     paddingVertical: 16,
-    paddingHorizontal: 32,
-    minHeight: 64,
-  },
-  secondaryBorder: {
-    borderColor: Colors.skyBlue,
-  },
-  outlineBorder: {
-    borderColor: Colors.skyBlue,
-    borderWidth: 3,
+    paddingHorizontal: 28,
+    minHeight: 60,
   },
   text: {
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    letterSpacing: 0.3,
+  },
+  text_sm: {
+    fontSize: Typography.sizes.sm,
+  },
+  text_md: {
     fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.heavy,
-    letterSpacing: 0.4,
+  },
+  text_lg: {
+    fontSize: Typography.sizes.lg,
+  },
+  iconLeft: {
+    marginRight: 8,
+  },
+  iconRight: {
+    marginLeft: 8,
   },
 });

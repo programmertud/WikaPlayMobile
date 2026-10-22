@@ -41,6 +41,7 @@ export default function StudentLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="category/[slug]" options={{ headerShown: false }} />
       <Stack.Screen name="flashcards/[slug]" options={{ headerShown: false }} />
+      <Stack.Screen name="quiz/[slug]/madali" options={{ headerShown: false }} />
       <Stack.Screen name="quiz/[slug]/[difficulty]" options={{ headerShown: false }} />
       <Stack.Screen name="games/[slug]" options={{ headerShown: false }} />
     </Stack>

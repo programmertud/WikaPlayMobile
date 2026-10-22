@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getFeedbackAudio, playSound, stopCurrentSound } from '../services/audio/sound-service';
+import { playSound, stopCurrentSound } from '../services/audio/sound-service';
+import { useAnswerFeedback } from './use-answer-feedback';
 import { QuizDifficulty, QuizQuestion } from '../types';
 
 interface UseQuizOptions {
@@ -16,9 +17,13 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isAnswerLocked, setIsAnswerLocked] = useState<boolean>(false);
 
-  // Separate streak counters per quiz session
-  const [correctStreak, setCorrectStreak] = useState<number>(0);
-  const [wrongStreak, setWrongStreak] = useState<number>(0);
+  // Centralized voice-over streak manager
+  const {
+    correctStreak,
+    wrongStreak,
+    isEvaluating,
+    triggerFeedback,
+  } = useAnswerFeedback();
 
   // Score & results
   const [score, setScore] = useState<number>(0);
@@ -88,7 +93,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
   // Handle single answer selection
   const handleSelectAnswer = useCallback(
     async (choiceId: string) => {
-      if (choicesDisabled || isAnswerLocked || !currentQuestion) return;
+      if (choicesDisabled || isAnswerLocked || isEvaluating || !currentQuestion) return;
 
       const questionId = currentQuestion.id;
 
@@ -97,25 +102,18 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
       setChoicesDisabled(true);
       setSelectedAnswer(choiceId);
 
-      // Validate answer
-      const isCorrect = String(choiceId) === String(currentQuestion.correct_answer);
-
-      // Calculate streak updates
-      let newCorrectStreak = 0;
-      let newWrongStreak = 0;
+      // Validate answer (supports both choice IDs and case-insensitive Mahirap jumble words)
+      const normalizedChoice = choiceId.toUpperCase().trim();
+      const normalizedExpected = String(currentQuestion.correct_answer).toUpperCase().trim();
+      const normalizedTarget = String(currentQuestion.target_item_name || '').toUpperCase().trim();
+      const isCorrect =
+        normalizedChoice === normalizedExpected ||
+        (normalizedTarget.length > 0 && normalizedChoice === normalizedTarget);
 
       if (isCorrect) {
-        newCorrectStreak = correctStreak + 1;
-        newWrongStreak = 0;
-        setCorrectStreak(newCorrectStreak);
-        setWrongStreak(0);
         setScore((prev) => prev + currentQuestion.points);
         setCorrectCount((prev) => prev + 1);
       } else {
-        newWrongStreak = wrongStreak + 1;
-        newCorrectStreak = 0;
-        setWrongStreak(newWrongStreak);
-        setCorrectStreak(0);
         setWrongCount((prev) => prev + 1);
       }
 
@@ -125,14 +123,9 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
         selected_answer: choiceId,
       });
 
-      // Play streak feedback audio
-      const feedbackSound = getFeedbackAudio(
-        isCorrect,
-        isCorrect ? newCorrectStreak : newWrongStreak
-      );
-
-      await playSound(feedbackSound, () => {
-        // Automatic progression after feedback finishes
+      // Play streak feedback voice-over immediately without 2-second delay
+      await triggerFeedback(isCorrect, () => {
+        // Automatic progression after feedback voice-over finishes
         if (currentQuestionIdRef.current === questionId) {
           if (currentIndex + 1 < questions.length) {
             setCurrentIndex((prev) => prev + 1);
@@ -146,17 +139,17 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     [
       choicesDisabled,
       isAnswerLocked,
+      isEvaluating,
       currentQuestion,
-      correctStreak,
-      wrongStreak,
       currentIndex,
       questions.length,
       onComplete,
+      triggerFeedback,
     ]
   );
 
   const replayAudio = useCallback(async () => {
-    if (!currentQuestion || isPlayingAudio) return;
+    if (!currentQuestion || isPlayingAudio || isAnswerLocked || isEvaluating) return;
     setIsPlayingAudio(true);
     setChoicesDisabled(true);
 
@@ -167,7 +160,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
         setChoicesDisabled(false);
       }
     });
-  }, [currentQuestion, isPlayingAudio, isAnswerLocked]);
+  }, [currentQuestion, isPlayingAudio, isAnswerLocked, isEvaluating]);
 
   return {
     currentIndex,

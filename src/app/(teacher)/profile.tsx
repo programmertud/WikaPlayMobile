@@ -1,39 +1,42 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+
 import { LoadingView } from '../../components/LoadingView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../hooks/use-auth';
 import { authService } from '../../services/api';
-import { Colors, Shadows, Typography } from '../../theme';
-
-interface StatsData {
-  stars_balance: number;
-  unlocked_collectibles_count: number;
-  quizzes_passed_count: number;
-  minigames_played_count: number;
-}
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 
 export default function TeacherProfileScreen() {
   const { user, logout } = useAuth();
-  const [stats, setStats] = useState<StatsData | null>(null);
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     authService.getMe()
-      .then((res) => setStats(res.stats))
       .catch(() => { /* non-critical */ })
       .finally(() => setLoading(false));
   }, []);
 
+
   const handleLogout = () => {
-    Alert.alert('Mag-logout', 'Sigurado ka bang gusto mong lumabas?', [
+    Alert.alert('Mag-logout', 'Sigurado ka bang gusto mong lumabas sa portal ng guro?', [
       { text: 'Hindi', style: 'cancel' },
       {
-        text: 'Oo', style: 'destructive',
+        text: 'Oo, Lumabas',
+        style: 'destructive',
         onPress: async () => {
           setLoggingOut(true);
-          try { await logout(); } catch { } finally { setLoggingOut(false); }
+          try {
+            await logout();
+          } catch {}
+          finally {
+            setLoggingOut(false);
+          }
         },
       },
     ]);
@@ -45,38 +48,61 @@ export default function TeacherProfileScreen() {
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {/* Avatar */}
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: Math.max(insets.top, 16) + 12 },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Avatar with Teacher Gradient Ring */}
       <View style={styles.avatarSection}>
-        <View style={[styles.avatarCircle, Shadows.card]}>
-          <Text style={styles.avatarInitial}>{initial}</Text>
-        </View>
+        <LinearGradient
+          colors={Gradients.teacher}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.avatarRing}
+        >
+          <View style={styles.avatarInner}>
+            <Text style={styles.avatarInitial}>{initial}</Text>
+          </View>
+        </LinearGradient>
+
         <Text style={styles.displayName}>{displayName}</Text>
-        <Text style={styles.roleLabel}>👩‍🏫 Guro</Text>
+        <View style={styles.roleBadge}>
+          <Ionicons name="school" size={14} color={Colors.teacherPurple} />
+          <Text style={styles.roleLabel}>Guro (Teacher Portal)</Text>
+        </View>
         {user?.email && <Text style={styles.emailLabel}>{user.email}</Text>}
       </View>
 
       {/* Info Card */}
-      <View style={[styles.infoCard, Shadows.soft]}>
-        <InfoRow icon="👤" label="Buong Pangalan" value={user?.name ?? '—'} />
-        <InfoRow icon="📧" label="Email" value={user?.email ?? '—'} />
-        <InfoRow icon="🎭" label="Tungkulin" value="Guro" />
+      <View style={[styles.infoCard, Shadows.card]}>
+        <InfoRow icon="person" label="Buong Pangalan" value={user?.name ?? '—'} />
+        <InfoRow icon="mail" label="Email Address" value={user?.email ?? '—'} />
+        <InfoRow icon="shield-checkmark" label="Tungkulin" value="Guro / Administrator" />
       </View>
 
-      {/* WikaPlay Info */}
-      <View style={[styles.aboutCard, Shadows.soft]}>
-        <Text style={styles.aboutTitle}>ℹ️ Tungkol sa WikaPlay</Text>
+      {/* WikaPlay Info Card */}
+      <View style={[styles.aboutCard, Shadows.card]}>
+        <View style={styles.aboutHeader}>
+          <Ionicons name="information-circle" size={20} color={Colors.teacherPurple} />
+          <Text style={styles.aboutTitle}>Tungkol sa WikaPlay</Text>
+        </View>
         <Text style={styles.aboutText}>
-          Ang WikaPlay ay isang mobile application para sa mga mag-aaral sa kindergarten na nagtuturong
-          Filipino vocabulary sa pamamagitan ng mga flashcard, quiz, at mini-games.
+          Ang WikaPlay ay isang mobile learning application para sa mga mag-aaral sa kindergarten na nagtuturo ng
+          Filipino vocabulary sa pamamagitan ng interactive flashcards, audio quizzes, at mini-games.
         </Text>
-        <Text style={styles.version}>Bersyon: 1.0.0</Text>
+        <Text style={styles.version}>Bersyon: 1.0.0 (Expo SDK 58)</Text>
       </View>
 
+      {/* Logout Button */}
       <PrimaryButton
-        title={loggingOut ? 'Lumalabas...' : '🚪 Mag-logout'}
+        title={loggingOut ? 'Lumalabas...' : 'Mag-logout'}
         variant="danger"
         size="lg"
+        icon="log-out"
         onPress={handleLogout}
         disabled={loggingOut}
         style={{ marginTop: 8 }}
@@ -85,10 +111,20 @@ export default function TeacherProfileScreen() {
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+function InfoRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
   return (
     <View style={rowStyles.row}>
-      <Text style={rowStyles.icon}>{icon}</Text>
+      <View style={rowStyles.iconWrapper}>
+        <Ionicons name={icon} size={18} color={Colors.teacherPurple} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={rowStyles.label}>{label}</Text>
         <Text style={rowStyles.value}>{value}</Text>
@@ -98,28 +134,128 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 }
 
 const rowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  icon: { fontSize: 20, width: 32 },
-  label: { fontSize: Typography.sizes.xs, color: Colors.textMuted, fontWeight: Typography.weights.semibold, textTransform: 'uppercase', letterSpacing: 0.5 },
-  value: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.bold, color: Colors.text, marginTop: 1 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.teacherPurpleLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  label: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    fontWeight: Typography.weights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  value: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginTop: 2,
+  },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F3FF' },
-  scrollContent: { padding: 16, paddingTop: 52, paddingBottom: 40 },
+  container: { flex: 1, backgroundColor: Colors.teacherPurpleBg },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
   avatarSection: { alignItems: 'center', marginBottom: 24 },
-  avatarCircle: {
-    width: 90, height: 90, borderRadius: 45, backgroundColor: '#7C3AED',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 4, borderColor: Colors.white, marginBottom: 12,
+  avatarRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    padding: 3,
   },
-  avatarInitial: { fontSize: 40, fontWeight: Typography.weights.heavy, color: Colors.white },
-  displayName: { fontSize: Typography.sizes.xl, fontWeight: Typography.weights.heavy, color: Colors.text, marginBottom: 4 },
-  roleLabel: { fontSize: Typography.sizes.sm, color: '#7C3AED', fontWeight: Typography.weights.bold, marginBottom: 2 },
-  emailLabel: { fontSize: Typography.sizes.xs, color: Colors.textMuted, marginTop: 2 },
-  infoCard: { backgroundColor: Colors.white, borderRadius: 24, borderWidth: 3, borderColor: Colors.white, padding: 20, marginBottom: 16 },
-  aboutCard: { backgroundColor: Colors.white, borderRadius: 24, borderWidth: 3, borderColor: Colors.white, padding: 20, marginBottom: 20 },
-  aboutTitle: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.heavy, color: Colors.text, marginBottom: 10 },
-  aboutText: { fontSize: Typography.sizes.sm, color: Colors.textLight, lineHeight: 20, marginBottom: 8 },
-  version: { fontSize: Typography.sizes.xs, color: Colors.textMuted, fontStyle: 'italic' },
+  avatarInner: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 40,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.teacherPurple,
+  },
+  displayName: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.teacherPurpleLight,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    gap: 6,
+    marginBottom: 4,
+  },
+  roleLabel: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.teacherPurple,
+    fontWeight: Typography.weights.bold,
+  },
+  emailLabel: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  infoCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    padding: 18,
+    marginBottom: 16,
+  },
+  aboutCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    padding: 20,
+    marginBottom: 20,
+  },
+  aboutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  aboutTitle: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  aboutText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  version: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+  },
 });

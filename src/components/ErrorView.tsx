@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Colors, Typography } from '../theme';
+import { Colors, Fonts, Shadows, Typography } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 
 interface ErrorViewProps {
@@ -11,7 +12,9 @@ interface ErrorViewProps {
 export const ErrorView: React.FC<ErrorViewProps> = ({ message, onRetry }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.emoji}>⚠️</Text>
+      <View style={styles.iconCircle}>
+        <Ionicons name="alert-circle" size={48} color={Colors.coralRed} />
+      </View>
       <Text style={styles.title}>Paumanhin!</Text>
       <Text style={styles.message}>{message}</Text>
       {onRetry && (
@@ -34,13 +37,19 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: Colors.background,
   },
-  emoji: {
-    fontSize: 56,
-    marginBottom: 12,
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    ...Shadows.sm,
   },
   title: {
     fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     marginBottom: 8,
   },
@@ -50,8 +59,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
+    fontFamily: Fonts.regular,
+    maxWidth: 280,
   },
   button: {
     minWidth: 160,
   },
 });
+

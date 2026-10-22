@@ -1,5 +1,5 @@
 import { Link, router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,13 +12,29 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withSpring,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
+
 import { PrimaryButton } from '../components/PrimaryButton';
+import { InputField } from '../components/InputField';
+import { PressableScale } from '../components/PressableScale';
+import { GradientBackground } from '../components/GradientBackground';
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient } from '../services/api';
-import { Colors, Shadows, Typography } from '../theme';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, studentLogin } = useAuth();
+  const [studentName, setStudentName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'student' | 'teacher'>('student');
@@ -29,45 +45,90 @@ export default function LoginScreen() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [customApiUrl, setCustomApiUrl] = useState(ApiClient.getBaseUrl());
 
-  const handleLogin = async (overrideEmail?: string, overridePass?: string, overrideRole?: 'student' | 'teacher') => {
-    const loginEmail = (overrideEmail || email).trim();
-    const loginPass = overridePass || password;
-    const loginRole = overrideRole || role;
+  // Gentle float animation for the logo
+  const floatY = useSharedValue(0);
+  // Role toggle indicator slide
+  const roleToggleAnim = useSharedValue(0);
 
-    if (!loginEmail || !loginPass) {
-      setErrorMessage('Pakilagay ang iyong email at password.');
-      return;
-    }
+  useEffect(() => {
+    floatY.value = withRepeat(
+      withSequence(
+        withTiming(-8, { duration: 1800 }),
+        withTiming(0, { duration: 1800 })
+      ),
+      -1,
+      true
+    );
+  }, []);
 
+  const handleRoleChange = (newRole: 'student' | 'teacher') => {
+    Haptics.selectionAsync().catch(() => {});
+    setRole(newRole);
+    setErrorMessage(null);
+    roleToggleAnim.value = withSpring(newRole === 'student' ? 0 : 1, {
+      damping: 18,
+      stiffness: 220,
+    });
+  };
+
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: floatY.value }],
+  }));
+
+  const handleLogin = async (overrideName?: string, overrideEmail?: string, overridePass?: string) => {
     setErrorMessage(null);
     setLoading(true);
 
     try {
-      const loggedUser = await login(loginEmail, loginPass, loginRole);
-      if (loggedUser.role === 'teacher' || loggedUser.role === 'admin') {
-        router.replace('/(teacher)');
-      } else {
+      if (role === 'student') {
+        const nameToUse = (overrideName || studentName).trim();
+        if (!nameToUse) {
+          setErrorMessage('Pakilagay ang iyong buong pangalan.');
+          setLoading(false);
+          return;
+        }
+
+        const loggedUser = await studentLogin(nameToUse);
         router.replace('/');
+      } else {
+        const loginEmail = (overrideEmail || email).trim();
+        const loginPass = overridePass || password;
+
+        if (!loginEmail || !loginPass) {
+          setErrorMessage('Pakilagay ang iyong email at password.');
+          setLoading(false);
+          return;
+        }
+
+        const loggedUser = await login(loginEmail, loginPass, 'teacher');
+        if (loggedUser.role === 'teacher' || loggedUser.role === 'admin') {
+          router.replace('/(teacher)');
+        } else {
+          router.replace('/');
+        }
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Nabigong mag-login. Pakisubukang muli.');
+      if (role === 'student' && (err.status === 404 || err.message?.includes('Hindi namin makita'))) {
+        setErrorMessage('Hindi namin makita ang pangalang ito. Pakisuri ang iyong pangalan o magpatulong sa iyong guro.');
+      } else {
+        setErrorMessage(err.message || 'Nabigong mag-login. Pakisubukang muli.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleQuickStudentLogin = () => {
-    setEmail('student@wikaplay.ph');
-    setPassword('password123');
-    setRole('student');
-    handleLogin('student@wikaplay.ph', 'password123', 'student');
+    setStudentName('Juan Dela Cruz');
+    handleRoleChange('student');
+    handleLogin('Juan Dela Cruz');
   };
 
   const handleQuickTeacherLogin = () => {
     setEmail('teacher@wikaplay.ph');
     setPassword('password123');
-    setRole('teacher');
-    handleLogin('teacher@wikaplay.ph', 'password123', 'teacher');
+    handleRoleChange('teacher');
+    handleLogin(undefined, 'teacher@wikaplay.ph', 'password123');
   };
 
   const saveCustomApiUrl = async () => {
@@ -77,192 +138,248 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.keyboardContainer}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Brand Header */}
-        <View style={styles.brandHeader}>
-          <View style={[styles.logoBadge, Shadows.card]}>
-            <Text style={styles.sunIcon}>☀️</Text>
-            <Text style={styles.bookIcon}>📖</Text>
-          </View>
-          <Text style={styles.brandTitle}>WikaPlay</Text>
-          <Text style={styles.brandSubtitle}>Masayang Pagkatuto ng Wikang Filipino</Text>
-        </View>
-
-        {/* Role Toggle Selector */}
-        <View style={styles.roleToggleContainer}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setRole('student')}
-            style={[
-              styles.roleTab,
-              role === 'student' && styles.roleTabActive,
-              role === 'student' && { backgroundColor: Colors.skyBlue },
-            ]}
-          >
-            <Text style={styles.roleEmoji}>🎒</Text>
-            <Text style={[styles.roleText, role === 'student' && styles.roleTextActive]}>
-              Mag-aaral
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setRole('teacher')}
-            style={[
-              styles.roleTab,
-              role === 'teacher' && styles.roleTabActive,
-              role === 'teacher' && { backgroundColor: Colors.sunYellowDark },
-            ]}
-          >
-            <Text style={styles.roleEmoji}>👩‍🏫</Text>
-            <Text style={[styles.roleText, role === 'teacher' && styles.roleTextActive]}>
-              Guro
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Login Form Card */}
-        <View style={[styles.card, Shadows.card]}>
-          <Text style={styles.cardHeader}>
-            {role === 'student' ? 'Maligayang Pagbabalik, Mag-aaral!' : 'Pumasok sa Teacher Portal'}
-          </Text>
-
-          {errorMessage && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorIcon}>⚠️</Text>
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          )}
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email Address</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Halimbawa: juan@wikaplay.ph"
-              placeholderTextColor={Colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ilagay ang iyong password"
-              placeholderTextColor={Colors.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          <PrimaryButton
-            title={loading ? 'Pumapasok...' : 'Pumasok (Log In)'}
-            variant={role === 'student' ? 'primary' : 'warning'}
-            size="lg"
-            loading={loading}
-            onPress={() => handleLogin()}
-            style={styles.loginBtn}
-          />
-
-          {/* Quick Demo Login Helpers */}
-          <View style={styles.demoSection}>
-            <Text style={styles.demoLabel}>Mabilisang Pagsubok (One-Tap Test Accounts):</Text>
-            <View style={styles.demoButtonsRow}>
-              <TouchableOpacity
-                style={[styles.demoBtn, { borderColor: Colors.skyBlue }]}
-                onPress={handleQuickStudentLogin}
-              >
-                <Text style={styles.demoBtnText}>🎒 Mag-aaral (Juan)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.demoBtn, { borderColor: Colors.sunYellowDark }]}
-                onPress={handleQuickTeacherLogin}
-              >
-                <Text style={styles.demoBtnText}>👩‍🏫 Guro (Maria)</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Registration link */}
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Wala ka pang account? </Text>
-            <Link href="/register" asChild>
-              <TouchableOpacity>
-                <Text style={styles.registerLink}>Magrehistro rito</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
-        </View>
-
-        {/* Server IP Config Footer Button */}
-        <TouchableOpacity
-          onPress={() => setIsConfigModalOpen(true)}
-          style={styles.serverConfigBtn}
+    <GradientBackground variant={role === 'teacher' ? 'teacher' : 'sky'}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.serverConfigText}>
-            ⚙️ Server URL: {ApiClient.getBaseUrl()}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {/* Brand Header with Floating Logo */}
+          <View style={styles.brandHeader}>
+            <Animated.View style={[styles.logoBadge, Shadows.card, logoAnimatedStyle]}>
+              <LinearGradient
+                colors={role === 'teacher' ? Gradients.teacher : Gradients.sky}
+                style={styles.logoGradient}
+              >
+                <Ionicons
+                  name={role === 'teacher' ? 'school' : 'sparkles'}
+                  size={36}
+                  color={Colors.white}
+                />
+              </LinearGradient>
+            </Animated.View>
+            <Text style={styles.brandTitle}>WikaPlay</Text>
+            <Text style={styles.brandSubtitle}>Masayang Pagkatuto ng Wikang Filipino</Text>
+          </View>
 
-      {/* Server URL Config Modal */}
-      <Modal visible={isConfigModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, Shadows.card]}>
-            <Text style={styles.modalTitle}>Ayusin ang Backend Server URL</Text>
-            <Text style={styles.modalSubtitle}>
-              Kung gumagamit ng pisikal na Android phone, ilagay ang IP ng iyong computer (hal. http://192.168.1.5:8000/api).
+          {/* Segmented Role Toggle */}
+          <View style={[styles.roleToggleContainer, Shadows.subtle]}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => handleRoleChange('student')}
+              style={[
+                styles.roleTab,
+                role === 'student' && styles.roleTabActive,
+              ]}
+            >
+              <Ionicons
+                name="happy"
+                size={18}
+                color={role === 'student' ? Colors.skyBlueDark : Colors.textMuted}
+                style={styles.roleIcon}
+              />
+              <Text
+                style={[
+                  styles.roleText,
+                  role === 'student' && styles.roleTextActiveStudent,
+                ]}
+              >
+                Mag-aaral
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => handleRoleChange('teacher')}
+              style={[
+                styles.roleTab,
+                role === 'teacher' && styles.roleTabActive,
+              ]}
+            >
+              <Ionicons
+                name="school"
+                size={18}
+                color={role === 'teacher' ? Colors.teacherPurple : Colors.textMuted}
+                style={styles.roleIcon}
+              />
+              <Text
+                style={[
+                  styles.roleText,
+                  role === 'teacher' && styles.roleTextActiveTeacher,
+                ]}
+              >
+                Guro
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Login Form Card */}
+          <View style={[styles.card, Shadows.card]}>
+            <Text style={styles.cardHeader}>
+              {role === 'student' ? 'Kamusta, Mag-aaral! 👋' : 'Pumasok sa Teacher Portal'}
             </Text>
+            {role === 'student' && (
+              <Text style={styles.studentPromptText}>
+                I-type ang iyong buong pangalan para makapasok at magsimulang maglaro!
+              </Text>
+            )}
 
-            <TextInput
-              style={styles.modalInput}
-              value={customApiUrl}
-              onChangeText={setCustomApiUrl}
-              placeholder="http://192.168.1.x:8000/api"
-              autoCapitalize="none"
-              autoCorrect={false}
+            {errorMessage && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={18} color={Colors.error} style={{ marginRight: 6 }} />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
+
+            {role === 'student' ? (
+              <InputField
+                label="Buong Pangalan (Full Name)"
+                icon="person-outline"
+                placeholder="Halimbawa: Juan Dela Cruz"
+                value={studentName}
+                onChangeText={setStudentName}
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={() => handleLogin()}
+              />
+            ) : (
+              <>
+                <InputField
+                  label="Email Address"
+                  icon="mail-outline"
+                  placeholder="Halimbawa: juan@wikaplay.ph"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+
+                <InputField
+                  label="Password"
+                  icon="lock-closed-outline"
+                  placeholder="Ilagay ang iyong password"
+                  value={password}
+                  onChangeText={setPassword}
+                  isPassword
+                />
+              </>
+            )}
+
+            <PrimaryButton
+              title={loading ? 'Pumapasok...' : (role === 'student' ? 'Mag-login' : 'Pumasok (Log In)')}
+              variant={role === 'student' ? 'primary' : 'teacher'}
+              size="lg"
+              loading={loading}
+              icon="log-in"
+              onPress={() => handleLogin()}
+              style={styles.loginBtn}
             />
 
-            <View style={styles.modalActions}>
-              <PrimaryButton
-                title="Kanselahin"
-                variant="secondary"
-                size="md"
-                onPress={() => setIsConfigModalOpen(false)}
-                style={{ flex: 1, marginRight: 8 }}
-              />
-              <PrimaryButton
-                title="I-save"
-                variant="primary"
-                size="md"
-                onPress={saveCustomApiUrl}
-                style={{ flex: 1 }}
-              />
+            {/* Quick Demo Login Helpers */}
+            <View style={styles.demoSection}>
+              <Text style={styles.demoLabel}>Mabilisang Pagsubok (One-Tap):</Text>
+              <View style={styles.demoButtonsRow}>
+                <PressableScale
+                  style={[styles.demoBtn, { borderColor: Colors.skyBlue }]}
+                  onPress={handleQuickStudentLogin}
+                >
+                  <Ionicons name="person" size={14} color={Colors.skyBlueDark} />
+                  <Text style={[styles.demoBtnText, { color: Colors.skyBlueDark }]}>
+                    Mag-aaral (Juan)
+                  </Text>
+                </PressableScale>
+
+                <PressableScale
+                  style={[styles.demoBtn, { borderColor: Colors.teacherPurple }]}
+                  onPress={handleQuickTeacherLogin}
+                >
+                  <Ionicons name="school" size={14} color={Colors.teacherPurple} />
+                  <Text style={[styles.demoBtnText, { color: Colors.teacherPurple }]}>
+                    Guro (Maria)
+                  </Text>
+                </PressableScale>
+              </View>
+            </View>
+
+            {/* Registration link */}
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>Wala ka pang account? </Text>
+              <Link href="/register" asChild>
+                <TouchableOpacity>
+                  <Text style={[styles.registerLink, { color: role === 'teacher' ? Colors.teacherPurple : Colors.skyBlueDark }]}>
+                    Magrehistro rito
+                  </Text>
+                </TouchableOpacity>
+              </Link>
             </View>
           </View>
-        </View>
-      </Modal>
-    </KeyboardAvoidingView>
+
+          {/* Server IP Config Footer Button */}
+          <PressableScale
+            onPress={() => setIsConfigModalOpen(true)}
+            style={styles.serverConfigBtn}
+          >
+            <Ionicons name="settings-outline" size={14} color={Colors.textLight} />
+            <Text style={styles.serverConfigText}>
+              Server URL: {ApiClient.getBaseUrl()}
+            </Text>
+          </PressableScale>
+        </ScrollView>
+
+        {/* Server URL Config Modal */}
+        <Modal visible={isConfigModalOpen} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, Shadows.card]}>
+              <Text style={styles.modalTitle}>Ayusin ang Backend Server URL</Text>
+              <Text style={styles.modalSubtitle}>
+                Kung gumagamit ng pisikal na Android phone, ilagay ang IP ng computer (hal. http://192.168.1.5:8000/api).
+              </Text>
+
+              <TextInput
+                style={styles.modalInput}
+                value={customApiUrl}
+                onChangeText={setCustomApiUrl}
+                placeholder="http://192.168.1.x:8000/api"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <View style={styles.modalActions}>
+                <PrimaryButton
+                  title="Kanselahin"
+                  variant="secondary"
+                  size="md"
+                  onPress={() => setIsConfigModalOpen(false)}
+                  style={{ flex: 1 }}
+                />
+                <PrimaryButton
+                  title="I-save"
+                  variant="primary"
+                  size="md"
+                  onPress={saveCustomApiUrl}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </KeyboardAvoidingView>
+    </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
-    backgroundColor: '#E0F2FE',
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 48,
+    paddingHorizontal: 20,
+    paddingTop: 54,
+    paddingBottom: 40,
     alignItems: 'center',
   },
   brandHeader: {
@@ -270,46 +387,40 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoBadge: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    flexDirection: 'row',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    overflow: 'hidden',
     marginBottom: 12,
   },
-  sunIcon: {
-    fontSize: 34,
-    marginRight: -6,
-  },
-  bookIcon: {
-    fontSize: 30,
+  logoGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   brandTitle: {
-    fontSize: Typography.sizes.hero,
-    fontWeight: Typography.weights.heavy,
-    color: '#0369A1',
+    fontSize: Typography.sizes.xxl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
     letterSpacing: 0.5,
   },
   brandSubtitle: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.xs,
     color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
-    marginTop: 4,
+    marginTop: 2,
+    textAlign: 'center',
   },
   roleToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: Radius.pill,
     padding: 4,
     marginBottom: 18,
     width: '100%',
-    maxWidth: 380,
-    borderWidth: 2,
-    borderColor: Colors.white,
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   roleTab: {
     flex: 1,
@@ -317,158 +428,154 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 18,
+    borderRadius: Radius.pill,
   },
   roleTabActive: {
-    ...Shadows.button,
+    backgroundColor: Colors.white,
+    ...Shadows.subtle,
   },
-  roleEmoji: {
-    fontSize: 18,
+  roleIcon: {
     marginRight: 6,
   },
   roleText: {
     fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
-    color: Colors.textLight,
+    color: Colors.textMuted,
   },
-  roleTextActive: {
-    color: Colors.white,
+  roleTextActiveStudent: {
+    color: Colors.skyBlueDark,
+  },
+  roleTextActiveTeacher: {
+    color: Colors.teacherPurple,
   },
   card: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 400,
     backgroundColor: Colors.white,
-    borderRadius: 28,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
     padding: 24,
-    borderWidth: 4,
-    borderColor: Colors.white,
+    marginBottom: 16,
   },
   cardHeader: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.heavy,
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     color: Colors.text,
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  studentPromptText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    textAlign: 'center',
     marginBottom: 16,
+    lineHeight: 18,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 16,
+    backgroundColor: '#FFF1F2',
     borderWidth: 1,
-    borderColor: '#FCA5A5',
-  },
-  errorIcon: {
-    fontSize: 18,
-    marginRight: 8,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: Radius.md,
+    padding: 10,
+    marginBottom: 16,
   },
   errorText: {
+    color: Colors.error,
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.medium,
     flex: 1,
-    fontSize: Typography.sizes.xs,
-    color: '#991B1B',
-    fontWeight: Typography.weights.bold,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  label: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: Typography.sizes.md,
-    color: Colors.text,
   },
   loginBtn: {
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 16,
   },
   demoSection: {
     borderTopWidth: 1,
-    borderColor: '#F1F5F9',
+    borderTopColor: '#F1F5F9',
     paddingTop: 16,
     marginBottom: 16,
+    alignItems: 'center',
   },
   demoLabel: {
-    fontSize: Typography.sizes.xs,
+    fontSize: 11,
     color: Colors.textLight,
-    fontWeight: Typography.weights.bold,
+    fontWeight: Typography.weights.semibold,
     marginBottom: 10,
-    textAlign: 'center',
   },
   demoButtonsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
+    width: '100%',
   },
   demoBtn: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    borderWidth: 2,
-    backgroundColor: '#F8FAFC',
-    marginHorizontal: 4,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: Radius.pill,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
   },
   demoBtnText: {
     fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.bold,
-    color: Colors.text,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
   },
   footerText: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.xs,
     color: Colors.textLight,
   },
   registerLink: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.heavy,
-    color: Colors.skyBlueDark,
   },
   serverConfigBtn: {
-    marginTop: 24,
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
   },
   serverConfigText: {
-    fontSize: Typography.sizes.xs,
-    color: '#0284C7',
+    fontSize: 11,
+    color: Colors.textLight,
     fontWeight: Typography.weights.semibold,
-    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 24,
     width: '100%',
     maxWidth: 380,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   modalTitle: {
     fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     color: Colors.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   modalSubtitle: {
     fontSize: Typography.sizes.xs,
@@ -477,16 +584,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalInput: {
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: Typography.sizes.sm,
     color: Colors.text,
-    backgroundColor: '#F8FAFC',
     marginBottom: 20,
   },
   modalActions: {
     flexDirection: 'row',
+    gap: 12,
   },
 });

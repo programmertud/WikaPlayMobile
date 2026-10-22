@@ -3,11 +3,13 @@ export type UserRole = 'student' | 'teacher' | 'admin';
 export interface User {
   id: number;
   name: string;
-  email: string;
+  email?: string | null;
   role: UserRole;
   avatar?: string | null;
   section?: string | null;
   stars_balance: number;
+  student_id_code?: string | null;
+  status?: 'active' | 'pending_approval' | 'disabled';
 }
 
 export type QuizDifficulty = 'madali' | 'katamtaman' | 'mahirap';
@@ -91,6 +93,7 @@ export interface Collectible {
   slug: string;
   name: string;
   filipino_name: string;
+  category?: string;
   description: string;
   image_url?: string | null;
   audio_url?: string | null;
@@ -98,12 +101,15 @@ export interface Collectible {
   required_stars: number;
   is_unlocked: boolean;
   unlocked_at?: string | null;
+  is_duplicate?: boolean;
 }
 
 export interface StudentMonitoringItem {
   id: number;
   name: string;
-  email: string;
+  email?: string | null;
+  student_id_code?: string | null;
+  status?: 'active' | 'pending_approval' | 'disabled';
   avatar?: string | null;
   section?: string | null;
   stars_balance: number;
@@ -139,6 +145,7 @@ export type LearningCategory = {
   englishName: string;
   color: string;
   icon: string;
+  logoImage?: any;
   description?: string;
   items: VocabularyItem[];
 };

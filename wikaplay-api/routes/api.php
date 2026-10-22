@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/student-login', [AuthController::class, 'studentLogin']);
+    Route::post('/student-register', [AuthController::class, 'studentRegister']);
 });
 
 // Public / Cached Content (Accessible to students without requiring heavy auth token, or with token)
@@ -53,8 +55,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Teacher Management (Protected role: teacher/admin)
     Route::prefix('teacher')->group(function () {
+        Route::get('/dashboard', [TeacherController::class, 'dashboardStats']);
         Route::get('/students', [TeacherController::class, 'students']);
         Route::get('/students/{id}/history', [TeacherController::class, 'studentHistory']);
+        Route::match(['put', 'patch'], '/students/{id}/status', [TeacherController::class, 'updateStudentStatus']);
         Route::get('/categories', [TeacherController::class, 'categories']);
         Route::post('/categories', [TeacherController::class, 'saveCategory']);
         Route::post('/flashcards', [TeacherController::class, 'saveFlashcard']);
@@ -62,6 +66,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/quizzes/toggle-lock', [TeacherController::class, 'toggleQuizLock']);
         Route::get('/quizzes/{categoryId}/{difficulty}', [TeacherController::class, 'getQuizQuestions']);
         Route::post('/quizzes/question', [TeacherController::class, 'saveQuizQuestion']);
+        Route::delete('/quizzes/question/{id}', [TeacherController::class, 'deleteQuizQuestion']);
+        Route::get('/reports/export-csv', [TeacherController::class, 'exportReportsCsv']);
         Route::post('/upload-audio', [TeacherController::class, 'uploadAudio']);
         Route::post('/upload-image', [TeacherController::class, 'uploadImage']);
     });

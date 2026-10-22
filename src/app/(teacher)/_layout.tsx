@@ -1,24 +1,42 @@
 import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/use-auth';
-import { Colors, Shadows, Typography } from '../../theme';
+import { Colors, Shadows, Typography, Radius } from '../../theme';
+
+function TeacherTabBarIcon({
+  name,
+  outlineName,
+  focused,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  outlineName: keyof typeof Ionicons.glyphMap;
+  focused: boolean;
+}) {
+  return (
+    <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
+      <Ionicons
+        name={focused ? name : outlineName}
+        size={22}
+        color={focused ? Colors.teacherPurple : Colors.textMuted}
+      />
+    </View>
+  );
+}
 
 export default function TeacherLayout() {
   const { isAuthenticated, isTeacher, isLoading } = useAuth();
 
-  // While auth is resolving, render nothing (avoids premature redirect)
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.skyBlue} />
+        <ActivityIndicator size="large" color={Colors.teacherPurple} />
       </View>
     );
   }
 
-  // Use declarative <Redirect> instead of router.replace() in useEffect.
-  // This avoids triggering expo-router's navigation tree reducer inside a
-  // layout effect, which causes the "Maximum update depth exceeded" loop on web.
   if (!isAuthenticated) {
     return <Redirect href="/login" />;
   }
@@ -31,10 +49,17 @@ export default function TeacherLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: '#7C3AED',
+        tabBarActiveTintColor: Colors.teacherPurple,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: styles.tabLabel,
+        tabBarStyle: styles.tabBar,
+        tabBarBackground: () => (
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 80 : 100}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+        ),
       }}
     >
       <Tabs.Screen
@@ -42,9 +67,11 @@ export default function TeacherLayout() {
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ focused }) => (
-            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
-              <Text style={styles.tabIcon}>📊</Text>
-            </View>
+            <TeacherTabBarIcon
+              name="stats-chart"
+              outlineName="stats-chart-outline"
+              focused={focused}
+            />
           ),
         }}
       />
@@ -53,9 +80,11 @@ export default function TeacherLayout() {
         options={{
           title: 'Mga Estudyante',
           tabBarIcon: ({ focused }) => (
-            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
-              <Text style={styles.tabIcon}>👨‍🎓</Text>
-            </View>
+            <TeacherTabBarIcon
+              name="people"
+              outlineName="people-outline"
+              focused={focused}
+            />
           ),
         }}
       />
@@ -64,9 +93,11 @@ export default function TeacherLayout() {
         options={{
           title: 'Nilalaman',
           tabBarIcon: ({ focused }) => (
-            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
-              <Text style={styles.tabIcon}>📚</Text>
-            </View>
+            <TeacherTabBarIcon
+              name="book"
+              outlineName="book-outline"
+              focused={focused}
+            />
           ),
         }}
       />
@@ -75,9 +106,11 @@ export default function TeacherLayout() {
         options={{
           title: 'Ako',
           tabBarIcon: ({ focused }) => (
-            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
-              <Text style={styles.tabIcon}>👩‍🏫</Text>
-            </View>
+            <TeacherTabBarIcon
+              name="school"
+              outlineName="school-outline"
+              focused={focused}
+            />
           ),
         }}
       />
@@ -90,29 +123,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: Colors.teacherPurpleBg,
   },
   tabBar: {
-    height: 70,
-    backgroundColor: Colors.white,
-    borderTopWidth: 3,
-    borderColor: '#E2E8F0',
-    paddingBottom: 8,
+    height: Platform.OS === 'ios' ? 84 : 70,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.85)' : Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     paddingTop: 8,
     ...Shadows.card,
   },
   tabLabel: {
     fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
   },
   iconContainer: {
-    padding: 4,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activeIconContainer: {
-    backgroundColor: '#EDE9FE',
-  },
-  tabIcon: {
-    fontSize: 22,
+    backgroundColor: Colors.teacherPurpleLight,
   },
 });

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Collectible;
 use App\Models\Flashcard;
 use App\Models\MinigameSession;
 use App\Models\StarTransaction;
+use App\Models\StudentCollectible;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -23,7 +25,7 @@ class MinigameController extends Controller
                 'title' => 'Memory Match',
                 'description' => 'Ipares ang magkakatulad na larawan ng mga salita!',
                 'cover_image' => 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=400&q=80',
-                'bg_color' => '#10B981', // Emerald
+                'bg_color' => '#10B981',
                 'tag' => 'Pares-pares',
             ],
             [
@@ -32,7 +34,7 @@ class MinigameController extends Controller
                 'title' => 'Paghahanap ng Larawan',
                 'description' => 'Makinig nang mabuti at hanapin ang tamang larawan!',
                 'cover_image' => 'https://images.unsplash.com/photo-1509228468518-180dd4864904?w=400&q=80',
-                'bg_color' => '#F59E0B', // Amber
+                'bg_color' => '#F59E0B',
                 'tag' => 'Makinig at Hanapin',
             ],
             [
@@ -41,7 +43,7 @@ class MinigameController extends Controller
                 'title' => 'Hulaan ang Salita',
                 'description' => 'Tingnan ang pahiwatig at hulaan ang wastong salitang Filipino!',
                 'cover_image' => 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400&q=80',
-                'bg_color' => '#3B82F6', // Blue
+                'bg_color' => '#3B82F6',
                 'tag' => 'Talas ng Isip',
             ],
             [
@@ -50,7 +52,7 @@ class MinigameController extends Controller
                 'title' => 'Gulong ng mga Letra',
                 'description' => 'Ayusin ang mga letra upang mabuo ang salita!',
                 'cover_image' => 'https://images.unsplash.com/photo-1587654780291-39c9404d746b?w=400&q=80',
-                'bg_color' => '#8B5CF6', // Purple
+                'bg_color' => '#8B5CF6',
                 'tag' => 'Ayusin ang Letra',
             ],
             [
@@ -59,7 +61,7 @@ class MinigameController extends Controller
                 'title' => 'Pop Balloon',
                 'description' => 'Paputukin ang tamang lobo na nagtataglay ng tamang sagot!',
                 'cover_image' => 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400&q=80',
-                'bg_color' => '#EC4899', // Pink
+                'bg_color' => '#EC4899',
                 'tag' => 'Masayang Laro',
             ],
         ];
@@ -68,14 +70,14 @@ class MinigameController extends Controller
     }
 
     /**
-     * Get dynamic content for a mini-game based on published flashcards.
+     * Get dynamic content for a mini-game based on published flashcards (up to 20 items).
      */
     public function getContent($gameType)
     {
         $flashcards = Flashcard::where('is_published', true)
             ->with('category:id,name,color')
             ->inRandomOrder()
-            ->limit(12)
+            ->limit(20)
             ->get();
 
         return response()->json([
@@ -85,52 +87,158 @@ class MinigameController extends Controller
     }
 
     /**
-     * Submit completed mini-game results.
+     * Submit completed mini-game results with strict 1:1 star updates,
+     * duplicate prevention, and mystery box collectible qualification for 15-20/20 scores.
      */
     public function submit(Request $request)
     {
         $validated = $request->validate([
             'game_type' => 'required|string',
-            'score' => 'required|integer|min:0',
+            'score' => 'required|integer|min:0|max:20',
+            'session_id' => 'nullable|string',
             'duration_seconds' => 'nullable|integer|min:0',
             'metadata' => 'nullable|array',
         ]);
 
-        $user = $request->user();
+        $user = $request->user() ?? auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+        $sessionId = $validated['session_id'] ?? null;
 
-        return DB::transaction(function () use ($user, $validated) {
-            // Stars awarded based on score: 1 star per 50 points (min 1, max 10)
-            $score = $validated['score'];
-            $starsAwarded = min(10, max(1, (int)floor($score / 50)));
+        // 1. Duplicate check: Prevent duplicate awards for the same session (repeat submissions / network retry)
+        if ($sessionId) {
+            $existing = MinigameSession::where('session_id', $sessionId)
+                ->where('user_id', $user->id)
+                ->first();
 
+            if ($existing) {
+                $meta = is_array($existing->metadata) ? $existing->metadata : json_decode($existing->metadata, true);
+                $collectible = null;
+                if (!empty($meta['collectible_id'])) {
+                    $collectible = Collectible::find($meta['collectible_id']);
+                }
+
+                return response()->json([
+                    'message' => 'Nai-record na ang larong ito dati.',
+                    'is_duplicate_submission' => true,
+                    'session' => [
+                        'id' => $existing->id,
+                        'session_id' => $existing->session_id,
+                        'score' => $existing->score,
+                        'total_levels' => 20,
+                        'stars_awarded' => $existing->stars_awarded,
+                        'stars_balance' => $user->stars_balance,
+                        'qualifies_for_collectible' => $meta['qualifies_for_collectible'] ?? false,
+                        'collectible' => $collectible ? [
+                            'id' => $collectible->id,
+                            'slug' => $collectible->slug,
+                            'name' => $collectible->name,
+                            'filipino_name' => $collectible->filipino_name,
+                            'category' => $collectible->category ?: 'Mga Hayop',
+                            'description' => $collectible->description,
+                            'image_url' => $collectible->image_url,
+                            'audio_url' => $collectible->audio_url,
+                            'rarity' => $collectible->rarity,
+                            'is_duplicate' => $meta['is_duplicate'] ?? false,
+                        ] : null,
+                    ],
+                ]);
+            }
+        }
+
+        return DB::transaction(function () use ($user, $validated, $sessionId) {
+            $score = $validated['score']; // 0 to 20
+
+            // Rule: Strict 1:1 star balance update: earning 20 stars adds exactly 20 stars, never 100
+            $starsAwarded = min(20, max(0, $score));
+
+            // Rule: Qualification for collectible card: 15-20 out of 20 qualifies; 0-14 does NOT grant collectible
+            $qualifiesForCollectible = ($score >= 15 && $score <= 20);
+            $awardedCollectible = null;
+            $isDuplicateCard = false;
+
+            if ($qualifiesForCollectible) {
+                // Find unowned collectibles for this student
+                $ownedIds = StudentCollectible::where('user_id', $user->id)->pluck('collectible_id');
+                $unowned = Collectible::whereNotIn('id', $ownedIds)->get();
+
+                if ($unowned->isNotEmpty()) {
+                    $chosen = $unowned->random();
+                    // Award new collectible
+                    StudentCollectible::create([
+                        'user_id' => $user->id,
+                        'collectible_id' => $chosen->id,
+                        'unlocked_at' => now(),
+                        'is_mystery_revealed' => true,
+                    ]);
+                    $awardedCollectible = $chosen;
+                    $isDuplicateCard = false;
+                } else {
+                    // Rule 12: Define duplicate-card behavior explicitly.
+                    // Never create duplicate ownership records for the same student and collectible!
+                    $chosen = Collectible::inRandomOrder()->first();
+                    $awardedCollectible = $chosen;
+                    $isDuplicateCard = true;
+                }
+            }
+
+            // Create persistent session
             $session = MinigameSession::create([
                 'user_id' => $user->id,
+                'session_id' => $sessionId,
                 'game_type' => $validated['game_type'],
                 'score' => $score,
                 'duration_seconds' => $validated['duration_seconds'] ?? 0,
                 'stars_awarded' => $starsAwarded,
-                'metadata' => $validated['metadata'] ?? null,
+                'metadata' => array_merge($validated['metadata'] ?? [], [
+                    'qualifies_for_collectible' => $qualifiesForCollectible,
+                    'collectible_id' => $awardedCollectible?->id,
+                    'is_duplicate' => $isDuplicateCard,
+                ]),
             ]);
 
-            $user->increment('stars_balance', $starsAwarded);
-            $newBalance = $user->fresh()->stars_balance;
+            // Update user star balance strictly 1:1
+            if ($starsAwarded > 0) {
+                $user->increment('stars_balance', $starsAwarded);
+                $newBalance = $user->fresh()->stars_balance;
 
-            StarTransaction::create([
-                'user_id' => $user->id,
-                'amount' => $starsAwarded,
-                'balance_after' => $newBalance,
-                'source_type' => 'minigame_session',
-                'source_id' => $session->id,
-                'description' => "Nilaro ang {$validated['game_type']}",
-            ]);
+                StarTransaction::create([
+                    'user_id' => $user->id,
+                    'amount' => $starsAwarded,
+                    'balance_after' => $newBalance,
+                    'source_type' => 'minigame_session',
+                    'source_id' => $session->id,
+                    'description' => "Nilaro ang {$validated['game_type']} ({$score}/20 puntos)",
+                ]);
+            } else {
+                $newBalance = $user->stars_balance;
+            }
 
             return response()->json([
-                'message' => 'Napakasayang maglaro! Nakaipon ka ng mga bituin!',
+                'message' => $qualifiesForCollectible
+                    ? 'Napakagaling! Nakakuha ka ng mahiwagang kard!'
+                    : 'Magaling! Nakaipon ka ng mga bituin!',
                 'session' => [
                     'id' => $session->id,
+                    'session_id' => $session->session_id,
                     'score' => $score,
+                    'total_levels' => 20,
                     'stars_awarded' => $starsAwarded,
                     'stars_balance' => $newBalance,
+                    'qualifies_for_collectible' => $qualifiesForCollectible,
+                    'collectible' => $awardedCollectible ? [
+                        'id' => $awardedCollectible->id,
+                        'slug' => $awardedCollectible->slug,
+                        'name' => $awardedCollectible->name,
+                        'filipino_name' => $awardedCollectible->filipino_name,
+                        'category' => $awardedCollectible->category ?: 'Mga Hayop',
+                        'description' => $awardedCollectible->description,
+                        'image_url' => $awardedCollectible->image_url,
+                        'audio_url' => $awardedCollectible->audio_url,
+                        'rarity' => $awardedCollectible->rarity,
+                        'is_duplicate' => $isDuplicateCard,
+                    ] : null,
                 ],
             ]);
         });

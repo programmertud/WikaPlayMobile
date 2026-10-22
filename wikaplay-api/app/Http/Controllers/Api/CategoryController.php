@@ -153,19 +153,22 @@ class CategoryController extends Controller
             $choices = is_array($q->choices) ? $q->choices : json_decode($q->choices, true);
 
             if ($isKatamtaman) {
-                // SPECIAL KATAMTAMAN RULES:
-                // Choices are PICTURE ONLY without text beneath or inside the pictures.
-                // Do not display written questions such as "Nasaan ang aso?"
+                // Katamtaman: Question prominently at the top ("Nasaan ang [target]?"), 4 pictures, no text labels beneath
                 $choices = array_map(function ($choice) {
                     return [
                         'id' => (string)($choice['id'] ?? ''),
                         'image_url' => $choice['image_url'] ?? '',
-                        'text' => '', // MUST BE BLANK for Katamtaman
+                        'text' => '', // No names beneath pictures
                     ];
                 }, $choices);
 
-                $questionText = '';
+                $targetName = $q->target_item_name ?: ($q->flashcard ? $q->flashcard->filipino_name : '');
+                $questionText = !empty($q->question_text) ? $q->question_text : ('Nasaan ang ' . strtolower($targetName) . '?');
+            } elseif ($difficulty === 'mahirap') {
+                $targetName = $q->target_item_name ?: ($q->flashcard ? $q->flashcard->filipino_name : '');
+                $questionText = !empty($q->question_text) ? $q->question_text : 'Ayusin ang mga letra.';
             } else {
+                $targetName = $q->target_item_name;
                 $questionText = $q->question_text;
             }
 
@@ -173,15 +176,62 @@ class CategoryController extends Controller
                 'id' => $q->id,
                 'flashcard_id' => $q->flashcard_id,
                 'question_text' => $questionText,
-                'audio_url' => $q->effective_audio_url, // Automatically pulls current flashcard audio!
+                'audio_url' => $q->effective_audio_url,
                 'target_image_url' => $q->effective_image_url,
-                'target_item_name' => $isKatamtaman ? '' : $q->target_item_name,
+                'target_item_name' => $targetName,
                 'choices' => $choices,
                 'correct_answer' => (string)$q->correct_answer,
-                'points' => $q->points,
+                'points' => 1,
                 'difficulty' => $q->difficulty,
             ];
         });
+
+        // Ensure Katamtaman and Mahirap quizzes have 20 questions
+        $targetCount = ($difficulty === 'katamtaman' || $difficulty === 'mahirap') ? 20 : 10;
+        if ($formattedQuestions->count() < $targetCount) {
+            $flashcards = $category->flashcards()->where('is_published', true)->get();
+            if ($flashcards->isNotEmpty()) {
+                $allFlashcards = $flashcards->all();
+                $existingCount = $formattedQuestions->count();
+                $needed = $targetCount - $existingCount;
+                for ($i = 0; $i < $needed; $i++) {
+                    $targetFc = $allFlashcards[$i % count($allFlashcards)];
+                    $otherFcs = array_values(array_filter($allFlashcards, fn($f) => $f->id !== $targetFc->id));
+                    shuffle($otherFcs);
+                    $choiceFcs = array_merge([$targetFc], array_slice($otherFcs, 0, min(3, count($otherFcs))));
+                    shuffle($choiceFcs);
+
+                    $choices = array_map(function ($f) use ($difficulty) {
+                        return [
+                            'id' => (string)$f->id,
+                            'image_url' => $f->image_url,
+                            'text' => ($difficulty === 'katamtaman') ? '' : $f->filipino_name,
+                        ];
+                    }, $choiceFcs);
+
+                    $qText = ($difficulty === 'katamtaman')
+                        ? 'Nasaan ang ' . strtolower($targetFc->filipino_name) . '?'
+                        : 'Ayusin ang mga letra.';
+
+                    $correctAnswer = ($difficulty === 'katamtaman')
+                        ? (string)$targetFc->id
+                        : strtoupper($targetFc->filipino_name);
+
+                    $formattedQuestions->push([
+                        'id' => 10000 + $i,
+                        'flashcard_id' => $targetFc->id,
+                        'question_text' => $qText,
+                        'audio_url' => $targetFc->audio_url,
+                        'target_image_url' => $targetFc->image_url,
+                        'target_item_name' => strtoupper($targetFc->filipino_name),
+                        'choices' => $choices,
+                        'correct_answer' => $correctAnswer,
+                        'points' => 1,
+                        'difficulty' => $difficulty,
+                    ]);
+                }
+            }
+        }
 
         return response()->json([
             'category' => [
@@ -192,7 +242,7 @@ class CategoryController extends Controller
             ],
             'difficulty' => $difficulty,
             'is_locked' => false,
-            'pass_score' => $availability ? $availability->pass_score : 3,
+            'pass_score' => $availability ? $availability->pass_score : ($difficulty === 'katamtaman' || $difficulty === 'mahirap' ? 15 : 7),
             'questions' => $formattedQuestions,
         ]);
     }

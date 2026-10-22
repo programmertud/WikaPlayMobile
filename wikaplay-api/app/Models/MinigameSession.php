@@ -11,6 +11,7 @@ class MinigameSession extends Model
 
     protected $fillable = [
         'user_id',
+        'session_id',
         'game_type',
         'score',
         'duration_seconds',

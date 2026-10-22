@@ -1,13 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   ViewStyle,
 } from 'react-native';
 import { playSound } from '../services/audio/sound-service';
 import { Colors, Shadows } from '../theme';
+import { PressableScale } from './PressableScale';
 
 interface AudioButtonProps {
   audioUrl?: string | null;
@@ -21,7 +22,7 @@ interface AudioButtonProps {
 export const AudioButton: React.FC<AudioButtonProps> = ({
   audioUrl,
   label = 'Pakinggan',
-  size = 64,
+  size = 56,
   style,
   onPlayStart,
   onPlayEnd,
@@ -31,6 +32,7 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
   const handlePress = async () => {
     if (isPlaying) return;
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setIsPlaying(true);
     onPlayStart?.();
 
@@ -40,9 +42,10 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
     });
   };
 
+  const iconSize = Math.round(size * 0.45);
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
+    <PressableScale
       onPress={handlePress}
       disabled={isPlaying}
       style={[
@@ -51,20 +54,20 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: isPlaying ? Colors.sunYellow : Colors.sunYellowDark,
+          backgroundColor: isPlaying ? '#FDE047' : Colors.sunYellow,
         },
-        Shadows.button,
+        Shadows.colored(Colors.sunYellowDark),
         style,
       ]}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
       {isPlaying ? (
-        <ActivityIndicator color={Colors.white} size="small" />
+        <ActivityIndicator color={Colors.text} size="small" />
       ) : (
-        <Text style={styles.icon}>🔊</Text>
+        <Ionicons name="volume-high" size={iconSize} color="#78350F" />
       )}
-    </TouchableOpacity>
+    </PressableScale>
   );
 };
 
@@ -72,10 +75,8 @@ const styles = StyleSheet.create({
   button: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: Colors.white,
-  },
-  icon: {
-    fontSize: 28,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
 });
+

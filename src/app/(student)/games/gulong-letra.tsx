@@ -3,30 +3,32 @@
  * Category-based: Letters of the vocabulary word from the selected category are scrambled;
  * the student taps the letter tiles to form the correct word.
  */
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import * as Haptics from '@/utils/haptics';
+
 import { ItemVisual } from '../../../components/ItemVisual';
-import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { PressableScale } from '../../../components/PressableScale';
+import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
+import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
+import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { minigameService } from '../../../services/api';
 import {
-  getFeedbackAudio,
-  playLocalSound,
-  playVocabularyItem,
   useBgmDuck,
 } from '../../../services/audio/sound-service';
-import { Colors, Shadows, Typography } from '../../../theme';
-import { VocabularyItem } from '../../../types';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import { Collectible, VocabularyItem } from '../../../types';
 
 interface ShuffleTile {
   id: string;
@@ -42,7 +44,6 @@ function scrambleWord(word: string): ShuffleTile[] {
     used: false,
   }));
 
-  // Shuffle until different from original if length > 1
   for (let i = tiles.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
@@ -52,6 +53,7 @@ function scrambleWord(word: string): ShuffleTile[] {
 
 export default function GuLongLetra() {
   useBgmDuck();
+  const { updateUserStars } = useAuth();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const items = getCategoryVocabulary(category.slug);
@@ -61,13 +63,19 @@ export default function GuLongLetra() {
   const [placedTiles, setPlacedTiles] = useState<ShuffleTile[]>([]);
   const [correct, setCorrect] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState(10);
-  const [correctStreak, setCorrectStreak] = useState(0);
-  const [wrongStreak, setWrongStreak] = useState(0);
+  const [starsAwarded, setStarsAwarded] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [locked, setLocked] = useState(false);
 
-  const totalRounds = Math.min(items.length, 8);
+  // Mystery Box & Collectible state
+  const [showMysteryBox, setShowMysteryBox] = useState(false);
+  const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
+
+  // Centralized voice-over streak manager
+  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+
+  // Exactly 20 questions / levels
+  const totalRounds = 20;
   const currentItem: VocabularyItem = items[currentIdx % items.length];
   const targetLetters = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
 
@@ -82,13 +90,12 @@ export default function GuLongLetra() {
 
   const handleTilePress = (tile: ShuffleTile) => {
     if (tile.used || locked) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-    // Mark tile as used
     setTiles((prev) => prev.map((t) => (t.id === tile.id ? { ...t, used: true } : t)));
     const nextPlaced = [...placedTiles, tile];
     setPlacedTiles(nextPlaced);
 
-    // If all tiles placed, check word
     if (nextPlaced.length === targetLetters.length) {
       checkWord(nextPlaced);
     }
@@ -96,70 +103,76 @@ export default function GuLongLetra() {
 
   const handleRemovePlaced = (tile: ShuffleTile) => {
     if (locked) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setPlacedTiles((prev) => prev.filter((t) => t.id !== tile.id));
     setTiles((prev) => prev.map((t) => (t.id === tile.id ? { ...t, used: false } : t)));
   };
 
-  const handleResetTiles = () => {
-    if (locked) return;
-    setTiles(scrambleWord(targetLetters));
-    setPlacedTiles([]);
-  };
-
-  const checkWord = (currentPlaced: ShuffleTile[]) => {
+  const checkWord = async (placed: ShuffleTile[]) => {
     setLocked(true);
-    const formed = currentPlaced.map((t) => t.letter).join('');
+    const formed = placed.map((t) => t.letter).join('');
     const isCorrect = formed === targetLetters;
 
     if (isCorrect) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setFeedback('correct');
-      const newStreak = correctStreak + 1;
-      setCorrectStreak(newStreak);
-      setWrongStreak(0);
       setCorrect((c) => c + 1);
-      playVocabularyItem(currentItem);
     } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setFeedback('wrong');
-      const newStreak = wrongStreak + 1;
-      setWrongStreak(newStreak);
-      setCorrectStreak(0);
-      const soundKey = getFeedbackAudio(false, newStreak);
-      playLocalSound(soundKey);
     }
 
-    setTimeout(() => {
+    await triggerFeedback(isCorrect, () => {
+      const finalCorrect = correct + (isCorrect ? 1 : 0);
       if (currentIdx + 1 >= totalRounds) {
-        setGameOver(true);
-        submitFinalScore(correct + (isCorrect ? 1 : 0));
+        submitFinalScore(finalCorrect);
       } else {
         setCurrentIdx((i) => i + 1);
       }
-    }, 1300);
+    });
   };
 
   const submitFinalScore = async (finalScore: number) => {
+    const sessionId = `gulong_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const percent = Math.round((finalScore / totalRounds) * 100);
       const res = await minigameService.submitResult({
         game_type: 'gulong_letra',
-        score: percent,
+        score: finalScore,
+        session_id: sessionId,
         metadata: { category: category.slug, correct: finalScore, total: totalRounds },
       });
-      if (res?.session?.stars_awarded) {
-        setStarsAwarded(res.session.stars_awarded);
+
+      const awarded = res?.session?.stars_awarded ?? finalScore;
+      setStarsAwarded(awarded);
+
+      if (res?.session?.stars_balance !== undefined) {
+        updateUserStars(res.session.stars_balance);
+      }
+
+      // Check if student qualifies for collectible (15-20/20)
+      if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+        setAwardedCollectible(res.session.collectible);
+        setShowMysteryBox(true);
+      } else {
+        setGameOver(true);
       }
     } catch {
       // offline fallback
+      setStarsAwarded(finalScore);
+      updateUserStars(finalScore);
+      setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    resetStreaks();
     setCurrentIdx(0);
     setCorrect(0);
-    setCorrectStreak(0);
-    setWrongStreak(0);
     setGameOver(false);
+    setShowMysteryBox(false);
+    setAwardedCollectible(null);
     setLocked(false);
+    setFeedback(null);
   };
 
   return (
@@ -169,127 +182,107 @@ export default function GuLongLetra() {
         bgColor={category.color}
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Progress Indicator */}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Animated Progress Bar */}
         <View style={styles.progressRow}>
           <ProgressIndicator
             current={currentIdx + 1}
             total={totalRounds}
-            color={category.color}
+            gradient={Gradients.grass}
+            height={10}
           />
         </View>
 
-        {/* Visual Clue Card */}
+        {/* Visual Card Clue */}
         <View style={[styles.visualCard, Shadows.card]}>
-          <ItemVisual item={currentItem} size={140} />
-          <Text style={styles.clueText}>English: {currentItem.english}</Text>
+          <ItemVisual item={currentItem} size={150} />
+          <Text style={styles.clueEnglish}>({currentItem.english})</Text>
         </View>
 
-        {/* Formed Word Drop Area */}
-        <View style={styles.dropZone}>
-          <Text style={styles.dropZoneLabel}>Ayusin ang mga titik:</Text>
-          <View style={styles.slotsRow}>
-            {Array.from({ length: targetLetters.length }).map((_, i) => {
-              const placed = placedTiles[i];
-              let slotBorder = '#CBD5E1';
-              let slotBg = '#FFFFFF';
+        {/* Target Formed Slots */}
+        <View style={styles.slotsRow}>
+          {Array.from({ length: targetLetters.length }).map((_, i) => {
+            const placed = placedTiles[i];
+            const isFilled = !!placed;
 
-              if (feedback === 'correct') {
-                slotBorder = Colors.grassGreen;
-                slotBg = '#F0FDF4';
-              } else if (feedback === 'wrong') {
-                slotBorder = Colors.coralPink;
-                slotBg = '#FFF1F2';
-              }
+            let borderCol: string = 'rgba(0, 0, 0, 0.08)';
+            let bgCol: string = Colors.white;
 
-              return (
-                <TouchableOpacity
-                  key={i}
-                  activeOpacity={0.8}
-                  disabled={!placed || locked}
-                  onPress={() => placed && handleRemovePlaced(placed)}
-                  style={[
-                    styles.slot,
-                    { borderColor: slotBorder, backgroundColor: slotBg },
-                    placed && Shadows.soft,
-                  ]}
-                >
-                  <Text style={styles.slotLetter}>{placed ? placed.letter : ''}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+            if (feedback === 'correct') {
+              borderCol = Colors.grassGreen;
+              bgCol = '#F0FDF4';
+            } else if (feedback === 'wrong') {
+              borderCol = Colors.coralPink;
+              bgCol = '#FFF1F2';
+            }
+
+
+            return (
+              <PressableScale
+                key={i}
+                disabled={!isFilled || locked}
+                onPress={() => placed && handleRemovePlaced(placed)}
+                activeScale={0.92}
+                style={[
+                  styles.slot,
+                  { borderColor: borderCol, backgroundColor: bgCol },
+                  isFilled && Shadows.soft,
+                ]}
+              >
+                <Text style={styles.slotText}>{placed ? placed.letter : ''}</Text>
+              </PressableScale>
+            );
+          })}
         </View>
 
-        {/* Scrambled Available Tiles */}
-        <View style={styles.scrambledBox}>
-          <Text style={styles.scrambledLabel}>Pindutin ang titik:</Text>
-          <View style={styles.tilesGrid}>
+        {/* Scrambled Available Letter Pool */}
+        <View style={styles.tilesPool}>
+          <Text style={styles.poolTitle}>Pindutin ang mga letra upang buuin:</Text>
+          <View style={styles.tilesRow}>
             {tiles.map((tile) => (
-              <TouchableOpacity
+              <PressableScale
                 key={tile.id}
-                activeOpacity={0.82}
                 disabled={tile.used || locked}
                 onPress={() => handleTilePress(tile)}
+                activeScale={0.9}
                 style={[
                   styles.tile,
-                  tile.used ? styles.tileUsed : styles.tileActive,
-                  Shadows.soft,
+                  tile.used && styles.tileUsed,
+                  !tile.used && Shadows.soft,
                 ]}
               >
                 <Text style={[styles.tileText, tile.used && styles.tileTextUsed]}>
                   {tile.letter}
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
             ))}
           </View>
         </View>
-
-        {/* Shuffle / Reset Button */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          disabled={locked}
-          onPress={handleResetTiles}
-          style={[styles.resetButton, Shadows.soft]}
-        >
-          <Text style={styles.resetButtonText}>🔄 I-shuffle Muli ang mga Titik</Text>
-        </TouchableOpacity>
       </ScrollView>
 
-      {/* GAME OVER MODAL */}
-      {gameOver && (
-        <View style={styles.overlay}>
-          <View style={[styles.victoryCard, Shadows.card]}>
-            <Text style={styles.victoryEmoji}>🎡🎉</Text>
-            <Text style={styles.victoryTitle}>Napakagaling!</Text>
-            <Text style={styles.victoryDesc}>
-              Nabuo mo ang mga salita sa {category.name} ({correct} / {totalRounds} tama)!
-            </Text>
+      {/* WIN CELEBRATION OVERLAY */}
+      <CelebrationOverlay
+        visible={gameOver}
+        title="Napakahusay!"
+        subtitle={`Nabuong muli ang ${correct} sa ${totalRounds} mga salita!`}
+        scoreText={`+${starsAwarded} Bituin! ⭐`}
+        stars={3}
+        continueText="Maglaro Ulit"
+        onContinue={handleRestart}
+      />
 
-            <View style={styles.starsEarnedRow}>
-              <Text style={styles.starBig}>⭐</Text>
-              <Text style={styles.starsEarnedText}>+{starsAwarded} Bituin!</Text>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <PrimaryButton
-                title="Maglaro Ulit 🔄"
-                variant="success"
-                size="md"
-                onPress={handleRestart}
-                style={styles.btnAction}
-              />
-              <PrimaryButton
-                title="Bumalik sa Aralin 🏠"
-                variant="secondary"
-                size="md"
-                onPress={() => router.back()}
-                style={styles.btnAction}
-              />
-            </View>
-          </View>
-        </View>
-      )}
+      {/* MYSTERY BOX COLLECTIBLE MODAL (Score 15-20/20) */}
+      <MysteryBoxModal
+        visible={showMysteryBox}
+        score={correct}
+        totalQuestions={totalRounds}
+        starsAwarded={starsAwarded}
+        collectible={awardedCollectible}
+        onClose={() => {
+          setShowMysteryBox(false);
+          setGameOver(true);
+        }}
+      />
     </View>
   );
 }
@@ -301,71 +294,62 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    alignItems: 'center',
     paddingBottom: 40,
+    alignItems: 'center',
   },
   progressRow: {
     width: '100%',
     marginBottom: 16,
   },
   visualCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    padding: 14,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    padding: 20,
     alignItems: 'center',
     width: '100%',
-    marginBottom: 16,
-  },
-  clueText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
-    marginTop: 8,
-  },
-  dropZone: {
-    width: '100%',
-    alignItems: 'center',
     marginBottom: 20,
   },
-  dropZoneLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 8,
+  clueEnglish: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textLight,
+    fontWeight: Typography.weights.semibold,
+    marginTop: 8,
   },
   slotsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
+    marginBottom: 24,
+    width: '100%',
   },
   slot: {
     width: 44,
     height: 52,
-    borderRadius: 14,
-    borderWidth: 3,
+    borderRadius: Radius.md,
+    borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  slotLetter: {
+  slotText: {
     fontSize: 24,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
-  scrambledBox: {
+  tilesPool: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  scrambledLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 8,
+  poolTitle: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    fontWeight: Typography.weights.semibold,
+    marginBottom: 12,
   },
-  tilesGrid: {
+  tilesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
@@ -373,103 +357,26 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: 50,
-    height: 54,
-    borderRadius: 16,
+    height: 50,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-  },
-  tileActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FB923C',
   },
   tileUsed: {
-    backgroundColor: '#E2E8F0',
-    borderColor: '#CBD5E1',
-    opacity: 0.4,
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.35,
   },
   tileText: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#EA580C',
+    fontSize: 22,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
   tileTextUsed: {
-    color: '#94A3B8',
-  },
-  resetButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-  },
-  resetButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  victoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    padding: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-  },
-  victoryEmoji: {
-    fontSize: 56,
-    marginBottom: 10,
-  },
-  victoryTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  victoryDesc: {
-    fontSize: 14,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  starsEarnedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF9C3',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
-    gap: 8,
-  },
-  starBig: {
-    fontSize: 28,
-  },
-  starsEarnedText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#854D0E',
-  },
-  modalButtons: {
-    width: '100%',
-    gap: 10,
-  },
-  btnAction: {
-    width: '100%',
+    color: Colors.textMuted,
   },
 });

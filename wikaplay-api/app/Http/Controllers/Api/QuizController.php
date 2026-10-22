@@ -22,12 +22,43 @@ class QuizController extends Controller
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
             'difficulty' => 'required|in:madali,katamtaman,mahirap',
+            'session_id' => 'nullable|string',
             'answers' => 'required|array',
-            'answers.*.question_id' => 'required|exists:quiz_questions,id',
+            'answers.*.question_id' => 'required|integer',
             'answers.*.selected_answer' => 'required|string',
         ]);
 
-        $user = $request->user();
+        $user = $request->user() ?? auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+        $sessionId = $validated['session_id'] ?? null;
+
+        // Idempotency check: prevent duplicate awards on repeat submissions / network retries
+        if ($sessionId) {
+            $existing = QuizSession::where('session_id', $sessionId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($existing) {
+                return response()->json([
+                    'message' => 'Nai-record na ang pagsusulit na ito.',
+                    'is_duplicate_submission' => true,
+                    'session' => [
+                        'id' => $existing->id,
+                        'session_id' => $existing->session_id,
+                        'score' => $existing->score,
+                        'total_questions' => $existing->total_questions,
+                        'correct_count' => $existing->correct_count,
+                        'wrong_count' => $existing->wrong_count,
+                        'passed' => $existing->passed,
+                        'stars_awarded' => $existing->stars_awarded,
+                        'stars_balance' => $user->stars_balance,
+                    ],
+                ]);
+            }
+        }
+
         $category = Category::findOrFail($validated['category_id']);
         $difficulty = $validated['difficulty'];
 
@@ -42,7 +73,7 @@ class QuizController extends Controller
             ], 403);
         }
 
-        return DB::transaction(function () use ($user, $category, $difficulty, $validated, $availability) {
+        return DB::transaction(function () use ($user, $category, $difficulty, $validated, $availability, $sessionId) {
             $questionIds = collect($validated['answers'])->pluck('question_id');
             $questions = QuizQuestion::whereIn('id', $questionIds)->get()->keyBy('id');
 
@@ -56,7 +87,9 @@ class QuizController extends Controller
                 $q = $questions->get($ans['question_id']);
                 if (!$q) continue;
 
-                $isCorrect = ((string)$ans['selected_answer'] === (string)$q->correct_answer);
+                $userAnswer = trim(mb_strtolower((string)$ans['selected_answer']));
+                $expectedAnswer = trim(mb_strtolower((string)$q->correct_answer));
+                $isCorrect = ($userAnswer === $expectedAnswer);
 
                 if ($isCorrect) {
                     $score += $q->points;
@@ -75,30 +108,13 @@ class QuizController extends Controller
             $passScore = $availability ? $availability->pass_score : ceil($totalQuestions * 0.7);
             $passed = ($correctCount >= $passScore);
 
-            // Determine star reward idempotently
-            $alreadyPassed = QuizSession::where('user_id', $user->id)
-                ->where('category_id', $category->id)
-                ->where('difficulty', $difficulty)
-                ->where('passed', true)
-                ->exists();
-
-            $starsAwarded = 0;
-            if ($passed) {
-                // First time passing: award 5 stars for Madali, 10 for Katamtaman, 15 for Mahirap
-                // Repeat pass: 1 practice star
-                if (!$alreadyPassed) {
-                    $starsAwarded = match ($difficulty) {
-                        'madali' => 5,
-                        'katamtaman' => 10,
-                        'mahirap' => 15,
-                    };
-                } else {
-                    $starsAwarded = 1;
-                }
-            }
+            // Rule: 1:1 star reward for correct questions (20 questions = up to 20 stars)
+            // Strict 1:1 star balance update: earning 20 stars adds exactly 20 stars
+            $starsAwarded = min($totalQuestions, max(0, $correctCount));
 
             $session = QuizSession::create([
                 'user_id' => $user->id,
+                'session_id' => $sessionId,
                 'category_id' => $category->id,
                 'difficulty' => $difficulty,
                 'score' => $score,
@@ -119,7 +135,7 @@ class QuizController extends Controller
                 ]);
             }
 
-            // Award stars if earned
+            // Award stars if earned (Rule 2: strict 1:1 balance update)
             if ($starsAwarded > 0) {
                 $user->increment('stars_balance', $starsAwarded);
                 $newBalance = $user->fresh()->stars_balance;
@@ -130,8 +146,10 @@ class QuizController extends Controller
                     'balance_after' => $newBalance,
                     'source_type' => 'quiz_session',
                     'source_id' => $session->id,
-                    'description' => "Natapos ang {$category->name} ({$difficulty})",
+                    'description' => "Natapos ang {$category->name} ({$difficulty}) na may {$correctCount}/{$totalQuestions} tamang sagot",
                 ]);
+            } else {
+                $newBalance = $user->stars_balance;
             }
 
             return response()->json([

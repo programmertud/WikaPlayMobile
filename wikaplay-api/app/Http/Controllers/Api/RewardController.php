@@ -32,7 +32,8 @@ class RewardController extends Controller
                 'slug' => $c->slug,
                 'name' => $c->name,
                 'filipino_name' => $c->filipino_name,
-                'description' => $isUnlocked ? $c->description : 'Mahiwagang Gantimpala! I-unlock gamit ang iyong mga bituin.',
+                'category' => $c->category ?: 'Mga Hayop',
+                'description' => $isUnlocked ? $c->description : 'Mahiwagang Gantimpala! I-unlock gamit ang iyong mga bituin o maglaro ng mini-game!',
                 'image_url' => $isUnlocked ? $c->image_url : null,
                 'audio_url' => $isUnlocked ? $c->audio_url : null,
                 'rarity' => $c->rarity,
@@ -126,12 +127,17 @@ class RewardController extends Controller
     {
         $user = $request->user();
 
+        $totalEarned = (int)StarTransaction::where('user_id', $user->id)->where('amount', '>', 0)->sum('amount');
+        $totalSpent = abs((int)StarTransaction::where('user_id', $user->id)->where('amount', '<', 0)->sum('amount'));
+
         $transactions = StarTransaction::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->paginate(30);
 
         return response()->json([
             'stars_balance' => $user->stars_balance,
+            'total_earned' => $totalEarned,
+            'total_spent' => $totalSpent,
             'history' => $transactions,
         ]);
     }

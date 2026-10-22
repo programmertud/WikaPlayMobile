@@ -1,24 +1,20 @@
 /**
  * Game router — dynamically renders the correct mini-game component
  * based on the URL [slug] parameter.
- *
- * Supported slugs:
- *   memory-match       → MemoryMatch
- *   paghahanap-larawan → PaghahanapLarawan
- *   hulaan-salita      → HulaanSalita
- *   gulong-letra       → GuLongLetra
- *   pop-balloon        → PopBalloon
  */
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import GuLongLetra from './gulong-letra';
 import HulaanSalita from './hulaan-salita';
 import MemoryMatch from './memory-match';
 import PaghahanapLarawan from './paghahanap-larawan';
 import PopBalloon from './pop-balloon';
 
+import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useBgmDuck } from '../../../services/audio/sound-service';
+import { Colors, Typography } from '../../../theme';
 
 type GameSlug =
   | 'memory-match'
@@ -43,12 +39,16 @@ export default function GameRouter() {
   if (!GameComponent) {
     return (
       <View style={styles.notFound}>
-        <Text style={styles.notFoundEmoji}>❓</Text>
+        <Ionicons name="help-circle-outline" size={64} color={Colors.textMuted} style={{ marginBottom: 12 }} />
         <Text style={styles.notFoundTitle}>Hindi Nahanap ang Laro</Text>
         <Text style={styles.notFoundSub}>Slug: {slug}</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Bumalik</Text>
-        </TouchableOpacity>
+        <PrimaryButton
+          title="Bumalik"
+          variant="primary"
+          icon="arrow-back"
+          onPress={() => router.back()}
+          style={{ marginTop: 12 }}
+        />
       </View>
     );
   }
@@ -61,19 +61,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: Colors.background,
     padding: 24,
   },
-  notFoundEmoji: { fontSize: 64, marginBottom: 12 },
-  notFoundTitle: { fontSize: 20, fontWeight: '800', color: '#1E293B', marginBottom: 6 },
-  notFoundSub: { fontSize: 14, color: '#64748B', marginBottom: 20 },
-  backBtn: {
-    backgroundColor: '#38BDF8',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+  notFoundTitle: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 4,
   },
-  backBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  notFoundSub: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textLight,
+    marginBottom: 16,
+  },
 });

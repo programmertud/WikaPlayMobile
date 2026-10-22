@@ -3,30 +3,33 @@
  * Category-based: Displays visual clue from the selected category,
  * student spells out or guesses the Filipino word using letter tiles.
  */
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
+
 import { ItemVisual } from '../../../components/ItemVisual';
-import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { PressableScale } from '../../../components/PressableScale';
+import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
+import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
+import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { minigameService } from '../../../services/api';
 import {
-  getFeedbackAudio,
-  playLocalSound,
-  playVocabularyItem,
   useBgmDuck,
 } from '../../../services/audio/sound-service';
-import { Colors, Shadows, Typography } from '../../../theme';
-import { VocabularyItem } from '../../../types';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import { Collectible, VocabularyItem } from '../../../types';
 
 const EXTRA_ALPHABET = 'AEIOUBKDGLMNPRSTW';
 
@@ -43,6 +46,7 @@ function buildChoices(word: string): string[] {
 
 export default function HulaanSalita() {
   useBgmDuck();
+  const { updateUserStars } = useAuth();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const items = getCategoryVocabulary(category.slug);
@@ -51,13 +55,19 @@ export default function HulaanSalita() {
   const [inputLetters, setInputLetters] = useState<string[]>([]);
   const [correct, setCorrect] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState(10);
-  const [correctStreak, setCorrectStreak] = useState(0);
-  const [wrongStreak, setWrongStreak] = useState(0);
+  const [starsAwarded, setStarsAwarded] = useState(0);
   const [locked, setLocked] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState<'correct' | 'wrong' | null>(null);
 
-  const totalRounds = Math.min(items.length, 8);
+  // Mystery Box & Collectible state
+  const [showMysteryBox, setShowMysteryBox] = useState(false);
+  const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
+
+  // Centralized voice-over streak manager
+  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+
+  // Exactly 20 questions / levels
+  const totalRounds = 20;
   const currentItem: VocabularyItem = items[currentIdx % items.length];
   const targetLetters = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
   const [choices, setChoices] = useState<string[]>(() => buildChoices(targetLetters));
@@ -66,10 +76,10 @@ export default function HulaanSalita() {
 
   const handleLetterPress = (ch: string) => {
     if (locked || inputLetters.length >= targetLetters.length) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const nextInput = [...inputLetters, ch];
     setInputLetters(nextInput);
 
-    // If fully filled, auto-verify
     if (nextInput.length === targetLetters.length) {
       verifyAnswer(nextInput.join(''));
     }
@@ -77,33 +87,27 @@ export default function HulaanSalita() {
 
   const handleDelete = () => {
     if (locked || inputLetters.length === 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setInputLetters((prev) => prev.slice(0, -1));
   };
 
-  const verifyAnswer = (guess: string) => {
+  const verifyAnswer = async (guess: string) => {
     setLocked(true);
     const isCorrect = guess === targetLetters;
 
     if (isCorrect) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setFeedbackStatus('correct');
-      const newStreak = correctStreak + 1;
-      setCorrectStreak(newStreak);
-      setWrongStreak(0);
       setCorrect((c) => c + 1);
-      playVocabularyItem(currentItem);
     } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setFeedbackStatus('wrong');
-      const newStreak = wrongStreak + 1;
-      setWrongStreak(newStreak);
-      setCorrectStreak(0);
-      const soundKey = getFeedbackAudio(false, newStreak);
-      playLocalSound(soundKey);
     }
 
-    setTimeout(() => {
+    await triggerFeedback(isCorrect, () => {
+      const finalCorrect = correct + (isCorrect ? 1 : 0);
       if (currentIdx + 1 >= totalRounds) {
-        setGameOver(true);
-        submitFinalScore(correct + (isCorrect ? 1 : 0));
+        submitFinalScore(finalCorrect);
       } else {
         const nextIdx = currentIdx + 1;
         setCurrentIdx(nextIdx);
@@ -113,32 +117,49 @@ export default function HulaanSalita() {
         setFeedbackStatus(null);
         setLocked(false);
       }
-    }, 1200);
+    });
   };
 
   const submitFinalScore = async (finalScore: number) => {
+    const sessionId = `hulaan_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const percent = Math.round((finalScore / totalRounds) * 100);
       const res = await minigameService.submitResult({
         game_type: 'hulaan_salita',
-        score: percent,
+        score: finalScore,
+        session_id: sessionId,
         metadata: { category: category.slug, correct: finalScore, total: totalRounds },
       });
-      if (res?.session?.stars_awarded) {
-        setStarsAwarded(res.session.stars_awarded);
+
+      const awarded = res?.session?.stars_awarded ?? finalScore;
+      setStarsAwarded(awarded);
+
+      if (res?.session?.stars_balance !== undefined) {
+        updateUserStars(res.session.stars_balance);
+      }
+
+      // Check if student qualifies for collectible (15-20/20)
+      if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+        setAwardedCollectible(res.session.collectible);
+        setShowMysteryBox(true);
+      } else {
+        setGameOver(true);
       }
     } catch {
-      // offline fallback
+      // offline fallback: 1:1 stars
+      setStarsAwarded(finalScore);
+      updateUserStars(finalScore);
+      setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    resetStreaks();
     setCurrentIdx(0);
     setInputLetters([]);
     setCorrect(0);
-    setCorrectStreak(0);
-    setWrongStreak(0);
     setGameOver(false);
+    setShowMysteryBox(false);
+    setAwardedCollectible(null);
     setLocked(false);
     setFeedbackStatus(null);
     const firstTarget = items[0].filipino.toUpperCase().replace(/[^A-Z]/g, '');
@@ -148,17 +169,18 @@ export default function HulaanSalita() {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title={`Hulaan ang Salita — ${category.name}`}
+        title={`Hulaan — ${category.name}`}
         bgColor={category.color}
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Progress Indicator */}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Animated Progress Bar */}
         <View style={styles.progressRow}>
           <ProgressIndicator
             current={currentIdx + 1}
             total={totalRounds}
-            color={category.color}
+            gradient={Gradients.grass}
+            height={10}
           />
         </View>
 
@@ -174,8 +196,8 @@ export default function HulaanSalita() {
             const letter = inputLetters[i];
             const isFilled = !!letter;
 
-            let slotBorder = '#CBD5E1';
-            let slotBg = '#FFFFFF';
+            let slotBorder: string = 'rgba(0, 0, 0, 0.08)';
+            let slotBg: string = Colors.white;
 
             if (feedbackStatus === 'correct') {
               slotBorder = Colors.grassGreen;
@@ -184,6 +206,7 @@ export default function HulaanSalita() {
               slotBorder = Colors.coralPink;
               slotBg = '#FFF1F2';
             }
+
 
             return (
               <View
@@ -200,68 +223,61 @@ export default function HulaanSalita() {
           })}
         </View>
 
-        {/* Letter Choices Bank */}
-        <View style={styles.choicesGrid}>
-          {choices.map((ch, idx) => (
-            <TouchableOpacity
-              key={`${ch}-${idx}`}
-              activeOpacity={0.8}
-              disabled={locked}
-              onPress={() => handleLetterPress(ch)}
-              style={[styles.letterBtn, Shadows.soft]}
-            >
-              <Text style={styles.letterBtnText}>{ch}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Letter Choices Keyboard */}
+        <View style={styles.keyboardContainer}>
+          <View style={styles.choicesRow}>
+            {choices.map((ch, idx) => (
+              <PressableScale
+                key={`${ch}-${idx}`}
+                disabled={locked}
+                onPress={() => handleLetterPress(ch)}
+                activeScale={0.9}
+                style={[styles.tileBtn, Shadows.soft]}
+              >
+                <Text style={styles.tileText}>{ch}</Text>
+              </PressableScale>
+            ))}
+          </View>
 
-        {/* Action Controls */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            activeOpacity={0.8}
+          {/* Delete Action Button */}
+          <PressableScale
             disabled={locked || inputLetters.length === 0}
             onPress={handleDelete}
-            style={[styles.actionBtn, styles.deleteBtn, Shadows.soft]}
+            style={[
+              styles.deleteBtn,
+              inputLetters.length === 0 && styles.deleteBtnDisabled,
+              Shadows.subtle,
+            ]}
           >
-            <Text style={styles.actionBtnText}>⌫ Burahin</Text>
-          </TouchableOpacity>
+            <Ionicons name="backspace" size={20} color={Colors.text} />
+            <Text style={styles.deleteText}>Burahin</Text>
+          </PressableScale>
         </View>
       </ScrollView>
 
-      {/* GAME OVER MODAL */}
-      {gameOver && (
-        <View style={styles.overlay}>
-          <View style={[styles.victoryCard, Shadows.card]}>
-            <Text style={styles.victoryEmoji}>💡🎉</Text>
-            <Text style={styles.victoryTitle}>Ang Galing Mo!</Text>
-            <Text style={styles.victoryDesc}>
-              Nahulaan mo ang mga salita sa {category.name} ({correct} / {totalRounds} tama)!
-            </Text>
+      {/* WIN CELEBRATION OVERLAY */}
+      <CelebrationOverlay
+        visible={gameOver}
+        title="Ang Galing Mo!"
+        subtitle={`Nabuo mo ang ${correct} sa ${totalRounds} mga salita!`}
+        scoreText={`+${starsAwarded} Bituin! ⭐`}
+        stars={3}
+        continueText="Maglaro Ulit"
+        onContinue={handleRestart}
+      />
 
-            <View style={styles.starsEarnedRow}>
-              <Text style={styles.starBig}>⭐</Text>
-              <Text style={styles.starsEarnedText}>+{starsAwarded} Bituin!</Text>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <PrimaryButton
-                title="Maglaro Muli 🔄"
-                variant="success"
-                size="md"
-                onPress={handleRestart}
-                style={styles.btnAction}
-              />
-              <PrimaryButton
-                title="Bumalik sa Aralin 🏠"
-                variant="secondary"
-                size="md"
-                onPress={() => router.back()}
-                style={styles.btnAction}
-              />
-            </View>
-          </View>
-        </View>
-      )}
+      {/* MYSTERY BOX COLLECTIBLE MODAL (Score 15-20/20) */}
+      <MysteryBoxModal
+        visible={showMysteryBox}
+        score={correct}
+        totalQuestions={totalRounds}
+        starsAwarded={starsAwarded}
+        collectible={awardedCollectible}
+        onClose={() => {
+          setShowMysteryBox(false);
+          setGameOver(true);
+        }}
+      />
     </View>
   );
 }
@@ -273,27 +289,27 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    alignItems: 'center',
     paddingBottom: 40,
+    alignItems: 'center',
   },
   progressRow: {
     width: '100%',
     marginBottom: 16,
   },
   visualCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    padding: 16,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    padding: 20,
     alignItems: 'center',
     width: '100%',
     marginBottom: 20,
   },
   englishHint: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.textLight,
     marginTop: 10,
   },
   slotsRow: {
@@ -301,126 +317,66 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 24,
     width: '100%',
   },
   slot: {
     width: 44,
     height: 52,
-    borderRadius: 14,
-    borderWidth: 3,
+    borderRadius: Radius.md,
+    borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
   slotText: {
     fontSize: 24,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
-  choicesGrid: {
+  keyboardContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  choicesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 10,
-    width: '100%',
+    gap: 8,
     marginBottom: 16,
   },
-  letterBtn: {
+  tileBtn: {
     width: 48,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 3,
-    borderColor: '#38BDF8',
+    height: 48,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  letterBtnText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#0284C7',
-  },
-  actionsRow: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  actionBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderWidth: 2,
+  tileText: {
+    fontSize: 20,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
   deleteBtn: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
-  },
-  actionBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  victoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    padding: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-  },
-  victoryEmoji: {
-    fontSize: 56,
-    marginBottom: 10,
-  },
-  victoryTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  victoryDesc: {
-    fontSize: 14,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  starsEarnedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF9C3',
+    gap: 6,
+    backgroundColor: '#E2E8F0',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
-    gap: 8,
+    borderRadius: Radius.pill,
   },
-  starBig: {
-    fontSize: 28,
+  deleteBtnDisabled: {
+    opacity: 0.45,
   },
-  starsEarnedText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#854D0E',
-  },
-  modalButtons: {
-    width: '100%',
-    gap: 10,
-  },
-  btnAction: {
-    width: '100%',
+  deleteText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
 });

@@ -13,6 +13,7 @@ class Collectible extends Model
         'slug',
         'name',
         'filipino_name',
+        'category',
         'description',
         'image_url',
         'audio_url',

@@ -4,11 +4,12 @@ import {
   Dimensions,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Colors, Shadows, Typography } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Shadows, Typography, Radius } from '@/theme';
 import { MiniGame } from '../types';
+import { PressableScale } from './PressableScale';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -20,13 +21,14 @@ interface MiniGameCardProps {
 }
 
 export const MiniGameCard: React.FC<MiniGameCardProps> = ({ game, onPress, emoji }) => {
+  const bgColor = game.bg_color || Colors.vibrantPurple;
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.88}
+    <PressableScale
       onPress={onPress}
       style={[
         styles.card,
-        { backgroundColor: game.bg_color || Colors.vibrantPurple },
+        { backgroundColor: bgColor },
         Shadows.card,
       ]}
       accessibilityRole="button"
@@ -45,6 +47,11 @@ export const MiniGameCard: React.FC<MiniGameCardProps> = ({ game, onPress, emoji
             <Text style={styles.placeholderEmoji}>{emoji ?? '🎮'}</Text>
           </View>
         )}
+        {/* Subtle gradient overlay on cover */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0, 0, 0, 0.35)']}
+          style={StyleSheet.absoluteFill}
+        />
       </View>
 
       <View style={styles.content}>
@@ -56,16 +63,16 @@ export const MiniGameCard: React.FC<MiniGameCardProps> = ({ game, onPress, emoji
           <Text style={styles.badgeText}>{game.tag || 'Laro'}</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    borderRadius: 24,
-    borderWidth: 4,
-    borderColor: Colors.white,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     overflow: 'hidden',
     marginBottom: 16,
   },
@@ -73,6 +80,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 110,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    position: 'relative',
   },
   image: {
     width: '100%',
@@ -90,27 +98,25 @@ const styles = StyleSheet.create({
   content: {
     padding: 12,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
   },
   title: {
     color: Colors.white,
     fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     textAlign: 'center',
-    marginBottom: 6,
-    textShadowColor: 'rgba(0, 0, 0, 0.25)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    marginBottom: 8,
   },
   badge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: Radius.pill,
   },
   badgeText: {
     color: Colors.text,
     fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
+    fontWeight: Typography.weights.heavy,
   },
 });

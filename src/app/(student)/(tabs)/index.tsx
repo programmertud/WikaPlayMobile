@@ -5,23 +5,35 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+  withSpring,
+} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
+
 import { CategoryCard } from '../../../components/CategoryCard';
 import { LoadingView } from '../../../components/LoadingView';
+import { PressableScale } from '../../../components/PressableScale';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
-import { Colors, Shadows, Typography } from '../../../theme';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { LEARNING_CATEGORIES } from '../../../data/categories';
 import { Category } from '../../../types';
 import { bgm } from '../../../services/audio/bgm-service';
 
 export default function StudentDashboardScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [isMuted, setIsMuted] = useState<boolean>(bgm.getMuted());
 
-  // Always use local categories — they contain all 151 vocabulary items
   const categories: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
     id: idx + 1,
     slug: c.slug,
@@ -37,18 +49,17 @@ export default function StudentDashboardScreen() {
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
+  // Pulse animation for stars pill
+  const starScale = useSharedValue(1);
+
   usePresence('Nasa Bahay (Dashboard)', 'student_home');
 
   const loadData = async () => {
-    // Categories are always loaded locally (LEARNING_CATEGORIES).
-    // Do NOT call refreshProfile() here — it triggers setUser in auth context
-    // which can cascade into an infinite re-render loop on web.
     setLoading(false);
     setRefreshing(false);
   };
 
   useEffect(() => {
-    // Ensure background music is initialized and restored to full volume
     bgm.init();
     bgm.restore();
     loadData();
@@ -67,6 +78,21 @@ export default function StudentDashboardScreen() {
     loadData();
   };
 
+  const handleStarPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    starScale.value = withSequence(
+      withTiming(1.22, { duration: 100 }),
+      withSpring(1, { damping: 10, stiffness: 300 })
+    );
+    router.push('/gantimpala');
+  };
+
+  const starAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: starScale.value }],
+  }));
+
+  const continueCategory = categories[0];
+
   if (loading && !refreshing) {
     return <LoadingView message="Kinukuha ang mga aralin sa WikaPlay..." />;
   }
@@ -74,60 +100,144 @@ export default function StudentDashboardScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: Math.max(insets.top, 16) + 12 },
+      ]}
+      showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.skyBlueDark]} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={[Colors.skyBlueDark]}
+        />
       }
     >
       {/* Top Bar with Logo, Music Button and Stars Pill */}
       <View style={styles.topBar}>
         <View style={styles.brandingRow}>
           <View style={[styles.miniLogo, Shadows.soft]}>
-            <Text style={styles.miniLogoEmoji}>☀️📖</Text>
+            <Ionicons name="sparkles" size={24} color={Colors.skyBlueDark} />
           </View>
           <View>
             <Text style={styles.appTitle}>WikaPlay</Text>
             <Text style={styles.greetingText}>
-              Kamusta, {user?.name ? user.name.split(' ')[0] : 'Kaibigan'}! 👋
+              Kumusta, {user?.name ? user.name.split(' ')[0] : 'Kaibigan'}! 👋
             </Text>
           </View>
         </View>
 
         <View style={styles.topBarActions}>
           {/* Background Music Toggle */}
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <PressableScale
             onPress={() => bgm.toggleMute()}
-            style={[styles.musicButton, Shadows.button, isMuted && styles.musicButtonMuted]}
+            style={[styles.musicButton, Shadows.subtle, isMuted && styles.musicButtonMuted]}
             accessibilityLabel={isMuted ? 'I-on ang tugtog' : 'I-off ang tugtog'}
           >
-            <Text style={styles.musicIcon}>{isMuted ? '🔇' : '🎵'}</Text>
-          </TouchableOpacity>
+            <Ionicons
+              name={isMuted ? 'volume-mute' : 'volume-high'}
+              size={20}
+              color={isMuted ? Colors.textMuted : Colors.skyBlueDark}
+            />
+          </PressableScale>
 
-          {/* Live Stars Badge */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => router.push('/gantimpala')}
-            style={[styles.starsPill, Shadows.button]}
-          >
-            <Text style={styles.starIcon}>⭐</Text>
-            <Text style={styles.starsCount}>{user?.stars_balance ?? 0}</Text>
-          </TouchableOpacity>
+          {/* Live Stars Badge with Pulse animation */}
+          <Animated.View style={starAnimatedStyle}>
+            <PressableScale
+              onPress={handleStarPress}
+              style={[styles.starsPill, Shadows.subtle]}
+            >
+              <Ionicons name="star" size={18} color={Colors.sunYellowDark} style={styles.starIcon} />
+              <Text style={styles.starsCount}>{user?.stars_balance ?? 0}</Text>
+            </PressableScale>
+          </Animated.View>
         </View>
       </View>
 
-      {/* Section Title */}
+      {/* Hero Banner: Daily Goal & Motivation */}
+      <PressableScale
+        onPress={() => router.push(`/(student)/category/${continueCategory.slug}` as any)}
+        style={[styles.heroCard, Shadows.card]}
+      >
+        <LinearGradient
+          colors={Gradients.purple}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.heroDecorCircle1} />
+        <View style={styles.heroDecorCircle2} />
+
+        <View style={styles.heroContent}>
+          <View style={styles.heroBadge}>
+            <Ionicons name="flame" size={14} color={Colors.sunYellow} />
+            <Text style={styles.heroBadgeText}>Araw-araw na Hamon</Text>
+          </View>
+          <Text style={styles.heroTitle}>Matuto ng Bagong Salita!</Text>
+          <Text style={styles.heroSubtitle}>
+            Tuklasin ang mga salitang Filipino at makakuha ng karagdagang bituin.
+          </Text>
+          <View style={styles.heroCta}>
+            <Text style={styles.heroCtaText}>Magsimula Na</Text>
+            <Ionicons name="arrow-forward" size={16} color={Colors.white} />
+          </View>
+        </View>
+        <Text style={styles.heroEmoji}>🌟</Text>
+      </PressableScale>
+
+      {/* Continue Learning "Magpatuloy" Section */}
+      <View style={styles.continueSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Magpatuloy sa Pag-aaral 🚀</Text>
+          <Text style={styles.sectionSubtitle}>Huling binuksang aralin</Text>
+        </View>
+
+        <PressableScale
+          onPress={() => router.push(`/(student)/category/${continueCategory.slug}` as any)}
+          style={[styles.continueCard, Shadows.card]}
+        >
+          <LinearGradient
+            colors={Gradients.skyLight}
+            style={styles.continueIconCircle}
+          >
+            <Text style={styles.continueEmoji}>{continueCategory.icon}</Text>
+          </LinearGradient>
+
+          <View style={styles.continueInfo}>
+            <Text style={styles.continueCatName}>{continueCategory.name}</Text>
+            <Text style={styles.continueStats}>
+              {continueCategory.flashcards_count} Salita • Handa para sa pagsasanay
+            </Text>
+            <View style={styles.continueProgressTrack}>
+              <LinearGradient
+                colors={Gradients.grass}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.continueProgressBar, { width: '45%' }]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.playArrow}>
+            <Ionicons name="play" size={18} color={Colors.white} />
+          </View>
+        </PressableScale>
+      </View>
+
+      {/* Categories Grid Header */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Mga Kategorya ng Aralin 📚</Text>
-        <Text style={styles.sectionSubtitle}>Pumili ng aralin upang mag-aral at mag-quiz</Text>
+        <Text style={styles.sectionTitle}>Lahat ng Aralin 📚</Text>
+        <Text style={styles.sectionSubtitle}>Pumili ng kategorya upang mag-aral o mag-laro</Text>
       </View>
 
       {/* 2-Column Responsive Categories Grid */}
       <View style={styles.grid}>
-        {categories.map((category) => (
+        {categories.map((category, index) => (
           <CategoryCard
             key={category.id}
+            index={index}
             category={category}
+            progress={index === 0 ? 0.45 : undefined}
             onPress={() => router.push(`/(student)/category/${category.slug}` as any)}
           />
         ))}
@@ -142,9 +252,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F9FF',
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 52,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingBottom: 40,
   },
   topBar: {
     flexDirection: 'row',
@@ -157,39 +266,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   miniLogo: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.skyBlue,
-    marginRight: 12,
-  },
-  miniLogoEmoji: {
-    fontSize: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+    marginRight: 10,
   },
   appTitle: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.heavy,
-    color: '#0369A1',
-    letterSpacing: 0.5,
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.skyBlueDark,
+    lineHeight: 22,
   },
   greetingText: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.xs,
     color: Colors.text,
     fontWeight: Typography.weights.bold,
   },
   starsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.sunYellowDark,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.4)',
   },
   topBarActions: {
     flexDirection: 'row',
@@ -199,83 +306,176 @@ const styles = StyleSheet.create({
   musicButton: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.skyBlue,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   musicButtonMuted: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#D1D5DB',
-  },
-  musicIcon: {
-    fontSize: 18,
+    backgroundColor: '#F1F5F9',
   },
   starIcon: {
-    fontSize: 18,
-    marginRight: 6,
+    marginRight: 4,
   },
   starsCount: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.heavy,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     color: '#92400E',
   },
-  heroBanner: {
+  heroCard: {
+    borderRadius: Radius.xxl,
+    overflow: 'hidden',
+    padding: 20,
+    marginBottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#8B5CF6',
-    borderRadius: 26,
-    borderWidth: 4,
-    borderColor: Colors.white,
-    padding: 18,
-    marginBottom: 24,
+    position: 'relative',
   },
-  heroTextContainer: {
+  heroDecorCircle1: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    top: -40,
+    right: 20,
+  },
+  heroDecorCircle2: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    bottom: -20,
+    left: 40,
+  },
+  heroContent: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 10,
   },
-  heroTag: {
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 10,
-    marginBottom: 6,
+    borderRadius: Radius.pill,
+    marginBottom: 8,
+    gap: 4,
   },
-  heroTagText: {
+  heroBadgeText: {
     color: Colors.white,
     fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.heavy,
+    fontWeight: Typography.weights.bold,
   },
   heroTitle: {
     color: Colors.white,
     fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     marginBottom: 4,
   },
   heroSubtitle: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.88)',
     fontSize: Typography.sizes.xs,
-    lineHeight: 16,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  heroCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    gap: 6,
+  },
+  heroCtaText: {
+    color: Colors.white,
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.bold,
   },
   heroEmoji: {
-    fontSize: 44,
+    fontSize: 48,
+    marginLeft: 8,
+  },
+  continueSection: {
+    marginBottom: 24,
+  },
+  continueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  continueIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  continueEmoji: {
+    fontSize: 24,
+  },
+  continueInfo: {
+    flex: 1,
+  },
+  continueCatName: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  continueStats: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    marginBottom: 6,
+  },
+  continueProgressTrack: {
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  continueProgressBar: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  playArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.skyBlueDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+    ...Shadows.colored(Colors.skyBlueDark, 0.25),
   },
   sectionHeader: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.heavy,
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
   sectionSubtitle: {
     fontSize: Typography.sizes.xs,
     color: Colors.textLight,
-    marginTop: 2,
+    marginTop: 1,
   },
   grid: {
     flexDirection: 'row',

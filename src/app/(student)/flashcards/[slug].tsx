@@ -4,19 +4,29 @@ import {
   Dimensions,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
+
 import { AudioButton } from '../../../components/AudioButton';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { PressableScale } from '../../../components/PressableScale';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
-import { Shadows } from '../../../theme';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 
 const { width } = Dimensions.get('window');
-const CARD_SIZE = Math.min(width - 48, 320);
+const CARD_SIZE = Math.min(width - 48, 340);
 
 export default function FlashcardsViewerScreen() {
   useBgmDuck();
@@ -31,98 +41,152 @@ export default function FlashcardsViewerScreen() {
 
   usePresence(`Nagbabasa ng Flashcards sa ${category.name}`, 'flashcards_view');
 
+  // Animation values for card slide/flip transition
+  const cardOpacity = useSharedValue(1);
+  const cardTranslateX = useSharedValue(0);
+
+  const transitionTo = (newIndex: number, direction: 'left' | 'right') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const exitX = direction === 'left' ? -60 : 60;
+    const enterX = direction === 'left' ? 60 : -60;
+
+    cardTranslateX.value = withTiming(exitX, { duration: 150 });
+    cardOpacity.value = withTiming(0, { duration: 150 }, () => {
+      runOnJS(setCurrentIndex)(newIndex);
+      cardTranslateX.value = enterX;
+      cardTranslateX.value = withTiming(0, { duration: 180 });
+      cardOpacity.value = withTiming(1, { duration: 180 });
+    });
+  };
+
   const handlePrev = () => {
     if (!isFirst) {
-      setCurrentIndex((i) => i - 1);
+      transitionTo(currentIndex - 1, 'right');
     }
   };
 
   const handleNext = () => {
     if (!isLast) {
-      setCurrentIndex((i) => i + 1);
+      transitionTo(currentIndex + 1, 'left');
     }
   };
 
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ translateX: cardTranslateX.value }],
+  }));
+
   return (
     <View style={styles.container}>
-      {/* Header with Back button and Category Name */}
       <ScreenHeader
         title={category.name.toUpperCase()}
         bgColor={category.color}
       />
 
       <View style={styles.content}>
-        {/* Main Flashcard */}
-        <View style={[styles.flashcard, Shadows.card, { borderColor: category.color }]}>
+        {/* Main Flashcard with Slide/Flip Animation */}
+        <Animated.View style={[styles.flashcard, Shadows.card, cardAnimatedStyle]}>
           {/* Card Visual / Illustration */}
-          <ItemVisual item={currentItem} size={CARD_SIZE * 0.72} style={styles.visualContainer} />
+          <ItemVisual item={currentItem} size={CARD_SIZE * 0.7} style={styles.visualContainer} />
 
-          {/* Filipino Name (Prominently Highlighted) */}
-          <Text style={[styles.filipinoName, { color: category.color }]}>
+          {/* Filipino Name */}
+          <Text style={[styles.filipinoName, { color: category.color || Colors.skyBlueDark }]}>
             {currentItem.filipino}
           </Text>
 
-          {/* English Translation (Directly underneath, smaller) */}
+          {/* English Translation */}
           <Text style={styles.englishName}>
             {currentItem.english}
           </Text>
 
-          {/* Optional Audio Button */}
+          {/* Audio Play Button */}
           {currentItem.audioUri ? (
             <View style={styles.audioContainer}>
               <AudioButton audioUrl={currentItem.audioUri} size={54} />
             </View>
           ) : (
-            <TouchableOpacity
-              activeOpacity={0.8}
+            <PressableScale
               onPress={() => playVocabularyItem(currentItem)}
-              style={[styles.audioPill, { backgroundColor: category.color + '20' }]}
+              style={[styles.audioPill, { backgroundColor: (category.color || Colors.skyBlue) + '18' }]}
             >
-              <Text style={styles.audioPillText}>🔊 Pakinggan</Text>
-            </TouchableOpacity>
+              <Ionicons name="volume-high" size={18} color={category.color || Colors.skyBlueDark} />
+              <Text style={[styles.audioPillText, { color: category.color || Colors.skyBlueDark }]}>
+                Pakinggan
+              </Text>
+            </PressableScale>
           )}
 
-          {/* Progress Indicator: e.g. 1 / 20 */}
+          {/* Counter Badge */}
           <View style={styles.counterBadge}>
             <Text style={styles.counterText}>
               {currentIndex + 1} / {items.length}
             </Text>
           </View>
+        </Animated.View>
+
+        {/* Progress Dots (showing a window of 7 dots centered around current) */}
+        <View style={styles.dotsRow}>
+          {items.slice(0, 15).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                i === currentIndex
+                  ? [styles.activeDot, { backgroundColor: category.color || Colors.skyBlueDark }]
+                  : styles.inactiveDot,
+              ]}
+            />
+          ))}
+          {items.length > 15 && <Text style={styles.moreDotsText}>•••</Text>}
         </View>
 
-        {/* Navigation Controls: Previous & Next */}
+        {/* Navigation Controls: Previous & Next with Icon Buttons */}
         <View style={styles.controlsRow}>
-          <TouchableOpacity
-            activeOpacity={0.85}
+          <PressableScale
             onPress={handlePrev}
             disabled={isFirst}
             style={[
               styles.navButton,
               styles.prevButton,
               isFirst && styles.disabledButton,
-              Shadows.button,
+              Shadows.subtle,
             ]}
           >
+            <Ionicons
+              name="chevron-back"
+              size={22}
+              color={isFirst ? Colors.textMuted : Colors.text}
+            />
             <Text style={[styles.navButtonText, isFirst && styles.disabledText]}>
-              ⬅️ Nakaraan
+              Nakaraan
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
+          <PressableScale
             onPress={handleNext}
             disabled={isLast}
             style={[
               styles.navButton,
               styles.nextButton,
               isLast && styles.disabledButton,
-              Shadows.button,
+              Shadows.colored(Colors.skyBlueDark, 0.2),
             ]}
           >
-            <Text style={[styles.navButtonText, isLast && styles.disabledText]}>
-              Susunod ➡️
+            <LinearGradient
+              colors={isLast ? ['#CBD5E1', '#94A3B8'] : Gradients.sky}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={[styles.nextButtonText, isLast && styles.disabledText]}>
+              Susunod
             </Text>
-          </TouchableOpacity>
+            <Ionicons
+              name="chevron-forward"
+              size={22}
+              color={Colors.white}
+            />
+          </PressableScale>
         </View>
       </View>
     </View>
@@ -138,32 +202,34 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
   flashcard: {
     width: CARD_SIZE,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 4,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     padding: 24,
     alignItems: 'center',
     position: 'relative',
   },
   visualContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   filipinoName: {
     fontSize: 32,
-    fontWeight: '900',
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     textAlign: 'center',
     textTransform: 'lowercase',
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   englishName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.textLight,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -171,60 +237,98 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   audioPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     marginBottom: 16,
+    gap: 6,
   },
   audioPillText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0284C7',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
   },
   counterBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   counterText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#475569',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textLight,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    marginBottom: 8,
+    gap: 5,
+  },
+  dot: {
+    height: 7,
+    borderRadius: 4,
+  },
+  activeDot: {
+    width: 20,
+  },
+  inactiveDot: {
+    width: 7,
+    backgroundColor: '#CBD5E1',
+  },
+  moreDotsText: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    marginLeft: 2,
   },
   controlsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: CARD_SIZE,
-    marginTop: 24,
-    gap: 16,
+    marginTop: 16,
+    gap: 14,
   },
   navButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 20,
+    height: 52,
+    borderRadius: Radius.xl,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    gap: 6,
   },
   prevButton: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   nextButton: {
-    backgroundColor: '#38BDF8',
+    position: 'relative',
   },
   disabledButton: {
-    backgroundColor: '#E2E8F0',
-    borderColor: '#E2E8F0',
-    opacity: 0.5,
+    opacity: 0.45,
   },
   navButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    color: Colors.text,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  nextButtonText: {
+    color: Colors.white,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
   },
   disabledText: {
-    color: '#94A3B8',
+    color: Colors.textMuted,
   },
 });

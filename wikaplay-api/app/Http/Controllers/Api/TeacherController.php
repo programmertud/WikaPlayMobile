@@ -362,4 +362,150 @@ class TeacherController extends Controller
             'url' => $url,
         ]);
     }
+
+    /**
+     * Live Dashboard Statistics for Teacher Overview.
+     */
+    public function dashboardStats(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        // Update stale presences (> 3 minutes without heartbeat)
+        StudentPresence::where('is_online', true)
+            ->where('last_active_at', '<', now()->subMinutes(3))
+            ->update([
+                'is_online' => false,
+                'current_activity' => 'Hindi aktibo',
+            ]);
+
+        $totalStudents = User::where('role', 'student')->count();
+        $onlineStudents = StudentPresence::where('is_online', true)
+            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->count();
+        $offlineStudents = max(0, $totalStudents - $onlineStudents);
+
+        $totalQuizAttempts = QuizSession::count();
+        $avgScore = round((float) (QuizSession::avg('score') ?? 0), 1);
+
+        $recentActivities = StudentPresence::where('is_online', true)
+            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->with('user:id,name,student_id_code,avatar,section')
+            ->orderByDesc('last_active_at')
+            ->limit(8)
+            ->get();
+
+        $recentResults = QuizSession::with(['user:id,name,student_id_code', 'category:id,name,color'])
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        $statsData = [
+            'total_students' => $totalStudents,
+            'online_students' => $onlineStudents,
+            'offline_students' => $offlineStudents,
+            'total_quiz_attempts' => $totalQuizAttempts,
+            'average_quiz_score' => $avgScore,
+            'average_score' => $avgScore,
+        ];
+
+        return response()->json([
+            'overview' => $statsData,
+            'stats' => $statsData,
+            'recent_activities' => $recentActivities,
+            'recent_results' => $recentResults,
+            'recent_quiz_results' => $recentResults,
+        ]);
+    }
+
+    /**
+     * Approve, disable, or reactivate student account.
+     */
+    public function updateStudentStatus(Request $request, $id)
+    {
+        $this->authorizeTeacher($request);
+
+        $validated = $request->validate([
+            'status' => 'required|in:active,disabled,pending_approval',
+        ]);
+
+        $student = User::where('role', 'student')->findOrFail($id);
+        $student->update(['status' => $validated['status']]);
+
+        // If disabled, revoke active tokens and set offline
+        if ($validated['status'] === 'disabled') {
+            $student->tokens()->delete();
+            StudentPresence::where('user_id', $student->id)->update([
+                'is_online' => false,
+                'current_activity' => 'Na-disable ang account',
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Matagumpay na na-update ang estado ng mag-aaral.',
+            'student' => $student,
+        ]);
+    }
+
+    /**
+     * Delete a quiz question.
+     */
+    public function deleteQuizQuestion(Request $request, $id)
+    {
+        $this->authorizeTeacher($request);
+
+        $question = QuizQuestion::findOrFail($id);
+        $question->delete();
+
+        return response()->json(['message' => 'Matagumpay na nabura ang tanong.']);
+    }
+
+    /**
+     * Export quiz performance report to CSV.
+     */
+    public function exportReportsCsv(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        $sessions = QuizSession::with(['user:id,name,student_id_code,section', 'category:id,name'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $filename = 'wikaplay_quiz_report_' . date('Y-m-d') . '.csv';
+        $csvHeader = ['Student ID', 'Student Name', 'Section', 'Category', 'Difficulty', 'Score', 'Total Questions', 'Correct', 'Wrong', 'Passed', 'Date'];
+
+        $rows = [];
+        $rows[] = implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader));
+
+        foreach ($sessions as $s) {
+            $row = [
+                $s->user->student_id_code ?? ('ID-' . $s->user_id),
+                $s->user->name ?? 'Unknown',
+                $s->user->section ?? 'N/A',
+                $s->category->name ?? 'N/A',
+                strtoupper($s->difficulty),
+                $s->score,
+                $s->total_questions,
+                $s->correct_count,
+                $s->wrong_count,
+                $s->passed ? 'YES' : 'NO',
+                $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
+            ];
+            $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+        }
+
+        $csvContent = implode("\n", $rows);
+
+        if ($request->has('download')) {
+            return response($csvContent, 200, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        }
+
+        return response()->json([
+            'filename' => $filename,
+            'csv' => $csvContent,
+            'total_records' => $sessions->count(),
+        ]);
+    }
 }

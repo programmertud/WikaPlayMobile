@@ -2,10 +2,10 @@ import { Asset } from 'expo-asset';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Platform } from 'react-native';
 import { bgm, useBgmDuck } from './bgm-service';
+import { LEARNING_CATEGORIES } from '../../data/categories';
 
 export { bgm, useBgmDuck };
 
-import { LEARNING_CATEGORIES } from '../../data/categories';
 
 // Centralized dictionary of all local audio assets across all 8 learning categories
 export const LOCAL_AUDIO_ASSETS: Record<string, any> = {};
@@ -49,6 +49,28 @@ if (hayopCategory) {
     }
   });
 }
+
+// Official Voice-Over Feedback Assets for WikaPlay
+export const VOICE_OVER_FEEDBACK_ASSETS: Record<string, any> = {
+  tama: require('../../../assets/audio/VOICE OVERS/tama.mp3'),
+  magaling: require('../../../assets/audio/VOICE OVERS/magaling.mp3'),
+  anggalingmo: require('../../../assets/audio/VOICE OVERS/anggalingmo.mp3'),
+  'ang galing mo': require('../../../assets/audio/VOICE OVERS/anggalingmo.mp3'),
+  mali: require('../../../assets/audio/VOICE OVERS/mali.mp3'),
+  oopsmali: require('../../../assets/audio/VOICE OVERS/oopsmali.mp3'),
+  'oops mali': require('../../../assets/audio/VOICE OVERS/oopsmali.mp3'),
+  subukanulit: require('../../../assets/audio/VOICE OVERS/subukan ulit.mp3'),
+  'subukan ulit': require('../../../assets/audio/VOICE OVERS/subukan ulit.mp3'),
+};
+
+// Register all feedback voice-overs into LOCAL_AUDIO_ASSETS
+Object.entries(VOICE_OVER_FEEDBACK_ASSETS).forEach(([key, asset]) => {
+  LOCAL_AUDIO_ASSETS[key] = asset;
+  LOCAL_AUDIO_ASSETS[`${key}.mp3`] = asset;
+  const noSpace = key.replace(/[\s_-]+/g, '');
+  LOCAL_AUDIO_ASSETS[noSpace] = asset;
+  LOCAL_AUDIO_ASSETS[`${noSpace}.mp3`] = asset;
+});
 
 let isAudioModeConfigured = false;
 let currentActivePlayer: any = null;
@@ -235,19 +257,6 @@ export async function playSound(
   };
 
   try {
-    // Check if it's a feedback sound (tama, mali, magaling, etc.)
-    if (typeof source === 'string') {
-      const lower = source.toLowerCase();
-      if (lower.includes('tama') || lower.includes('magaling') || lower.includes('anggalingmo')) {
-        playSynthesizedFeedback(true, onFinished);
-        return cleanup;
-      }
-      if (lower.includes('mali') || lower.includes('oopsmali')) {
-        playSynthesizedFeedback(false, onFinished);
-        return cleanup;
-      }
-    }
-
     const resolvedSource = resolveAudioSource(source);
 
     // If source could not be resolved from local assets or valid URL
@@ -308,10 +317,26 @@ export async function playSound(
     player = createAudioPlayer(resolvedSource);
     currentActivePlayer = player;
 
+    let hasFinished = false;
+    const finish = () => {
+      if (hasFinished) return;
+      hasFinished = true;
+      cleanup();
+      onFinished?.();
+    };
+
+    // Listen for actual playback completion event from native player
+    try {
+      player.addListener('playbackStatusUpdate', (status: any) => {
+        if (status?.didJustFinish && !isCancelled) {
+          finish();
+        }
+      });
+    } catch {}
+
     fallbackTimer = setTimeout(() => {
       if (!isCancelled) {
-        cleanup();
-        onFinished?.();
+        finish();
       }
     }, 4000);
 
@@ -322,10 +347,9 @@ export async function playSound(
 
     setTimeout(() => {
       if (!isCancelled) {
-        cleanup();
-        onFinished?.();
+        finish();
       }
-    }, durationMs);
+    }, durationMs + 200);
 
     return cleanup;
   } catch {
@@ -387,10 +411,19 @@ export async function playVocabularyItem(
   return playSound(item.filipino, onFinished);
 }
 
+export type FeedbackAudioKey = 'tama' | 'magaling' | 'anggalingmo' | 'mali' | 'oopsmali';
+
 /**
- * Streak feedback audio resolver
+ * Streak feedback audio resolver according to WikaPlay rules:
+ * Correct Streak:
+ *   1st: 'tama'
+ *   2nd: 'magaling'
+ *   3rd+: 'anggalingmo'
+ * Wrong Streak:
+ *   1st: 'mali'
+ *   2nd+: 'oopsmali'
  */
-export function getFeedbackAudio(isCorrect: boolean, streak: number): string {
+export function getFeedbackAudio(isCorrect: boolean, streak: number): FeedbackAudioKey {
   if (isCorrect) {
     if (streak <= 1) return 'tama';
     if (streak === 2) return 'magaling';
@@ -399,4 +432,27 @@ export function getFeedbackAudio(isCorrect: boolean, streak: number): string {
     if (streak <= 1) return 'mali';
     return 'oopsmali';
   }
+}
+
+/**
+ * Explicitly play a voice-over feedback sound with fallback
+ */
+export async function playFeedbackSound(
+  soundKey: FeedbackAudioKey | string,
+  onFinished?: () => void
+): Promise<() => void> {
+  const normalizedKey = soundKey.toLowerCase().replace(/[\s_-]+/g, '');
+  const asset =
+    VOICE_OVER_FEEDBACK_ASSETS[normalizedKey] ||
+    VOICE_OVER_FEEDBACK_ASSETS[soundKey] ||
+    resolveAudioSource(soundKey);
+
+  if (asset) {
+    return playSound(asset, onFinished);
+  }
+
+  // Graceful fallback to synthesized tones if file is unavailable
+  const isCorrect = ['tama', 'magaling', 'anggalingmo'].includes(normalizedKey);
+  playSynthesizedFeedback(isCorrect, onFinished);
+  return () => {};
 }

@@ -1,4 +1,5 @@
 import { Redirect, router } from 'expo-router';
+import { USE_NATIVE_DRIVER } from '../utils/platform';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,11 +8,14 @@ import {
   Easing,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+
+import { PressableScale } from '../components/PressableScale';
 import { useAuth } from '../hooks/use-auth';
-import { Colors, Shadows, Typography } from '../theme';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -22,8 +26,8 @@ function SplashScreen() {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.12, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.08, duration: 900, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
     );
     loop.start();
@@ -32,9 +36,14 @@ function SplashScreen() {
 
   return (
     <View style={splash.container}>
+      <LinearGradient
+        colors={Gradients.sky}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <Animated.View style={[splash.logoCircle, Shadows.card, { transform: [{ scale: pulse }] }]}>
-        <Text style={splash.sunEmoji}>☀️</Text>
-        <Text style={splash.bookEmoji}>📖</Text>
+        <Ionicons name="sparkles" size={54} color={Colors.sunYellowDark} />
       </Animated.View>
       <Text style={splash.brandTitle}>WikaPlay</Text>
       <Text style={splash.tagline}>Masayang Pagkatuto ng Wikang Filipino</Text>
@@ -46,45 +55,39 @@ function SplashScreen() {
 const splash = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.skyBlue,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   logoCircle: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 6,
-    borderColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
     marginBottom: 20,
-    flexDirection: 'row',
   },
-  sunEmoji: { fontSize: 48, marginRight: -10 },
-  bookEmoji: { fontSize: 44 },
   brandTitle: {
     fontSize: Typography.sizes.hero,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     color: Colors.white,
-    letterSpacing: 1.2,
-    textShadowColor: 'rgba(0,0,0,0.25)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
+    letterSpacing: 0.8,
   },
   tagline: {
     fontSize: Typography.sizes.md,
     fontWeight: Typography.weights.semibold,
-    color: 'rgba(255,255,255,0.95)',
-    marginTop: 8,
+    color: 'rgba(255, 255, 255, 0.92)',
+    marginTop: 6,
     textAlign: 'center',
   },
   spinner: { marginTop: 36 },
 });
 
-// ── Floating decoration (cloud / star / animal) ───────────────────────────────
+// ── Floating decoration ───────────────────────────────────────────────────────
 interface FloatingDecorProps {
   emoji: string;
   size: number;
@@ -106,13 +109,13 @@ function FloatingDecor({ emoji, size, x, y, duration, delay, amplitude }: Floati
           duration,
           delay,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(floatY, {
           toValue: amplitude,
           duration,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ])
     );
@@ -140,35 +143,23 @@ function WelcomeScreen() {
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const descOpacity = useRef(new Animated.Value(0)).current;
   const btnOpacity = useRef(new Animated.Value(0)).current;
-  const btnScale = useRef(new Animated.Value(0.88)).current;
-
-  // Button press feedback
-  const pressAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.parallel([
-        Animated.timing(logoOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(logoOpacity, { toValue: 1, duration: 600, useNativeDriver: USE_NATIVE_DRIVER }),
         Animated.timing(logoSlide, {
           toValue: 0,
           duration: 600,
           easing: Easing.out(Easing.back(1.2)),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ]),
-      Animated.timing(titleOpacity, { toValue: 1, duration: 500, delay: 80, useNativeDriver: true }),
-      Animated.timing(descOpacity, { toValue: 1, duration: 500, delay: 80, useNativeDriver: true }),
-      Animated.parallel([
-        Animated.timing(btnOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.spring(btnScale, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }),
-      ]),
+      Animated.timing(titleOpacity, { toValue: 1, duration: 500, delay: 80, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(descOpacity, { toValue: 1, duration: 500, delay: 80, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(btnOpacity, { toValue: 1, duration: 400, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
-  }, [logoOpacity, logoSlide, titleOpacity, descOpacity, btnOpacity, btnScale]);
-
-  const onPressIn = () =>
-    Animated.spring(pressAnim, { toValue: 0.94, useNativeDriver: true, friction: 8 }).start();
-  const onPressOut = () =>
-    Animated.spring(pressAnim, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
+  }, [logoOpacity, logoSlide, titleOpacity, descOpacity, btnOpacity]);
 
   const handleMagsimula = useCallback(() => {
     if (navigating) return;
@@ -178,31 +169,20 @@ function WelcomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Layered sky background */}
-      <View style={styles.skyTop} />
-      <View style={styles.skyBottom} />
+      <LinearGradient
+        colors={['#38BDF8', '#0284C7', '#0369A1']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
 
-      {/* Grass strip */}
-      <View style={styles.grassStrip}>
-        <View style={styles.grassWave1} />
-        <View style={styles.grassWave2} />
-      </View>
-
-      {/* Floating clouds, stars, animals */}
+      {/* Floating clouds, stars, elements */}
       <FloatingDecor emoji="☁️" size={42} x={-10} y={SCREEN_H * 0.08} duration={3200} delay={0} amplitude={10} />
       <FloatingDecor emoji="☁️" size={28} x={SCREEN_W * 0.62} y={SCREEN_H * 0.05} duration={2800} delay={400} amplitude={8} />
-      <FloatingDecor emoji="☁️" size={36} x={SCREEN_W * 0.3} y={SCREEN_H * 0.15} duration={3600} delay={200} amplitude={12} />
-      <FloatingDecor emoji="⭐" size={22} x={SCREEN_W * 0.07} y={SCREEN_H * 0.22} duration={2200} delay={100} amplitude={9} />
-      <FloatingDecor emoji="✨" size={18} x={SCREEN_W * 0.8} y={SCREEN_H * 0.18} duration={2600} delay={300} amplitude={7} />
-      <FloatingDecor emoji="⭐" size={16} x={SCREEN_W * 0.55} y={SCREEN_H * 0.26} duration={3000} delay={600} amplitude={10} />
-      <FloatingDecor emoji="🐤" size={30} x={SCREEN_W * 0.05} y={SCREEN_H * 0.67} duration={2900} delay={150} amplitude={8} />
-      <FloatingDecor emoji="🦋" size={26} x={SCREEN_W * 0.76} y={SCREEN_H * 0.64} duration={3300} delay={250} amplitude={11} />
-      <FloatingDecor emoji="🌻" size={28} x={SCREEN_W * 0.83} y={SCREEN_H * 0.72} duration={2700} delay={500} amplitude={6} />
-
-      {/* Sunshine */}
-      <View style={styles.sunContainer} pointerEvents="none">
-        <Text style={styles.sunEmoji}>☀️</Text>
-      </View>
+      <FloatingDecor emoji="☁️" size={36} x={SCREEN_W * 0.3} y={SCREEN_H * 0.14} duration={3600} delay={200} amplitude={12} />
+      <FloatingDecor emoji="⭐" size={22} x={SCREEN_W * 0.08} y={SCREEN_H * 0.22} duration={2200} delay={100} amplitude={9} />
+      <FloatingDecor emoji="✨" size={20} x={SCREEN_W * 0.82} y={SCREEN_H * 0.18} duration={2600} delay={300} amplitude={7} />
+      <FloatingDecor emoji="⭐" size={18} x={SCREEN_W * 0.55} y={SCREEN_H * 0.25} duration={3000} delay={600} amplitude={10} />
 
       {/* Main content */}
       <View style={styles.contentWrapper}>
@@ -214,8 +194,7 @@ function WelcomeScreen() {
             { opacity: logoOpacity, transform: [{ translateY: logoSlide }] },
           ]}
         >
-          <Text style={styles.logoSun}>☀️</Text>
-          <Text style={styles.logoBook}>📖</Text>
+          <Ionicons name="sparkles" size={54} color={Colors.sunYellowDark} />
         </Animated.View>
 
         {/* App name */}
@@ -233,35 +212,31 @@ function WelcomeScreen() {
           Tuklasin ang mga salita, larawan, at masasayang laro sa wikang Filipino.
         </Animated.Text>
 
-        {/* Open-book pill */}
+        {/* Feature pill */}
         <Animated.View style={[styles.bookPill, { opacity: descOpacity }]}>
-          <Text style={styles.bookPillEmoji}>📚</Text>
-          <Text style={styles.bookPillLabel}>Aralin · Laruan · Laro</Text>
+          <Ionicons name="book" size={18} color={Colors.white} />
+          <Text style={styles.bookPillLabel}>Flashcards · Quizzes · Mini-Games</Text>
         </Animated.View>
 
         {/* Magsimula button */}
-        <Animated.View
-          style={{
-            opacity: btnOpacity,
-            transform: [{ scale: Animated.multiply(btnScale, pressAnim) }],
-            width: '100%',
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
+        <Animated.View style={{ opacity: btnOpacity, width: '100%', maxWidth: 320 }}>
+          <PressableScale
             onPress={handleMagsimula}
-            onPressIn={onPressIn}
-            onPressOut={onPressOut}
             disabled={navigating}
-            style={[styles.magsimulaBtnOuter, Shadows.card]}
+            style={[styles.magsimulaBtn, Shadows.card]}
             accessibilityRole="button"
             accessibilityLabel="Magsimula — Pumunta sa login"
           >
-            <View style={styles.magsimulaBtnInner}>
-              <Text style={styles.magsimulaBtnEmoji}>🚀</Text>
+            <LinearGradient
+              colors={Gradients.sun}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.magsimulaGradient}
+            >
               <Text style={styles.magsimulaBtnText}>Magsimula</Text>
-            </View>
-          </TouchableOpacity>
+              <Ionicons name="arrow-forward" size={22} color="#78350F" />
+            </LinearGradient>
+          </PressableScale>
         </Animated.View>
 
         <Animated.Text style={[styles.footerTagline, { opacity: btnOpacity }]}>
@@ -288,105 +263,99 @@ export default function IndexGateway() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#56B8F5', overflow: 'hidden' },
-
-  skyTop: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    height: SCREEN_H * 0.65, backgroundColor: '#56B8F5',
+  container: {
+    flex: 1,
+    overflow: 'hidden',
   },
-  skyBottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: SCREEN_H * 0.38, backgroundColor: '#AEE6FF',
-    borderTopLeftRadius: 60, borderTopRightRadius: 60,
+  floatDecor: {
+    position: 'absolute',
+    zIndex: 1,
   },
-
-  grassStrip: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 72, backgroundColor: '#68CC91',
-    borderTopLeftRadius: 50, borderTopRightRadius: 50,
-  },
-  grassWave1: {
-    position: 'absolute', top: -18, left: -20,
-    width: SCREEN_W * 0.55, height: 40,
-    backgroundColor: '#7DD8A0', borderRadius: 99,
-  },
-  grassWave2: {
-    position: 'absolute', top: -14, right: -10,
-    width: SCREEN_W * 0.45, height: 36,
-    backgroundColor: '#56C278', borderRadius: 99,
-  },
-
-  floatDecor: { position: 'absolute', zIndex: 1 },
-
-  sunContainer: { position: 'absolute', top: SCREEN_H * 0.03, right: 24, zIndex: 2 },
-  sunEmoji: { fontSize: 52 },
-
   contentWrapper: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 28, paddingBottom: 80, zIndex: 10,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    zIndex: 10,
   },
-
   logoBadge: {
-    width: 120, height: 120, borderRadius: 60,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: Colors.white,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 6, borderColor: 'rgba(255,255,255,0.9)',
-    flexDirection: 'row', marginBottom: 12,
-  },
-  logoSun: { fontSize: 46, marginRight: -8 },
-  logoBook: { fontSize: 42 },
-
-  appName: {
-    fontSize: 38, fontWeight: '900', color: Colors.white,
-    letterSpacing: 1.5, marginBottom: 12,
-    textShadowColor: 'rgba(0,70,130,0.3)',
-    textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6,
-  },
-
-  heroTitle: {
-    fontSize: Typography.sizes.xxl, fontWeight: Typography.weights.heavy,
-    color: Colors.white, textAlign: 'center', lineHeight: 36,
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,60,120,0.25)',
-    textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
-  },
-
-  heroDesc: {
-    fontSize: Typography.sizes.sm, fontWeight: Typography.weights.semibold,
-    color: 'rgba(255,255,255,0.95)', textAlign: 'center',
-    lineHeight: 22, marginBottom: 20, paddingHorizontal: 8,
-  },
-
-  bookPill: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 24, paddingVertical: 12, paddingHorizontal: 20,
-    marginBottom: 28, borderWidth: 2, borderColor: 'rgba(255,255,255,0.45)',
-    gap: 10,
-  },
-  bookPillEmoji: { fontSize: 32 },
-  bookPillLabel: {
-    fontSize: Typography.sizes.sm, fontWeight: Typography.weights.bold,
-    color: 'rgba(255,255,255,0.95)', letterSpacing: 0.4,
-  },
-
-  magsimulaBtnOuter: {
-    borderRadius: 28, overflow: 'hidden',
-    borderWidth: 4, borderColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
     marginBottom: 16,
   },
-  magsimulaBtnInner: {
-    backgroundColor: '#FFD166',
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 18, paddingHorizontal: 32, gap: 10,
+  appName: {
+    fontSize: 40,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+    letterSpacing: 1,
+    marginBottom: 8,
   },
-  magsimulaBtnEmoji: { fontSize: 24 },
+  heroTitle: {
+    fontSize: Typography.sizes.xxl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+    textAlign: 'center',
+    lineHeight: 34,
+    marginBottom: 8,
+  },
+  heroDesc: {
+    fontSize: Typography.sizes.sm,
+    color: 'rgba(255, 255, 255, 0.92)',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
+  bookPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: Radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    gap: 8,
+  },
+  bookPillLabel: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+    letterSpacing: 0.3,
+  },
+  magsimulaBtn: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  magsimulaGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    gap: 10,
+  },
   magsimulaBtnText: {
-    fontSize: 22, fontWeight: '900', color: '#78350F', letterSpacing: 0.6,
+    fontSize: 20,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: '#78350F',
+    letterSpacing: 0.5,
   },
-
   footerTagline: {
-    fontSize: Typography.sizes.sm, fontWeight: Typography.weights.semibold,
-    color: 'rgba(255,255,255,0.85)', textAlign: 'center',
+    fontSize: Typography.sizes.xs,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
   },
 });

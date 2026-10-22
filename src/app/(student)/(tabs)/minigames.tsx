@@ -1,22 +1,22 @@
 import { router } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { MiniGameCard } from '../../../components/MiniGameCard';
 import { usePresence } from '../../../hooks/use-presence';
-import { Colors, Shadows, Typography } from '../../../theme';
+import { Colors, Shadows, Typography, Radius } from '../../../theme';
 import { MiniGame } from '../../../types';
 
-// Static mini-game definitions — cover images use emoji fallbacks until
-// real assets are placed at assets/images/minigame_*.png
 const MINI_GAMES: MiniGame[] = [
   {
     id: 'memory_match',
     slug: 'memory-match',
     title: 'Memory Match',
     description: 'Hanapin ang magkaparehong larawan!',
-    cover_image: '',   // Replace with require('../../assets/images/minigame_memory_match.png')
+    cover_image: '',
     bg_color: '#8B5CF6',
-    tag: '🃏 Katandaan',
+    tag: 'Katandaan',
   },
   {
     id: 'paghahanap_larawan',
@@ -25,7 +25,7 @@ const MINI_GAMES: MiniGame[] = [
     description: 'Marinig ang salita at hanapin ang larawan!',
     cover_image: '',
     bg_color: '#0EA5E9',
-    tag: '🎵 Pakikinig',
+    tag: 'Pakikinig',
   },
   {
     id: 'hulaan_salita',
@@ -34,7 +34,7 @@ const MINI_GAMES: MiniGame[] = [
     description: 'Tingnan ang larawan at hulaan ang salita!',
     cover_image: '',
     bg_color: '#10B981',
-    tag: '💭 Pag-iisip',
+    tag: 'Pag-iisip',
   },
   {
     id: 'gulong_letra',
@@ -43,7 +43,7 @@ const MINI_GAMES: MiniGame[] = [
     description: 'Ayusin ang mga letra upang makabuo ng salita!',
     cover_image: '',
     bg_color: '#F59E0B',
-    tag: '🔤 Spelling',
+    tag: 'Spelling',
   },
   {
     id: 'pop_balloon',
@@ -52,19 +52,20 @@ const MINI_GAMES: MiniGame[] = [
     description: 'I-pop ang tamang balloon batay sa larawan!',
     cover_image: '',
     bg_color: '#EF4444',
-    tag: '🎈 Mabilis',
+    tag: 'Mabilis',
   },
 ];
 
 const GAME_EMOJIS: Record<string, string> = {
-  memory_match: '🃏',
+  memory_match: '🧠',
   paghahanap_larawan: '🔍',
-  hulaan_salita: '💬',
-  gulong_letra: '🔤',
+  hulaan_salita: '💡',
+  gulong_letra: '🎡',
   pop_balloon: '🎈',
 };
 
 export default function MiniGamesScreen() {
+  const insets = useSafeAreaInsets();
   usePresence('Pinipili ng Laro (Mini-Games)', 'minigame_select');
 
   const handleSelectGame = (game: MiniGame) => {
@@ -74,13 +75,16 @@ export default function MiniGamesScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: Math.max(insets.top, 16) + 12 },
+      ]}
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={styles.header}>
         <View style={[styles.headerIcon, Shadows.soft]}>
-          <Text style={styles.headerEmoji}>🎮</Text>
+          <Ionicons name="game-controller" size={24} color={Colors.vibrantPurple} />
         </View>
         <View>
           <Text style={styles.headerTitle}>Mga Laro</Text>
@@ -106,41 +110,37 @@ export default function MiniGamesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: Colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 52,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+    gap: 12,
   },
   headerIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 46,
+    height: 46,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#8B5CF6',
-    marginRight: 12,
-  },
-  headerEmoji: {
-    fontSize: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   headerTitle: {
     fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
   headerSub: {
     fontSize: Typography.sizes.xs,
     color: Colors.textLight,
-    marginTop: 2,
   },
   grid: {
     flexDirection: 'row',

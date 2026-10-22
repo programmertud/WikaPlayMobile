@@ -11,6 +11,7 @@ class QuizSession extends Model
 
     protected $fillable = [
         'user_id',
+        'session_id',
         'category_id',
         'difficulty',
         'score',

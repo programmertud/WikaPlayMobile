@@ -1,26 +1,39 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Colors, Typography } from '../theme';
+import { Colors, Fonts, Shadows, Typography } from '../theme';
 
 interface EmptyStateProps {
   emoji?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
+  message?: string;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   emoji = '🌟',
+  icon,
   title,
   subtitle,
+  message,
 }) => {
+  const displayText = subtitle || message;
   return (
     <View style={styles.container}>
-      <Text style={styles.emoji}>{emoji}</Text>
+      {icon ? (
+        <View style={styles.iconCircle}>
+          <Ionicons name={icon} size={36} color={Colors.sunYellowDark} />
+        </View>
+      ) : (
+        <Text style={styles.emoji}>{emoji}</Text>
+      )}
       <Text style={styles.title}>{title}</Text>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      {displayText && <Text style={styles.subtitle}>{displayText}</Text>}
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -28,13 +41,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    ...Shadows.sm,
+  },
   emoji: {
     fontSize: 52,
     marginBottom: 12,
   },
   title: {
     fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.heavy,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     textAlign: 'center',
     marginBottom: 6,
@@ -42,6 +65,9 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: Typography.sizes.sm,
     color: Colors.textLight,
+    fontFamily: Fonts.regular,
     textAlign: 'center',
+    maxWidth: 260,
   },
 });
+

@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Fonts, Radius, Shadows } from '../theme';
 import { VocabularyItem } from '../types';
 
 interface ItemVisualProps {
@@ -133,16 +134,12 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 24,
+    borderRadius: Radius.xl,
     backgroundColor: '#FFFFFF',
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Shadows.md,
   },
   image: {
     width: '90%',
@@ -150,16 +147,13 @@ const styles = StyleSheet.create({
   },
   swatchCard: {
     backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
   },
   swatchCircle: {
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
     padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    ...Shadows.md,
   },
   swatchGloss: {
     backgroundColor: 'rgba(255,255,255,0.45)',
@@ -171,7 +165,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   numberLargeText: {
-    fontWeight: '900',
+    fontFamily: Fonts.bold,
     color: '#854D0E',
     textAlign: 'center',
   },
@@ -186,11 +180,11 @@ const styles = StyleSheet.create({
   },
   quantityDot: {
     backgroundColor: '#EAB308',
-    borderRadius: 999,
+    borderRadius: Radius.pill,
   },
   quantityMoreText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: Fonts.bold,
     color: '#854D0E',
     marginLeft: 2,
   },
@@ -209,3 +203,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+

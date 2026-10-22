@@ -1,15 +1,21 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { Colors, Typography } from '../theme';
+import { Colors, Fonts, Typography } from '../theme';
 
 interface LoadingViewProps {
   message?: string;
+  variant?: 'student' | 'teacher';
 }
 
-export const LoadingView: React.FC<LoadingViewProps> = ({ message = 'Ikinakarga ang WikaPlay...' }) => {
+export const LoadingView: React.FC<LoadingViewProps> = ({
+  message = 'Ikinakarga ang WikaPlay...',
+  variant = 'student',
+}) => {
+  const accentColor = variant === 'teacher' ? Colors.teacherPurple : Colors.skyBlueDark;
+
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={Colors.skyBlueDark} />
+      <ActivityIndicator size="large" color={accentColor} />
       <Text style={styles.text}>{message}</Text>
     </View>
   );
@@ -27,6 +33,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: Colors.textLight,
     fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.semibold,
+    fontFamily: Fonts.medium,
   },
 });
+

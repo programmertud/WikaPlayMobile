@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -9,10 +10,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { PressableScale } from '../../../components/PressableScale';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { Colors, Shadows } from '../../../theme';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { QuizDifficulty } from '../../../types';
 
 export default function CategoryDetailScreen() {
@@ -105,7 +109,11 @@ export default function CategoryDetailScreen() {
   const handleStartQuiz = (difficulty: QuizDifficulty) => {
     blurActiveElement();
     setQuizModalVisible(false);
-    router.push(`/(student)/quiz/${category.slug}/${difficulty}` as any);
+    if (difficulty === 'madali') {
+      router.push(`/(student)/quiz/${category.slug}/madali` as any);
+    } else {
+      router.push(`/(student)/quiz/${category.slug}/${difficulty}` as any);
+    }
   };
 
   const handleOpenGame = (gameSlug: string) => {
@@ -129,10 +137,25 @@ export default function CategoryDetailScreen() {
         bgColor={category.color}
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Category Header Banner */}
-        <View style={[styles.heroCard, Shadows.card, { borderTopColor: category.color }]}>
-          <Text style={styles.heroEmoji}>{category.icon}</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Category Hero Banner with LinearGradient & Decorative Blobs */}
+        <View style={[styles.heroCard, Shadows.card]}>
+          <LinearGradient
+            colors={[category.color || '#38BDF8', '#0284C7']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroBlob1} />
+          <View style={styles.heroBlob2} />
+
+          {category.logoImage ? (
+            <View style={styles.heroLogoWrapper}>
+              <Image source={category.logoImage} style={styles.heroLogo} resizeMode="contain" />
+            </View>
+          ) : (
+            <Text style={styles.heroEmoji}>{category.icon}</Text>
+          )}
           <Text style={styles.heroTitle}>{category.name}</Text>
           <Text style={styles.heroSub}>{category.englishName} • {category.items.length} Salita</Text>
           {category.description ? (
@@ -143,58 +166,64 @@ export default function CategoryDetailScreen() {
         <Text style={styles.sectionHeader}>Pumili ng Gawain:</Text>
 
         {/* Option 1: Flashcards */}
-        <TouchableOpacity
-          activeOpacity={0.88}
+        <PressableScale
           onPress={handleOpenFlashcards}
-          style={[styles.primaryCard, styles.flashcardsCard, Shadows.card]}
+          style={[styles.primaryCard, Shadows.soft]}
         >
-          <View style={[styles.iconBox, { backgroundColor: '#E0F2FE' }]}>
-            <Text style={styles.iconBoxText}>🗂️</Text>
-          </View>
+          <LinearGradient
+            colors={Gradients.skyLight}
+            style={styles.iconBox}
+          >
+            <Ionicons name="albums" size={24} color={Colors.skyBlueDark} />
+          </LinearGradient>
           <View style={styles.cardTextBox}>
             <Text style={styles.cardTitle}>1. Mga Flashcard</Text>
             <Text style={styles.cardSubtitle}>
               Basahin at aralin ang {category.items.length} Filipino-English cards
             </Text>
           </View>
-          <Text style={styles.arrowIcon}>➡️</Text>
-        </TouchableOpacity>
+          <Ionicons name="chevron-forward" size={22} color={Colors.textMuted} />
+        </PressableScale>
 
         {/* Option 2: Quiz */}
-        <TouchableOpacity
-          activeOpacity={0.88}
+        <PressableScale
           onPress={() => setQuizModalVisible(true)}
-          style={[styles.primaryCard, styles.quizCard, Shadows.card]}
+          style={[styles.primaryCard, Shadows.soft]}
         >
-          <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
-            <Text style={styles.iconBoxText}>🎯</Text>
-          </View>
+          <LinearGradient
+            colors={Gradients.grassLight}
+            style={styles.iconBox}
+          >
+            <Ionicons name="checkbox" size={24} color={Colors.grassGreenDark} />
+          </LinearGradient>
           <View style={styles.cardTextBox}>
             <Text style={styles.cardTitle}>2. Pagsusulit (Quiz)</Text>
             <Text style={styles.cardSubtitle}>
               Madali, Katamtaman, at Mahirap na antas
             </Text>
           </View>
-          <Text style={styles.arrowIcon}>➡️</Text>
-        </TouchableOpacity>
+          <Ionicons name="chevron-forward" size={22} color={Colors.textMuted} />
+        </PressableScale>
 
         {/* Option 3: Mini Games */}
-        <TouchableOpacity
-          activeOpacity={0.88}
+        <PressableScale
           onPress={() => setGamesModalVisible(true)}
-          style={[styles.primaryCard, styles.gamesCard, Shadows.card]}
+          style={[styles.primaryCard, Shadows.soft]}
         >
-          <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
-            <Text style={styles.iconBoxText}>🎮</Text>
-          </View>
+          <LinearGradient
+            colors={Gradients.sunLight}
+            style={styles.iconBox}
+          >
+            <Ionicons name="game-controller" size={24} color={Colors.sunYellowDark} />
+          </LinearGradient>
           <View style={styles.cardTextBox}>
             <Text style={styles.cardTitle}>3. Mga Mini-Game</Text>
             <Text style={styles.cardSubtitle}>
               5 larong pang-aral gamit ang {category.name}
             </Text>
           </View>
-          <Text style={styles.arrowIcon}>➡️</Text>
-        </TouchableOpacity>
+          <Ionicons name="chevron-forward" size={22} color={Colors.textMuted} />
+        </PressableScale>
       </ScrollView>
 
       {/* QUIZ DIFFICULTY MODAL */}
@@ -212,9 +241,8 @@ export default function CategoryDetailScreen() {
             </View>
 
             {difficulties.map((d) => (
-              <TouchableOpacity
+              <PressableScale
                 key={d.key}
-                activeOpacity={0.85}
                 onPress={() => handleStartQuiz(d.key)}
                 style={[styles.diffItem, { borderLeftColor: d.color }]}
               >
@@ -227,7 +255,7 @@ export default function CategoryDetailScreen() {
                 <View style={[styles.diffBadge, { backgroundColor: d.color }]}>
                   <Text style={styles.diffBadgeText}>{d.stars}</Text>
                 </View>
-              </TouchableOpacity>
+              </PressableScale>
             ))}
 
             <TouchableOpacity
@@ -256,9 +284,8 @@ export default function CategoryDetailScreen() {
 
             <ScrollView style={{ maxHeight: 380 }}>
               {miniGames.map((game) => (
-                <TouchableOpacity
+                <PressableScale
                   key={game.slug}
-                  activeOpacity={0.85}
                   onPress={() => handleOpenGame(game.slug)}
                   style={[styles.gameItem, { borderLeftColor: game.color }]}
                 >
@@ -269,8 +296,8 @@ export default function CategoryDetailScreen() {
                     <Text style={styles.gameTitle}>{game.title}</Text>
                     <Text style={styles.gameDesc}>{game.desc}</Text>
                   </View>
-                  <Text style={styles.arrowIcon}>➡️</Text>
-                </TouchableOpacity>
+                  <Ionicons name="play" size={18} color={game.color} />
+                </PressableScale>
               ))}
             </ScrollView>
 
@@ -297,121 +324,125 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    borderTopWidth: 8,
-    padding: 20,
+    borderRadius: Radius.xxl,
+    overflow: 'hidden',
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  heroBlob1: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    top: -30,
+    right: -20,
+  },
+  heroBlob2: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    bottom: -20,
+    left: -20,
   },
   heroEmoji: {
     fontSize: 56,
     marginBottom: 8,
   },
   heroTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontSize: Typography.sizes.xxl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
     marginBottom: 2,
   },
   heroSub: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.semibold,
+    color: 'rgba(255, 255, 255, 0.92)',
     marginBottom: 8,
   },
   heroDesc: {
-    fontSize: 13,
-    color: '#475569',
+    fontSize: Typography.sizes.xs,
+    color: 'rgba(255, 255, 255, 0.85)',
     textAlign: 'center',
     lineHeight: 18,
+    maxWidth: 300,
   },
   sectionHeader: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1E293B',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
     marginBottom: 12,
   },
   primaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
     padding: 16,
     marginBottom: 14,
   },
-  flashcardsCard: {
-    borderLeftColor: '#38BDF8',
-    borderLeftWidth: 8,
-  },
-  quizCard: {
-    borderLeftColor: '#4ADE80',
-    borderLeftWidth: 8,
-  },
-  gamesCard: {
-    borderLeftColor: '#FACC15',
-    borderLeftWidth: 8,
-  },
   iconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
-  },
-  iconBoxText: {
-    fontSize: 28,
   },
   cardTextBox: {
     flex: 1,
   },
   cardTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 3,
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 2,
   },
   cardSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
     lineHeight: 16,
-  },
-  arrowIcon: {
-    fontSize: 20,
-    marginLeft: 8,
   },
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
     padding: 20,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
     padding: 20,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   modalHeader: {
     alignItems: 'center',
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
   modalSub: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.textLight,
     marginTop: 2,
   },
   diffItem: {
@@ -419,83 +450,106 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    borderLeftWidth: 6,
+    borderRadius: Radius.lg,
+    borderLeftWidth: 5,
     padding: 14,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   diffItemTextContainer: {
     flex: 1,
     paddingRight: 10,
   },
   diffItemTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
   diffItemEnglish: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.textLight,
   },
   diffItemDesc: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
     marginTop: 2,
   },
   diffBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
   },
   diffBadgeText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 12,
+    color: Colors.white,
+    fontWeight: Typography.weights.heavy,
+    fontSize: Typography.sizes.xs,
   },
   gameItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    borderLeftWidth: 6,
+    borderRadius: Radius.lg,
+    borderLeftWidth: 5,
     padding: 12,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   gameEmojiBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   gameEmoji: {
-    fontSize: 24,
+    fontSize: 22,
   },
   gameTextContainer: {
     flex: 1,
   },
   gameTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
   },
   gameDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    marginTop: 1,
   },
   closeBtn: {
     marginTop: 12,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     alignItems: 'center',
   },
   closeBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#334155',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textLight,
+  },
+  heroLogoWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    overflow: 'hidden',
+  },
+  heroLogo: {
+    width: 64,
+    height: 64,
   },
 });

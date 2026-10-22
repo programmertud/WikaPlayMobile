@@ -1,26 +1,34 @@
 /**
  * Memory Match Mini-Game
- * Category-based: Uses vocabulary from the selected category (Hayop, Prutas, Gulay, Kulay, Hugis, Bilang, etc.)
+ * Category-based: Uses vocabulary from the selected category
  */
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useState, useRef } from 'react';
 import {
   Dimensions,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
+
 import { ItemVisual } from '../../../components/ItemVisual';
-import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ScreenHeader } from '../../../components/ScreenHeader';
+import { PressableScale } from '../../../components/PressableScale';
+import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
+import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
+import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
+import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { minigameService } from '../../../services/api';
-import { playLocalSound, playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
-import { Colors, Shadows, Typography } from '../../../theme';
-import { VocabularyItem } from '../../../types';
+import { playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
+import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import { Collectible, VocabularyItem } from '../../../types';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = Math.min((width - 56) / 3, 110);
@@ -32,15 +40,22 @@ interface CardItem {
   isMatched: boolean;
 }
 
-function makeCards(items: VocabularyItem[]): CardItem[] {
-  // Take 6 items from the selected category for a 12-card (3x4) grid
-  const selected = [...items].sort(() => 0.5 - Math.random()).slice(0, 6);
+const PAIRS_PER_ROUND = 5;
+const TOTAL_ROUNDS = 4;
+const TOTAL_PAIRS = PAIRS_PER_ROUND * TOTAL_ROUNDS; // 20 pairs = 20 stars
+
+function makeCards(items: VocabularyItem[], roundIndex: number): CardItem[] {
+  const startIdx = (roundIndex * PAIRS_PER_ROUND) % items.length;
+  const selected: VocabularyItem[] = [];
+  for (let i = 0; i < PAIRS_PER_ROUND; i++) {
+    selected.push(items[(startIdx + i) % items.length]);
+  }
+
   const pairs = selected.flatMap((item, idx) => [
-    { uid: `${item.id}-a-${idx}`, item, isFlipped: false, isMatched: false },
-    { uid: `${item.id}-b-${idx}`, item, isFlipped: false, isMatched: false },
+    { uid: `${item.id}-a-${roundIndex}-${idx}`, item, isFlipped: false, isMatched: false },
+    { uid: `${item.id}-b-${roundIndex}-${idx}`, item, isFlipped: false, isMatched: false },
   ]);
 
-  // Shuffle
   for (let i = pairs.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
@@ -53,37 +68,61 @@ export default function MemoryMatch() {
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
   const vocabulary = getCategoryVocabulary(category.slug);
+  const { updateUserStars } = useAuth();
 
-  const [cards, setCards] = useState<CardItem[]>(() => makeCards(vocabulary));
-  const [flippedUids, setFlippedUids] = useState<string[]>([]);
-  const [matches, setMatches] = useState(0);
+  const [currentRound, setCurrentRound] = useState(0); // 0 to 3
+  const [cards, setCards] = useState<CardItem[]>(() => makeCards(vocabulary, 0));
+  const [, setFlippedUids] = useState<string[]>([]);
+  const [roundMatches, setRoundMatches] = useState(0);
+  const [totalMatches, setTotalMatches] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState(10);
+  const [starsAwarded, setStarsAwarded] = useState(0);
+  const [showMysteryBox, setShowMysteryBox] = useState(false);
+  const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
   const [startTime] = useState(() => Date.now());
   const lockRef = useRef(false);
+
+  // Centralized voice-over streak manager
+  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
 
   usePresence(`Memory Match (${category.name})`, 'minigame_memory_match');
 
   const submitScore = useCallback(
-    async (finalMatches: number) => {
+    async (finalScore: number) => {
+      const sessionId = `memory_${Date.now()}_${Math.random().toString(36).substring(2)}`;
       try {
         const duration = Math.round((Date.now() - startTime) / 1000);
-        const score = Math.max(0, 100 - attempts * 5);
         const res = await minigameService.submitResult({
           game_type: 'memory_match',
-          score,
+          score: finalScore,
           duration_seconds: duration,
-          metadata: { category: category.slug, matches: finalMatches, attempts },
+          session_id: sessionId,
+          metadata: { category: category.slug, matches: finalScore, attempts, total: TOTAL_PAIRS },
         });
-        if (res?.session?.stars_awarded) {
-          setStarsAwarded(res.session.stars_awarded);
+
+        const awarded = res?.session?.stars_awarded ?? finalScore;
+        setStarsAwarded(awarded);
+
+        if (res?.session?.stars_balance !== undefined) {
+          updateUserStars(res.session.stars_balance);
+        }
+
+        // Check if student qualifies for collectible (15-20/20)
+        if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+          setAwardedCollectible(res.session.collectible);
+          setShowMysteryBox(true);
+        } else {
+          setGameOver(true);
         }
       } catch {
-        // offline fallback non-critical
+        // offline fallback
+        setStarsAwarded(finalScore);
+        updateUserStars(finalScore);
+        setGameOver(true);
       }
     },
-    [startTime, attempts, category.slug]
+    [startTime, attempts, category.slug, updateUserStars]
   );
 
   const handleFlip = useCallback(
@@ -93,7 +132,8 @@ export default function MemoryMatch() {
       const target = cards.find((c) => c.uid === uid);
       if (!target || target.isFlipped || target.isMatched) return;
 
-      // Flip the clicked card
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
       setCards((prev) => prev.map((c) => (c.uid === uid ? { ...c, isFlipped: true } : c)));
 
       setFlippedUids((prevFlipped) => {
@@ -110,7 +150,7 @@ export default function MemoryMatch() {
           const isMatch = firstCard.item.id === secondCard.item.id;
 
           if (isMatch) {
-            playVocabularyItem(firstCard.item);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             setCards((prev) =>
               prev.map((c) =>
                 c.uid === firstUid || c.uid === secondUid
@@ -118,20 +158,38 @@ export default function MemoryMatch() {
                   : c
               )
             );
-            setMatches((m) => {
-              const newMatches = m + 1;
-              if (newMatches >= 6) {
-                setTimeout(() => {
-                  playLocalSound('magaling');
-                  setGameOver(true);
-                  submitScore(newMatches);
-                }, 600);
-              }
-              return newMatches;
+            triggerFeedback(true, () => {
+              playVocabularyItem(firstCard.item);
             });
-            lockRef.current = false;
+
+            const nextRoundMatches = roundMatches + 1;
+            const nextTotalMatches = totalMatches + 1;
+            setRoundMatches(nextRoundMatches);
+            setTotalMatches(nextTotalMatches);
+
+            if (nextRoundMatches >= PAIRS_PER_ROUND) {
+              // Check if all 4 rounds are finished
+              if (currentRound + 1 >= TOTAL_ROUNDS) {
+                setTimeout(() => {
+                  submitScore(nextTotalMatches);
+                }, 800);
+              } else {
+                // Advance to next round
+                setTimeout(() => {
+                  const nextR = currentRound + 1;
+                  setCurrentRound(nextR);
+                  setRoundMatches(0);
+                  setCards(makeCards(vocabulary, nextR));
+                  setFlippedUids([]);
+                  lockRef.current = false;
+                }, 900);
+              }
+            } else {
+              lockRef.current = false;
+            }
           } else {
-            playLocalSound('mali');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+            triggerFeedback(false);
             setTimeout(() => {
               setCards((prev) =>
                 prev.map((c) =>
@@ -150,15 +208,20 @@ export default function MemoryMatch() {
         return next;
       });
     },
-    [cards, submitScore]
+    [cards, currentRound, roundMatches, totalMatches, vocabulary, submitScore, triggerFeedback]
   );
 
   const handleRestart = () => {
-    setCards(makeCards(vocabulary));
+    resetStreaks();
+    setCurrentRound(0);
+    setCards(makeCards(vocabulary, 0));
     setFlippedUids([]);
-    setMatches(0);
+    setRoundMatches(0);
+    setTotalMatches(0);
     setAttempts(0);
     setGameOver(false);
+    setShowMysteryBox(false);
+    setAwardedCollectible(null);
     lockRef.current = false;
   };
 
@@ -169,16 +232,35 @@ export default function MemoryMatch() {
         bgColor={category.color}
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Scoreboard Bar */}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Progress bar across 20 matches */}
+        <View style={styles.progressRow}>
+          <ProgressIndicator
+            current={totalMatches}
+            total={TOTAL_PAIRS}
+            gradient={Gradients.grass}
+            height={10}
+          />
+        </View>
+
+        {/* Scoreboard Bar with LinearGradient */}
         <View style={[styles.scoreboard, Shadows.soft]}>
           <View style={styles.scorePill}>
+            <Ionicons name="sparkles" size={18} color={Colors.grassGreenDark} />
             <Text style={styles.scoreLabel}>Magkapares:</Text>
-            <Text style={[styles.scoreValue, { color: Colors.grassGreen }]}>
-              {matches} / 6
+            <Text style={[styles.scoreValue, { color: Colors.grassGreenDark }]}>
+              {totalMatches} / {TOTAL_PAIRS}
             </Text>
           </View>
           <View style={styles.scorePill}>
+            <Ionicons name="layers-outline" size={18} color={Colors.coralPink} />
+            <Text style={styles.scoreLabel}>Antas:</Text>
+            <Text style={[styles.scoreValue, { color: Colors.coralPink }]}>
+              {currentRound + 1} / {TOTAL_ROUNDS}
+            </Text>
+          </View>
+          <View style={styles.scorePill}>
+            <Ionicons name="repeat" size={18} color={Colors.skyBlueDark} />
             <Text style={styles.scoreLabel}>Tangka:</Text>
             <Text style={[styles.scoreValue, { color: Colors.skyBlueDark }]}>
               {attempts}
@@ -186,81 +268,72 @@ export default function MemoryMatch() {
           </View>
         </View>
 
-        {/* 3-Column Card Grid */}
+        {/* Card Grid */}
         <View style={styles.grid}>
           {cards.map((card) => {
             const isRevealed = card.isFlipped || card.isMatched;
 
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={card.uid}
-                activeOpacity={0.82}
                 onPress={() => handleFlip(card.uid)}
                 disabled={card.isMatched || card.isFlipped}
+                activeScale={0.94}
                 style={[
                   styles.card,
                   isRevealed ? styles.cardFaceUp : styles.cardFaceDown,
                   card.isMatched && styles.cardMatched,
-                  Shadows.card,
+                  Shadows.soft,
                 ]}
               >
                 {isRevealed ? (
                   <View style={styles.cardContent}>
-                    <ItemVisual item={card.item} size={CARD_SIZE - 24} />
+                    <ItemVisual item={card.item} size={CARD_SIZE - 28} />
                     <Text style={styles.cardWord} numberOfLines={1}>
                       {card.item.filipino}
                     </Text>
                   </View>
                 ) : (
-                  <View style={styles.cardBack}>
-                    <Text style={styles.questionMark}>❓</Text>
+                  <LinearGradient
+                    colors={Gradients.sky}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.cardBack}
+                  >
+                    <Ionicons name="help-circle" size={36} color="rgba(255, 255, 255, 0.85)" />
                     <Text style={styles.cardBackCategory} numberOfLines={1}>
                       {category.name}
                     </Text>
-                  </View>
+                  </LinearGradient>
                 )}
-              </TouchableOpacity>
+              </PressableScale>
             );
           })}
         </View>
       </ScrollView>
 
-      {/* GAME OVER MODAL */}
-      {gameOver && (
-        <View style={styles.overlay}>
-          <View style={[styles.victoryCard, Shadows.card]}>
-            <Text style={styles.victoryEmoji}>🏆🎉</Text>
-            <Text style={styles.victoryTitle}>Napakagaling!</Text>
-            <Text style={styles.victoryDesc}>
-              Nahanap mo ang lahat ng magkapares na salita sa {category.name}!
-            </Text>
+      {/* GAME OVER CELEBRATION OVERLAY */}
+      <CelebrationOverlay
+        visible={gameOver}
+        title="Napakagaling!"
+        subtitle={`Nahanap mo ang ${totalMatches} sa ${TOTAL_PAIRS} na magkapares sa ${category.name}!`}
+        scoreText={`+${starsAwarded} Bituin! ⭐`}
+        stars={totalMatches >= 15 ? 3 : totalMatches >= 10 ? 2 : 1}
+        continueText="Maglaro Ulit"
+        onContinue={handleRestart}
+      />
 
-            <View style={styles.starsEarnedRow}>
-              <Text style={styles.starBig}>⭐</Text>
-              <Text style={styles.starsEarnedText}>+{starsAwarded} Bituin!</Text>
-            </View>
-
-            <Text style={styles.statsSummary}>Kabuuang Tangka: {attempts}</Text>
-
-            <View style={styles.modalButtons}>
-              <PrimaryButton
-                title="Maglaro Ulit 🔄"
-                variant="success"
-                size="md"
-                onPress={handleRestart}
-                style={styles.btnAction}
-              />
-              <PrimaryButton
-                title="Bumalik sa Aralin 🏠"
-                variant="secondary"
-                size="md"
-                onPress={() => router.back()}
-                style={styles.btnAction}
-              />
-            </View>
-          </View>
-        </View>
-      )}
+      {/* MYSTERY BOX REWARD MODAL */}
+      <MysteryBoxModal
+        visible={showMysteryBox}
+        score={totalMatches}
+        starsAwarded={starsAwarded}
+        collectible={awardedCollectible}
+        onClose={() => {
+          setShowMysteryBox(false);
+          setGameOver(true);
+        }}
+      />
     </View>
   );
 }
@@ -275,31 +348,37 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     alignItems: 'center',
   },
+  progressRow: {
+    width: '100%',
+    marginBottom: 12,
+  },
   scoreboard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
     padding: 12,
     marginBottom: 20,
   },
   scorePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
+    gap: 6,
+    paddingHorizontal: 8,
   },
   scoreLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textLight,
   },
   scoreValue: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
   },
   grid: {
     flexDirection: 'row',
@@ -310,37 +389,36 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_SIZE,
     height: CARD_SIZE * 1.25,
-    borderRadius: 18,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
   },
   cardFaceDown: {
-    backgroundColor: '#0284C7',
+    borderColor: 'transparent',
   },
   cardFaceUp: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.white,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   cardMatched: {
-    borderColor: '#4ADE80',
+    borderColor: Colors.grassGreen,
+    borderWidth: 2,
     backgroundColor: '#F0FDF4',
   },
   cardBack: {
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 4,
   },
-  questionMark: {
-    fontSize: 32,
-    marginBottom: 4,
-  },
   cardBackCategory: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#BAE6FD',
+    fontWeight: Typography.weights.bold,
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
+    marginTop: 2,
   },
   cardContent: {
     alignItems: 'center',
@@ -349,78 +427,10 @@ const styles = StyleSheet.create({
   },
   cardWord: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
     marginTop: 4,
     textAlign: 'center',
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  victoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    padding: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-  },
-  victoryEmoji: {
-    fontSize: 56,
-    marginBottom: 10,
-  },
-  victoryTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  victoryDesc: {
-    fontSize: 14,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  starsEarnedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF9C3',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 12,
-    gap: 8,
-  },
-  starBig: {
-    fontSize: 28,
-  },
-  starsEarnedText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#854D0E',
-  },
-  statsSummary: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 20,
-  },
-  modalButtons: {
-    width: '100%',
-    gap: 10,
-  },
-  btnAction: {
-    width: '100%',
   },
 });
