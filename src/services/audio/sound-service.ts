@@ -1,10 +1,12 @@
-import { Asset } from 'expo-asset';
+﻿import { Asset } from 'expo-asset';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import { Platform } from 'react-native';
+import { Image, Platform } from 'react-native';
 import { bgm, useBgmDuck } from './bgm-service';
 import { LEARNING_CATEGORIES } from '../../data/categories';
+import { ALL_MADALI_AUDIO, ALL_MADALI_WEB_PATHS } from '../../utils/quiz-madali-audio';
 
 export { bgm, useBgmDuck };
+
 
 
 // Centralized dictionary of all local audio assets across all 8 learning categories
@@ -71,6 +73,13 @@ Object.entries(VOICE_OVER_FEEDBACK_ASSETS).forEach(([key, asset]) => {
   LOCAL_AUDIO_ASSETS[noSpace] = asset;
   LOCAL_AUDIO_ASSETS[`${noSpace}.mp3`] = asset;
 });
+
+// Register all Madali quiz voice audios into LOCAL_AUDIO_ASSETS
+Object.entries(ALL_MADALI_AUDIO).forEach(([key, asset]) => {
+  LOCAL_AUDIO_ASSETS[key] = asset;
+  LOCAL_AUDIO_ASSETS[`${key}.mp3`] = asset;
+});
+
 
 let isAudioModeConfigured = false;
 let currentActivePlayer: any = null;
@@ -154,16 +163,40 @@ function playSynthesizedFeedback(isCorrect: boolean, onFinished?: () => void) {
     } catch {}
   }
 
-  // Fallback to speech feedback
-  const feedbackWord = isCorrect ? 'Tama!' : 'Subukan muli';
-  speakWordWeb(feedbackWord, onFinished);
+  // Safe fallback completion without any AI speech voice
+  setTimeout(() => {
+    onFinished?.();
+  }, 300);
 }
+
+// Static Web paths for voice-over feedback
+export const VOICE_OVER_WEB_PATHS: Record<string, string> = {
+  tama: '/audio/VOICE OVERS/tama.mp3',
+  magaling: '/audio/VOICE OVERS/magaling.mp3',
+  anggalingmo: '/audio/VOICE OVERS/anggalingmo.mp3',
+  'ang galing mo': '/audio/VOICE OVERS/anggalingmo.mp3',
+  mali: '/audio/VOICE OVERS/mali.mp3',
+  oopsmali: '/audio/VOICE OVERS/oopsmali.mp3',
+  'oops mali': '/audio/VOICE OVERS/oopsmali.mp3',
+  subukanulit: '/audio/VOICE OVERS/subukan ulit.mp3',
+  'subukan ulit': '/audio/VOICE OVERS/subukan ulit.mp3',
+};
 
 /**
  * Resolve an audio key or URL to a playable source
  */
 export function resolveAudioSource(source: string | any): any {
   if (!source) return null;
+
+  // On Web, prefer direct web paths from public/audio if matching ID or key
+  if (Platform.OS === 'web' && typeof source === 'string') {
+    const rawTrim = source.trim();
+    const cleanKey = rawTrim.split('/').pop()?.replace(/\.mp3$/i, '').toLowerCase() || rawTrim;
+    if (ALL_MADALI_WEB_PATHS[rawTrim]) return ALL_MADALI_WEB_PATHS[rawTrim];
+    if (ALL_MADALI_WEB_PATHS[cleanKey]) return ALL_MADALI_WEB_PATHS[cleanKey];
+    if (VOICE_OVER_WEB_PATHS[cleanKey]) return VOICE_OVER_WEB_PATHS[cleanKey];
+  }
+
   if (typeof source !== 'string') return source;
 
   // Extract base filename if it has path elements (e.g. "audio/hayop_aso.mp3" -> "hayop_aso.mp3")
@@ -186,8 +219,15 @@ export function resolveAudioSource(source: string | any): any {
     return LOCAL_AUDIO_ASSETS[`${stripped}.mp3`];
   }
 
-  // If it's a valid remote or absolute data URL, return it directly
+  // Check direct lookup in Madali dictionary
+  if (ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt]) {
+    return ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt];
+  }
+
+  // If it's a valid remote or relative web URL, return it directly
   if (
+    source.startsWith('/') ||
+    source.startsWith('./') ||
     source.startsWith('http://') ||
     source.startsWith('https://') ||
     source.startsWith('data:') ||
@@ -200,28 +240,18 @@ export function resolveAudioSource(source: string | any): any {
 }
 
 /**
- * Web Speech Synthesis fallback for pronouncing words when an mp3 is unavailable
+ * Speech synthesis is completely disabled â€” AI voice removed per requirements.
+ * Only pre-recorded human voice audios are used in WikaPlay.
  */
-export function speakWordWeb(text: string, onFinished?: () => void): (() => void) | null {
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+export function speakWordWeb(_text: string, onFinished?: () => void): (() => void) | null {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'fil-PH';
-      utterance.rate = 0.9;
-      utterance.onend = () => onFinished?.();
-      utterance.onerror = () => onFinished?.();
-      window.speechSynthesis.speak(utterance);
-      return () => {
-        try {
-          window.speechSynthesis.cancel();
-        } catch {}
-      };
-    } catch {
-      onFinished?.();
-      return null;
-    }
+    } catch {}
   }
+  setTimeout(() => {
+    onFinished?.();
+  }, 100);
   return null;
 }
 
@@ -247,7 +277,11 @@ export async function playSound(
     if (player) {
       try {
         player.pause();
-        player.remove();
+        if (typeof player.remove === 'function') {
+          player.remove();
+        } else {
+          player.src = '';
+        }
       } catch {}
       player = null;
     }
@@ -261,12 +295,6 @@ export async function playSound(
 
     // If source could not be resolved from local assets or valid URL
     if (!resolvedSource) {
-      // Fallback: If it's a string word, pronounce it via Web Speech API
-      if (typeof source === 'string') {
-        const cleanWord = source.split('/').pop()?.replace(/\.mp3$/i, '').replace(/^hayop_/, '') || source;
-        const speechCleaner = speakWordWeb(cleanWord, onFinished);
-        if (speechCleaner) return speechCleaner;
-      }
       setTimeout(() => {
         if (!isCancelled) onFinished?.();
       }, 300);
@@ -283,38 +311,95 @@ export async function playSound(
         (resolvedSource.default || resolvedSource.uri)
       ) {
         webUri = resolvedSource.default || resolvedSource.uri;
-      } else {
+      }
+
+      // Handle numeric require() module IDs â€” common when question.audio is a require() asset on web
+      if (!webUri && typeof resolvedSource === 'number') {
+        try {
+          const resolved = Image.resolveAssetSource?.(resolvedSource);
+          webUri = resolved?.uri || '';
+        } catch {}
+      }
+
+      // Try Asset.fromModule as secondary resolution for number/object assets
+      if (!webUri && (typeof resolvedSource === 'number' || (typeof resolvedSource === 'object' && resolvedSource !== null))) {
         try {
           const asset = Asset.fromModule(resolvedSource);
-          webUri = asset.uri || asset.localUri || '';
-        } catch {
-          webUri = '';
+          if (asset.uri) {
+            webUri = asset.uri;
+          } else {
+            await asset.downloadAsync();
+            webUri = asset.localUri || asset.uri || '';
+          }
+        } catch {}
+      }
+
+      // If still no URI and source was a string, try web path maps
+      if (!webUri && typeof source === 'string') {
+        const clean = source.trim().toLowerCase();
+        webUri = ALL_MADALI_WEB_PATHS[clean] || VOICE_OVER_WEB_PATHS[clean] || '';
+      }
+
+      // Last resort: if source is a number, find its key in ALL_MADALI_AUDIO and use web path
+      if (!webUri && typeof source === 'number') {
+        for (const [key, asset] of Object.entries(ALL_MADALI_AUDIO)) {
+          if (asset === source) {
+            webUri = ALL_MADALI_WEB_PATHS[key] || '';
+            break;
+          }
         }
       }
 
       if (webUri) {
         const audio = new Audio(webUri);
+        player = audio;
+        currentActivePlayer = audio;
         audio.volume = 1.0;
+
+        let hasFinished = false;
+        const finish = () => {
+          if (hasFinished) return;
+          hasFinished = true;
+          if (fallbackTimer) clearTimeout(fallbackTimer);
+          if (currentActivePlayer === audio) {
+            currentActivePlayer = null;
+          }
+          if (!isCancelled) onFinished?.();
+        };
+
         audio.onended = () => {
-          if (!isCancelled) onFinished?.();
+          finish();
         };
-        audio.onerror = () => {
-          if (!isCancelled) onFinished?.();
+
+        audio.onerror = (e) => {
+          console.warn('[SoundService] Web audio error for:', webUri, e);
+          finish();
         };
-        audio.play().catch(() => {
-          if (!isCancelled) onFinished?.();
+
+        audio.play().catch((err) => {
+          // Autoplay policy or gesture required
+          console.warn('[SoundService] Play error (autoplay gesture policy):', err?.message);
+          finish();
         });
-        return () => {
-          try {
-            audio.pause();
-            audio.src = '';
-          } catch {}
-        };
+
+        fallbackTimer = setTimeout(() => {
+          if (!isCancelled) finish();
+        }, 8000);
+
+        return cleanup;
       }
+
+      // Safe fallback on web when audio cannot be played
+      setTimeout(() => {
+        if (!isCancelled) onFinished?.();
+      }, 300);
+      return cleanup;
     }
 
     // Native mobile playback using expo-audio
-    player = createAudioPlayer(resolvedSource);
+    player = createAudioPlayer(resolvedSource, {
+      downloadFirst: true,
+    });
     currentActivePlayer = player;
 
     let hasFinished = false;
@@ -334,25 +419,18 @@ export async function playSound(
       });
     } catch {}
 
+    // Safe fallback timeout (8s) gives the full question time to finish
     fallbackTimer = setTimeout(() => {
       if (!isCancelled) {
         finish();
       }
-    }, 4000);
+    }, 8000);
 
     player.play();
 
-    const durationSec = player.duration || 1.4;
-    const durationMs = Math.max(900, durationSec * 1000);
-
-    setTimeout(() => {
-      if (!isCancelled) {
-        finish();
-      }
-    }, durationMs + 200);
-
     return cleanup;
-  } catch {
+  } catch (err) {
+    console.warn('[SoundService] Playback error:', err);
     cleanup();
     setTimeout(() => {
       if (!isCancelled) onFinished?.();
@@ -365,7 +443,11 @@ export function stopCurrentSound() {
   if (currentActivePlayer) {
     try {
       currentActivePlayer.pause();
-      currentActivePlayer.remove();
+      if (typeof currentActivePlayer.remove === 'function') {
+        currentActivePlayer.remove();
+      } else {
+        currentActivePlayer.src = '';
+      }
     } catch {}
     currentActivePlayer = null;
   }
@@ -442,6 +524,18 @@ export async function playFeedbackSound(
   onFinished?: () => void
 ): Promise<() => void> {
   const normalizedKey = soundKey.toLowerCase().replace(/[\s_-]+/g, '');
+
+  // On web, use static paths from public/audio directly to bypass Asset resolution issues
+  if (Platform.OS === 'web') {
+    const webPath = VOICE_OVER_WEB_PATHS[normalizedKey] || VOICE_OVER_WEB_PATHS[soundKey] || '';
+    if (webPath) {
+      return playSound(webPath, onFinished);
+    }
+    const isCorrectWeb = ['tama', 'magaling', 'anggalingmo'].includes(normalizedKey);
+    playSynthesizedFeedback(isCorrectWeb, onFinished);
+    return () => {};
+  }
+
   const asset =
     VOICE_OVER_FEEDBACK_ASSETS[normalizedKey] ||
     VOICE_OVER_FEEDBACK_ASSETS[soundKey] ||

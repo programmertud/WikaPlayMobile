@@ -159,13 +159,24 @@ class MinigameController extends Controller
             $isDuplicateCard = false;
 
             if ($qualifiesForCollectible) {
+                // Determine category from metadata (e.g., mga-hayop -> Mga Hayop)
+                $meta = $validated['metadata'] ?? [];
+                $categorySlugOrName = $meta['category'] ?? $meta['category_slug'] ?? $meta['category_name'] ?? null;
+                $targetCategory = $this->resolveCategoryName($categorySlugOrName);
+
                 // Find unowned collectibles for this student
                 $ownedIds = StudentCollectible::where('user_id', $user->id)->pluck('collectible_id');
-                $unowned = Collectible::whereNotIn('id', $ownedIds)->get();
 
-                if ($unowned->isNotEmpty()) {
-                    $chosen = $unowned->random();
-                    // Award new collectible
+                // 1. Primary: Find unowned collectibles in the played category
+                $categoryQuery = Collectible::whereNotIn('id', $ownedIds);
+                if ($targetCategory) {
+                    $categoryQuery->where('category', $targetCategory);
+                }
+                $unownedList = $categoryQuery->get();
+
+                // 2. If student has unowned collectibles in this category, award one
+                if ($unownedList->isNotEmpty()) {
+                    $chosen = $unownedList->random();
                     StudentCollectible::create([
                         'user_id' => $user->id,
                         'collectible_id' => $chosen->id,
@@ -175,11 +186,29 @@ class MinigameController extends Controller
                     $awardedCollectible = $chosen;
                     $isDuplicateCard = false;
                 } else {
-                    // Rule 12: Define duplicate-card behavior explicitly.
-                    // Never create duplicate ownership records for the same student and collectible!
-                    $chosen = Collectible::inRandomOrder()->first();
-                    $awardedCollectible = $chosen;
-                    $isDuplicateCard = true;
+                    // All cards in this category collected.
+                    // Fallback A: Check if unowned cards exist in other categories
+                    $anyUnowned = Collectible::whereNotIn('id', $ownedIds)->get();
+                    if ($anyUnowned->isNotEmpty()) {
+                        $chosen = $anyUnowned->random();
+                        StudentCollectible::create([
+                            'user_id' => $user->id,
+                            'collectible_id' => $chosen->id,
+                            'unlocked_at' => now(),
+                            'is_mystery_revealed' => true,
+                        ]);
+                        $awardedCollectible = $chosen;
+                        $isDuplicateCard = false;
+                    } else {
+                        // All 151 cards unlocked! Award duplicate card
+                        $dupQuery = Collectible::query();
+                        if ($targetCategory) {
+                            $dupQuery->where('category', $targetCategory);
+                        }
+                        $chosen = $dupQuery->inRandomOrder()->first() ?? Collectible::inRandomOrder()->first();
+                        $awardedCollectible = $chosen;
+                        $isDuplicateCard = true;
+                    }
                 }
             }
 
@@ -242,5 +271,23 @@ class MinigameController extends Controller
                 ],
             ]);
         });
+    }
+
+    /**
+     * Resolve raw category slug or name into standard Collectible category name.
+     */
+    private function resolveCategoryName(?string $raw): ?string
+    {
+        if (!$raw) return null;
+        $c = strtolower(trim($raw));
+        if (str_contains($c, 'hayop') || $c === 'animals') return 'Mga Hayop';
+        if (str_contains($c, 'prutas') || $c === 'fruits') return 'Mga Prutas';
+        if (str_contains($c, 'gulay') || $c === 'vegetables') return 'Mga Gulay';
+        if (str_contains($c, 'kulay') || $c === 'colors') return 'Mga Kulay';
+        if (str_contains($c, 'hugis') || $c === 'shapes') return 'Mga Hugis';
+        if (str_contains($c, 'bilang') || str_contains($c, 'numero') || $c === 'numbers') return 'Mga Bilang';
+        if (str_contains($c, 'katawan') || $c === 'body') return 'Mga Bahagi ng Katawan';
+        if (str_contains($c, 'bati') || $c === 'phrases' || $c === 'greetings') return 'Mga Pagbati';
+        return null;
     }
 }

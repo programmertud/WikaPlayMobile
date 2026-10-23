@@ -97,4 +97,14 @@ class User extends Authenticatable
     {
         return $this->hasOne(StudentPresence::class);
     }
+
+    public function studentBadges()
+    {
+        return $this->hasMany(StudentBadge::class);
+    }
+
+    public function studentMissions()
+    {
+        return $this->hasMany(StudentMission::class);
+    }
 }

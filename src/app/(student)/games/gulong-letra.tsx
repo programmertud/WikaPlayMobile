@@ -1,16 +1,24 @@
 /**
- * Gulong ng mga Letra Mini-Game
- * Category-based: Letters of the vocabulary word from the selected category are scrambled;
- * the student taps the letter tiles to form the correct word.
+ * Gulong ng mga Letra Mini-Game — Improved with Circular Letter Wheel
+ *
+ * Distinct from Hulaan ang Salita:
+ * - Letters are arranged in a circular wheel layout
+ * - Tapping a letter in the wheel places it; tapping a placed slot returns it
+ * - Visual wheel-like ring with colored letter segments
+ * - Auto-submit when all slots filled; manual Suriin also works
+ * - Shows correct answer on wrong guess
  */
 import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
 import { ItemVisual } from '../../../components/ItemVisual';
@@ -23,315 +31,452 @@ import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categori
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
-import { minigameService } from '../../../services/api';
-import {
-  useBgmDuck,
-} from '../../../services/audio/sound-service';
+import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
+import { useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible, VocabularyItem } from '../../../types';
 
-interface ShuffleTile {
+const { width } = Dimensions.get('window');
+const WHEEL_DIAM = Math.min(width - 48, 300);
+const TILE_SIZE = 52;
+
+// Wheel segment colors cycling
+const SEGMENT_COLORS = [
+  '#F43F5E', '#F59E0B', '#10B981', '#3B82F6',
+  '#8B5CF6', '#EC4899', '#14B8A6', '#F97316',
+];
+
+interface WheelTile {
   id: string;
-  letter: string;
+  char: string;
   used: boolean;
+  color: string;
 }
 
-function scrambleWord(word: string): ShuffleTile[] {
-  const letters = word.toUpperCase().replace(/[^A-Z]/g, '').split('');
-  const tiles: ShuffleTile[] = letters.map((l, i) => ({
-    id: `${l}-${i}-${Math.random()}`,
-    letter: l,
-    used: false,
-  }));
+function buildWheelTiles(word: string): WheelTile[] {
+  const clean = word.toUpperCase().replace(/[^A-Z]/g, '');
+  const wordLetters = clean.split('');
 
-  for (let i = tiles.length - 1; i > 0; i--) {
+  // For Gulong ng Letra we only use the exact word letters (no extra distractors)
+  // — this keeps the wheel focused and distinct from Hulaan which adds extras
+  const shuffled = [...wordLetters];
+  for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return tiles;
+
+  // Ensure not identical to original (if possible)
+  if (shuffled.join('') === wordLetters.join('') && shuffled.length > 1) {
+    [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+  }
+
+  return shuffled.map((char, idx) => ({
+    id: `${char}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+    char,
+    used: false,
+    color: SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
+  }));
+}
+
+/** Renders letter tiles in a circular wheel arrangement */
+function LetterWheel({
+  tiles,
+  disabled,
+  onTileTap,
+}: {
+  tiles: WheelTile[];
+  disabled: boolean;
+  onTileTap: (tile: WheelTile) => void;
+}) {
+  const n = tiles.length;
+  const radius = (WHEEL_DIAM / 2) - TILE_SIZE / 2 - 4;
+  const centerX = WHEEL_DIAM / 2;
+  const centerY = WHEEL_DIAM / 2;
+
+  return (
+    <View
+      style={[
+        styles.wheelContainer,
+        { width: WHEEL_DIAM, height: WHEEL_DIAM },
+      ]}
+    >
+      {/* Decorative ring */}
+      <View style={styles.wheelRingOuter} />
+      <View style={styles.wheelRingInner} />
+      <View style={styles.wheelHub}>
+        <Ionicons name="star" size={22} color={Colors.sunYellow} />
+      </View>
+
+      {/* Letter tiles positioned around the circle */}
+      {tiles.map((tile, idx) => {
+        const angle = (2 * Math.PI * idx) / n - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle) - TILE_SIZE / 2;
+        const y = centerY + radius * Math.sin(angle) - TILE_SIZE / 2;
+
+        return (
+          <TouchableOpacity
+            key={tile.id}
+            disabled={disabled || tile.used}
+            activeOpacity={0.7}
+            onPress={() => onTileTap(tile)}
+            style={[
+              styles.wheelTile,
+              {
+                position: 'absolute',
+                left: x,
+                top: y,
+                width: TILE_SIZE,
+                height: TILE_SIZE,
+                backgroundColor: tile.used ? '#E2E8F0' : tile.color,
+                opacity: tile.used ? 0.35 : 1,
+              },
+              !tile.used && Shadows.soft,
+            ]}
+          >
+            <Text style={[styles.wheelTileText, tile.used && styles.wheelTileTextUsed]}>
+              {tile.char}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function shuffleItems<T>(list: T[]): T[] {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export default function GuLongLetra() {
   useBgmDuck();
-  const { updateUserStars } = useAuth();
+  const { user, updateUserStars } = useAuth();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
-  const items = getCategoryVocabulary(category.slug);
+  const rawItems = getCategoryVocabulary(category.slug);
+  const [items, setItems] = useState<VocabularyItem[]>(() => shuffleItems(rawItems));
+
+  // Stable session ID — regenerated only on restart
+  const sessionIdRef = useRef<string>(generateSessionId('gulong'));
 
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [tiles, setTiles] = useState<ShuffleTile[]>([]);
-  const [placedTiles, setPlacedTiles] = useState<ShuffleTile[]>([]);
   const [correct, setCorrect] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [starsAwarded, setStarsAwarded] = useState(0);
-  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [locked, setLocked] = useState(false);
-
-  // Mystery Box & Collectible state
+  const [feedbackStatus, setFeedbackStatus] = useState<'correct' | 'wrong' | null>(null);
   const [showMysteryBox, setShowMysteryBox] = useState(false);
   const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
 
-  // Centralized voice-over streak manager
   const { triggerFeedback, resetStreaks } = useAnswerFeedback();
 
-  // Exactly 20 questions / levels
-  const totalRounds = 20;
+  const TOTAL_ROUNDS = 20;
   const currentItem: VocabularyItem = items[currentIdx % items.length];
-  const targetLetters = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
+  const targetWord = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
+
+  const [tiles, setTiles] = useState<WheelTile[]>(() => buildWheelTiles(targetWord));
+  const [slots, setSlots] = useState<(WheelTile | null)[]>(() => new Array(targetWord.length).fill(null));
 
   usePresence(`Gulong ng mga Letra (${category.name})`, 'minigame_gulong');
 
-  useEffect(() => {
-    setTiles(scrambleWord(targetLetters));
-    setPlacedTiles([]);
-    setFeedback(null);
+  const resetForQuestion = (idx: number, activeItems: VocabularyItem[] = items) => {
+    const item = activeItems[idx % activeItems.length];
+    const word = item.filipino.toUpperCase().replace(/[^A-Z]/g, '');
+    setTiles(buildWheelTiles(word));
+    setSlots(new Array(word.length).fill(null));
+    setFeedbackStatus(null);
     setLocked(false);
-  }, [currentIdx]);
-
-  const handleTilePress = (tile: ShuffleTile) => {
-    if (tile.used || locked) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-
-    setTiles((prev) => prev.map((t) => (t.id === tile.id ? { ...t, used: true } : t)));
-    const nextPlaced = [...placedTiles, tile];
-    setPlacedTiles(nextPlaced);
-
-    if (nextPlaced.length === targetLetters.length) {
-      checkWord(nextPlaced);
-    }
   };
 
-  const handleRemovePlaced = (tile: ShuffleTile) => {
+  const handleTileTap = (tile: WheelTile) => {
+    if (locked || tile.used) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setTiles((prev) => prev.map((t) => t.id === tile.id ? { ...t, used: true } : t));
+    setSlots((prev) => {
+      const next = [...prev];
+      const emptyIdx = next.findIndex((s) => s === null);
+      if (emptyIdx === -1) return prev;
+      next[emptyIdx] = tile;
+      if (next.filter(Boolean).length === targetWord.length) {
+        setTimeout(() => verifyAnswer(next as WheelTile[]), 100);
+      }
+      return next;
+    });
+  };
+
+  const handleSlotTap = (slotIdx: number) => {
     if (locked) return;
+    const tile = slots[slotIdx];
+    if (!tile) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setPlacedTiles((prev) => prev.filter((t) => t.id !== tile.id));
-    setTiles((prev) => prev.map((t) => (t.id === tile.id ? { ...t, used: false } : t)));
+    setSlots((prev) => { const n = [...prev]; n[slotIdx] = null; return n; });
+    setTiles((prev) => prev.map((t) => t.id === tile.id ? { ...t, used: false } : t));
   };
 
-  const checkWord = async (placed: ShuffleTile[]) => {
+  const handleReset = () => {
+    if (locked) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setTiles((prev) => prev.map((t) => ({ ...t, used: false })));
+    setSlots(new Array(targetWord.length).fill(null));
+  };
+
+  const verifyAnswer = async (filledSlots: WheelTile[]) => {
     setLocked(true);
-    const formed = placed.map((t) => t.letter).join('');
-    const isCorrect = formed === targetLetters;
+    const guess = filledSlots.map((t) => t.char).join('');
+    const isCorrect = guess === targetWord;
 
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setFeedback('correct');
+      setFeedbackStatus('correct');
       setCorrect((c) => c + 1);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      setFeedback('wrong');
+      setFeedbackStatus('wrong');
     }
 
     await triggerFeedback(isCorrect, () => {
       const finalCorrect = correct + (isCorrect ? 1 : 0);
-      if (currentIdx + 1 >= totalRounds) {
+      if (currentIdx + 1 >= TOTAL_ROUNDS) {
         submitFinalScore(finalCorrect);
       } else {
-        setCurrentIdx((i) => i + 1);
+        const nextIdx = currentIdx + 1;
+        setCurrentIdx(nextIdx);
+        resetForQuestion(nextIdx);
       }
     });
   };
 
+  const handleSubmit = () => {
+    if (locked) return;
+    const filled = slots.filter(Boolean) as WheelTile[];
+    if (filled.length < targetWord.length) return;
+    verifyAnswer(slots as WheelTile[]);
+  };
+
   const submitFinalScore = async (finalScore: number) => {
-    const sessionId = `gulong_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const res = await minigameService.submitResult({
-        game_type: 'gulong_letra',
+      const res = await submitMinigameReward({
+        gameType: 'gulong_letra',
         score: finalScore,
-        session_id: sessionId,
-        metadata: { category: category.slug, correct: finalScore, total: totalRounds },
+        sessionId: sessionIdRef.current,
+        metadata: { category: category.slug, correct: finalScore, total: TOTAL_ROUNDS },
+        currentStarsBalance: user?.stars_balance ?? 0,
+        updateUserStars,
       });
-
-      const awarded = res?.session?.stars_awarded ?? finalScore;
-      setStarsAwarded(awarded);
-
-      if (res?.session?.stars_balance !== undefined) {
-        updateUserStars(res.session.stars_balance);
-      }
-
-      // Check if student qualifies for collectible (15-20/20)
-      if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+      setStarsAwarded(res.starsAwarded);
+      if (res.session?.qualifies_for_collectible && res.session?.collectible) {
         setAwardedCollectible(res.session.collectible);
         setShowMysteryBox(true);
       } else {
         setGameOver(true);
       }
     } catch {
-      // offline fallback
       setStarsAwarded(finalScore);
-      updateUserStars(finalScore);
       setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    sessionIdRef.current = generateSessionId('gulong');
     resetStreaks();
+    const newShuffled = shuffleItems(rawItems);
+    setItems(newShuffled);
     setCurrentIdx(0);
     setCorrect(0);
     setGameOver(false);
     setShowMysteryBox(false);
     setAwardedCollectible(null);
-    setLocked(false);
-    setFeedback(null);
+    resetForQuestion(0, newShuffled);
   };
+
+  const allFilled = slots.every((s) => s !== null);
 
   return (
     <View style={styles.container}>
       <ScreenHeader
         title={`Gulong ng Letra — ${category.name}`}
         bgColor={category.color}
+        logoImage={require('../../../../assets/images/minigames/cover-gulong-letra.jpg')}
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Animated Progress Bar */}
+        {/* Progress */}
         <View style={styles.progressRow}>
           <ProgressIndicator
             current={currentIdx + 1}
-            total={totalRounds}
+            total={TOTAL_ROUNDS}
             gradient={Gradients.grass}
             height={10}
           />
+          <Text style={styles.progressLabel}>
+            Tanong {currentIdx + 1}/{TOTAL_ROUNDS} • ✓ {correct}
+          </Text>
         </View>
 
-        {/* Visual Card Clue */}
+        {/* Picture card */}
         <View style={[styles.visualCard, Shadows.card]}>
-          <ItemVisual item={currentItem} size={150} />
-          <Text style={styles.clueEnglish}>({currentItem.english})</Text>
+          <ItemVisual item={currentItem} size={120} />
+          <Text style={styles.englishHint}>{currentItem.english}</Text>
+          <View style={styles.instructionBadge}>
+            <Ionicons name="sync-circle" size={14} color={Colors.vibrantPurple} />
+            <Text style={styles.instructionText}>Buuin ang salita gamit ang gulong!</Text>
+          </View>
         </View>
 
-        {/* Target Formed Slots */}
+        {/* Answer slots */}
         <View style={styles.slotsRow}>
-          {Array.from({ length: targetLetters.length }).map((_, i) => {
-            const placed = placedTiles[i];
-            const isFilled = !!placed;
-
-            let borderCol: string = 'rgba(0, 0, 0, 0.08)';
-            let bgCol: string = Colors.white;
-
-            if (feedback === 'correct') {
-              borderCol = Colors.grassGreen;
-              bgCol = '#F0FDF4';
-            } else if (feedback === 'wrong') {
-              borderCol = Colors.coralPink;
-              bgCol = '#FFF1F2';
-            }
-
+          {slots.map((slot, i) => {
+            let borderColor: string = 'rgba(0,0,0,0.1)';
+            let bgColor: string = Colors.white;
+            if (feedbackStatus === 'correct') { borderColor = Colors.grassGreen; bgColor = '#F0FDF4'; }
+            if (feedbackStatus === 'wrong') { borderColor = Colors.coralPink; bgColor = '#FFF1F2'; }
 
             return (
               <PressableScale
                 key={i}
-                disabled={!isFilled || locked}
-                onPress={() => placed && handleRemovePlaced(placed)}
-                activeScale={0.92}
+                disabled={locked || !slot}
+                onPress={() => handleSlotTap(i)}
+                activeScale={0.9}
                 style={[
                   styles.slot,
-                  { borderColor: borderCol, backgroundColor: bgCol },
-                  isFilled && Shadows.soft,
+                  { borderColor, backgroundColor: slot ? (slot.color + '22') : bgColor },
+                  slot && { borderColor: slot.color, borderWidth: 2.5 },
+                  slot && Shadows.subtle,
                 ]}
               >
-                <Text style={styles.slotText}>{placed ? placed.letter : ''}</Text>
+                <Text style={[styles.slotText, slot && { color: slot.color }]}>
+                  {slot?.char ?? ''}
+                </Text>
               </PressableScale>
             );
           })}
         </View>
 
-        {/* Scrambled Available Letter Pool */}
-        <View style={styles.tilesPool}>
-          <Text style={styles.poolTitle}>Pindutin ang mga letra upang buuin:</Text>
-          <View style={styles.tilesRow}>
-            {tiles.map((tile) => (
-              <PressableScale
-                key={tile.id}
-                disabled={tile.used || locked}
-                onPress={() => handleTilePress(tile)}
-                activeScale={0.9}
-                style={[
-                  styles.tile,
-                  tile.used && styles.tileUsed,
-                  !tile.used && Shadows.soft,
-                ]}
-              >
-                <Text style={[styles.tileText, tile.used && styles.tileTextUsed]}>
-                  {tile.letter}
-                </Text>
-              </PressableScale>
-            ))}
+        {/* Wrong answer hint */}
+        {feedbackStatus === 'wrong' && (
+          <View style={styles.correctHint}>
+            <Text style={styles.correctHintLabel}>Tamang sagot: </Text>
+            <Text style={styles.correctHintWord}>{targetWord}</Text>
           </View>
+        )}
+
+        {/* Circular Wheel */}
+        <LetterWheel
+          tiles={tiles}
+          disabled={locked}
+          onTileTap={handleTileTap}
+        />
+
+        {/* Controls */}
+        <View style={styles.controls}>
+          <PressableScale
+            disabled={locked || slots.every((s) => s === null)}
+            onPress={handleReset}
+            style={[styles.resetBtn, slots.every((s) => s === null) && styles.btnDisabled]}
+          >
+            <Ionicons name="refresh-circle" size={20} color={Colors.textMuted} />
+            <Text style={styles.resetText}>I-reset</Text>
+          </PressableScale>
+
+          <PressableScale
+            disabled={locked || !allFilled}
+            onPress={handleSubmit}
+            style={[styles.submitBtn, (!allFilled || locked) && styles.btnDisabled]}
+          >
+            <Ionicons name="checkmark-circle" size={20} color={Colors.white} />
+            <Text style={styles.submitText}>Suriin</Text>
+          </PressableScale>
         </View>
       </ScrollView>
 
-      {/* WIN CELEBRATION OVERLAY */}
       <CelebrationOverlay
         visible={gameOver}
         title="Napakahusay!"
-        subtitle={`Nabuong muli ang ${correct} sa ${totalRounds} mga salita!`}
+        subtitle={`Nabuong muli ang ${correct} sa ${TOTAL_ROUNDS} mga salita!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
-        stars={3}
+        stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
       />
 
-      {/* MYSTERY BOX COLLECTIBLE MODAL (Score 15-20/20) */}
       <MysteryBoxModal
         visible={showMysteryBox}
         score={correct}
-        totalQuestions={totalRounds}
+        totalQuestions={TOTAL_ROUNDS}
         starsAwarded={starsAwarded}
         collectible={awardedCollectible}
-        onClose={() => {
-          setShowMysteryBox(false);
-          setGameOver(true);
-        }}
+        onClose={() => { setShowMysteryBox(false); setGameOver(true); }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F0F9FF',
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  progressRow: {
-    width: '100%',
-    marginBottom: 16,
+  container: { flex: 1, backgroundColor: '#F0F9FF' },
+  content: { padding: 16, paddingBottom: 40, alignItems: 'center' },
+  progressRow: { width: '100%', marginBottom: 4 },
+  progressLabel: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    fontWeight: Typography.weights.semibold,
+    marginTop: 4,
+    textAlign: 'right',
   },
   visualCard: {
     backgroundColor: Colors.white,
     borderRadius: Radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 20,
+    borderColor: 'rgba(0,0,0,0.05)',
+    padding: 16,
     alignItems: 'center',
     width: '100%',
-    marginBottom: 20,
-  },
-  clueEnglish: {
-    fontSize: Typography.sizes.sm,
-    color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
+    marginBottom: 16,
     marginTop: 8,
+  },
+  englishHint: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.textLight,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  instructionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EDE9FE',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  instructionText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.bold,
+    color: Colors.vibrantPurple,
   },
   slotsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 24,
+    marginBottom: 8,
     width: '100%',
   },
   slot: {
-    width: 44,
-    height: 52,
+    width: 50,
+    height: 58,
     borderRadius: Radius.md,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   slotText: {
     fontSize: 24,
@@ -339,44 +484,116 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
-  tilesPool: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  poolTitle: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
-    marginBottom: 12,
-  },
-  tilesRow: {
+  correctHint: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
+    alignItems: 'center',
+    backgroundColor: '#FFF1F2',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.coralPink,
   },
-  tile: {
-    width: 50,
-    height: 50,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.white,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+  correctHintLabel: { fontSize: 12, color: Colors.coralPinkDark },
+  correctHintWord: {
+    fontSize: 14,
+    fontWeight: Typography.weights.heavy,
+    color: Colors.coralPinkDark,
+    letterSpacing: 2,
+  },
+  // ── Wheel ────────────────────────────────────────────────────────────
+  wheelContainer: {
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
+    marginVertical: 8,
   },
-  tileUsed: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-    opacity: 0.35,
+  wheelRingOuter: {
+    position: 'absolute',
+    width: WHEEL_DIAM - 8,
+    height: WHEEL_DIAM - 8,
+    borderRadius: (WHEEL_DIAM - 8) / 2,
+    borderWidth: 3,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: 'rgba(139, 92, 246, 0.04)',
   },
-  tileText: {
-    fontSize: 22,
+  wheelRingInner: {
+    position: 'absolute',
+    width: WHEEL_DIAM * 0.44,
+    height: WHEEL_DIAM * 0.44,
+    borderRadius: WHEEL_DIAM * 0.22,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+  },
+  wheelHub: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.soft,
+  },
+  wheelTile: {
+    borderRadius: TILE_SIZE / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  wheelTileText: {
+    fontSize: 20,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
-    color: Colors.text,
+    color: Colors.white,
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  tileTextUsed: {
+  wheelTileTextUsed: { color: Colors.textMuted },
+  // ── Controls ─────────────────────────────────────────────────────────
+  controls: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+  },
+  resetText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
     color: Colors.textMuted,
   },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.vibrantPurple,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+    flex: 1,
+    justifyContent: 'center',
+    ...Shadows.colored('#8B5CF6', 0.35),
+  },
+  submitText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+  },
+  btnDisabled: { opacity: 0.4 },
 });

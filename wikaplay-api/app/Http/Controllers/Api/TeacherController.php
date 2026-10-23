@@ -9,6 +9,7 @@ use App\Models\MinigameSession;
 use App\Models\QuizAvailability;
 use App\Models\QuizQuestion;
 use App\Models\QuizSession;
+use App\Models\StarTransaction;
 use App\Models\StudentPresence;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -99,10 +100,16 @@ class TeacherController extends Controller
             ->limit(20)
             ->get();
 
+        $starTransactions = StarTransaction::where('user_id', $student->id)
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get();
+
         return response()->json([
             'student' => $student,
             'quiz_history' => $quizHistory,
             'game_history' => $gameHistory,
+            'star_transactions' => $starTransactions,
         ]);
     }
 

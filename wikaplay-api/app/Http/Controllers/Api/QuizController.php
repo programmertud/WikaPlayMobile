@@ -24,8 +24,9 @@ class QuizController extends Controller
             'difficulty' => 'required|in:madali,katamtaman,mahirap',
             'session_id' => 'nullable|string',
             'answers' => 'required|array',
-            'answers.*.question_id' => 'required|integer',
-            'answers.*.selected_answer' => 'required|string',
+            'answers.*.question_id' => 'required',
+            'answers.*.selected_answer' => 'required',
+            'answers.*.is_correct' => 'nullable|boolean',
         ]);
 
         $user = $request->user() ?? auth()->user();
@@ -74,8 +75,11 @@ class QuizController extends Controller
         }
 
         return DB::transaction(function () use ($user, $category, $difficulty, $validated, $availability, $sessionId) {
-            $questionIds = collect($validated['answers'])->pluck('question_id');
-            $questions = QuizQuestion::whereIn('id', $questionIds)->get()->keyBy('id');
+            $numericQuestionIds = collect($validated['answers'])
+                ->pluck('question_id')
+                ->filter(fn($id) => is_numeric($id) && $id < 10000);
+            $questions = QuizQuestion::whereIn('id', $numericQuestionIds)->get()->keyBy('id');
+            $flashcards = $category->flashcards()->get();
 
             $score = 0;
             $correctCount = 0;
@@ -84,23 +88,38 @@ class QuizController extends Controller
             $processedAnswers = [];
 
             foreach ($validated['answers'] as $ans) {
-                $q = $questions->get($ans['question_id']);
-                if (!$q) continue;
+                $rawQid = $ans['question_id'];
+                $q = (is_numeric($rawQid) && $rawQid < 10000) ? $questions->get($rawQid) : null;
 
                 $userAnswer = trim(mb_strtolower((string)$ans['selected_answer']));
-                $expectedAnswer = trim(mb_strtolower((string)$q->correct_answer));
-                $isCorrect = ($userAnswer === $expectedAnswer);
+                $isCorrect = false;
+
+                if ($q) {
+                    $expectedAnswer = trim(mb_strtolower((string)$q->correct_answer));
+                    $isCorrect = ($userAnswer === $expectedAnswer);
+                } elseif (isset($ans['is_correct'])) {
+                    $isCorrect = (bool)$ans['is_correct'];
+                } else {
+                    // Check if answer matches any flashcard in this category
+                    foreach ($flashcards as $fc) {
+                        if ((string)$fc->id === $userAnswer || trim(mb_strtolower($fc->filipino_name)) === $userAnswer) {
+                            $isCorrect = true;
+                            break;
+                        }
+                    }
+                }
 
                 if ($isCorrect) {
-                    $score += $q->points;
+                    $score += ($q ? $q->points : 1);
                     $correctCount++;
                 } else {
                     $wrongCount++;
                 }
 
                 $processedAnswers[] = [
-                    'question_id' => $q->id,
-                    'selected_answer' => $ans['selected_answer'],
+                    'question_id' => $q ? $q->id : null,
+                    'question_key' => (string)$rawQid,
+                    'selected_answer' => (string)$ans['selected_answer'],
                     'is_correct' => $isCorrect,
                 ];
             }
@@ -110,7 +129,7 @@ class QuizController extends Controller
 
             // Rule: 1:1 star reward for correct questions (20 questions = up to 20 stars)
             // Strict 1:1 star balance update: earning 20 stars adds exactly 20 stars
-            $starsAwarded = min($totalQuestions, max(0, $correctCount));
+            $starsAwarded = min(20, min($totalQuestions, max(0, $correctCount)));
 
             $session = QuizSession::create([
                 'user_id' => $user->id,
@@ -130,6 +149,7 @@ class QuizController extends Controller
                 QuizAnswer::create([
                     'quiz_session_id' => $session->id,
                     'question_id' => $item['question_id'],
+                    'question_key' => $item['question_key'],
                     'selected_answer' => $item['selected_answer'],
                     'is_correct' => $item['is_correct'],
                 ]);
@@ -156,13 +176,14 @@ class QuizController extends Controller
                 'message' => $passed ? 'Napakagaling! Naipasa mo ang pagsusulit!' : 'Subukang muli! Kaya mo \'yan!',
                 'session' => [
                     'id' => $session->id,
+                    'session_id' => $session->session_id,
                     'score' => $score,
                     'total_questions' => $totalQuestions,
                     'correct_count' => $correctCount,
                     'wrong_count' => $wrongCount,
                     'passed' => $passed,
                     'stars_awarded' => $starsAwarded,
-                    'stars_balance' => $user->fresh()->stars_balance,
+                    'stars_balance' => $newBalance,
                 ],
             ]);
         });

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React from 'react';
 import {
+  Image,
   StyleSheet,
   Text,
   View,
@@ -23,6 +24,7 @@ interface ScreenHeaderProps {
   bgColor?: string;
   gradient?: readonly [string, string, ...string[]];
   blur?: boolean;
+  logoImage?: any;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -35,6 +37,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   bgColor,
   gradient,
   blur = false,
+  logoImage,
   style,
 }) => {
   const insets = useSafeAreaInsets();
@@ -42,8 +45,10 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   const handleBack = () => {
     if (onBack) {
       onBack();
-    } else {
+    } else if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace('/(student)/(tabs)' as any);
     }
   };
 
@@ -81,14 +86,23 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
         )}
 
         <View style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
+          <View style={styles.titleRow}>
+            {logoImage ? (
+              <View style={styles.logoBadge}>
+                <Image source={logoImage} style={styles.headerLogo} resizeMode="cover" />
+              </View>
+            ) : null}
+            <View style={styles.titleTextCol}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              {subtitle ? (
+                <Text style={styles.subtitle} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+          </View>
         </View>
 
         {rightElement ? (
@@ -134,9 +148,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  logoBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  headerLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  titleTextCol: {
+    alignItems: 'center',
+  },
   title: {
     color: Colors.white,
-    fontSize: Typography.sizes.xl,
+    fontSize: Typography.sizes.lg,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
   },

@@ -44,10 +44,18 @@ export class ApiClient {
 
   public static async init() {
     try {
-      this.cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
-      const customUrl = await SecureStore.getItemAsync(API_URL_KEY);
-      if (customUrl) {
-        this.currentBaseUrl = customUrl;
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        this.cachedToken = window.localStorage.getItem(TOKEN_KEY);
+        const customUrl = window.localStorage.getItem(API_URL_KEY);
+        if (customUrl) {
+          this.currentBaseUrl = customUrl;
+        }
+      } else {
+        this.cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
+        const customUrl = await SecureStore.getItemAsync(API_URL_KEY);
+        if (customUrl) {
+          this.currentBaseUrl = customUrl;
+        }
       }
     } catch {
       // Secure store might not be available on Web or during initial boot
@@ -61,17 +69,29 @@ export class ApiClient {
   public static async setBaseUrl(url: string) {
     this.currentBaseUrl = url.trim().replace(/\/+$/, '');
     try {
-      await SecureStore.setItemAsync(API_URL_KEY, this.currentBaseUrl);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(API_URL_KEY, this.currentBaseUrl);
+      } else {
+        await SecureStore.setItemAsync(API_URL_KEY, this.currentBaseUrl);
+      }
     } catch {}
   }
 
   public static async setToken(token: string | null) {
     this.cachedToken = token;
     try {
-      if (token) {
-        await SecureStore.setItemAsync(TOKEN_KEY, token);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        if (token) {
+          window.localStorage.setItem(TOKEN_KEY, token);
+        } else {
+          window.localStorage.removeItem(TOKEN_KEY);
+        }
       } else {
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
+        if (token) {
+          await SecureStore.setItemAsync(TOKEN_KEY, token);
+        } else {
+          await SecureStore.deleteItemAsync(TOKEN_KEY);
+        }
       }
     } catch {}
   }

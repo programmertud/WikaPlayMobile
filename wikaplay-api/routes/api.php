@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\MinigameController;
 use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\RewardController;
+use App\Http\Controllers\Api\StudentProfileController;
 use App\Http\Controllers\Api\TeacherController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat']);
 
+    // Student Profile & Detailed Aggregated Statistics
+    Route::prefix('student')->group(function () {
+        Route::get('/profile-stats', [StudentProfileController::class, 'profileStats']);
+        Route::put('/avatar', [StudentProfileController::class, 'updateAvatar']);
+    });
+
     // Quizzes Gameplay & Submission
     Route::prefix('quizzes')->group(function () {
         Route::post('/submit', [QuizController::class, 'submit']);
@@ -51,6 +58,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/collectibles', [RewardController::class, 'collectibles']);
         Route::post('/unlock-mystery', [RewardController::class, 'unlockMystery']);
         Route::get('/stars-history', [RewardController::class, 'starsHistory']);
+        Route::get('/achievements', [RewardController::class, 'achievements']);
+        Route::post('/claim-badge', [RewardController::class, 'claimBadge']);
     });
 
     // Teacher Management (Protected role: teacher/admin)

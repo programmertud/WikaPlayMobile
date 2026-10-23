@@ -96,11 +96,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    setIsLoading(true);
     try {
       await authService.logout();
     } catch {
-      // Ignore network errors on logout
+      // Ignore network errors — always clear local token
+      await ApiClient.setToken(null);
     } finally {
       setUser(null);
       setIsLoading(false);

@@ -4,7 +4,7 @@
  * student picks the matching picture from 4 choices.
  */
 import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
@@ -24,7 +24,7 @@ import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categori
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
-import { minigameService } from '../../../services/api';
+import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
 import {
   playVocabularyItem,
   useBgmDuck,
@@ -34,6 +34,15 @@ import { Collectible, VocabularyItem } from '../../../types';
 
 const { width } = Dimensions.get('window');
 const CHOICE_SIZE = (width - 56) / 2;
+
+function shuffleItems<T>(list: T[]): T[] {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 function buildRound(items: VocabularyItem[], targetIndex: number) {
   const target = items[targetIndex % items.length];
@@ -47,9 +56,13 @@ export default function PaghahanapLarawan() {
   useBgmDuck();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
-  const items = getCategoryVocabulary(category.slug);
-  const { updateUserStars } = useAuth();
+  const rawItems = getCategoryVocabulary(category.slug);
+  const { user, updateUserStars } = useAuth();
 
+  // Stable session ID — regenerated only on restart
+  const sessionIdRef = useRef<string>(generateSessionId('paghahanap'));
+
+  const [items, setItems] = useState<VocabularyItem[]>(() => shuffleItems(rawItems));
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [correct, setCorrect] = useState(0);
@@ -66,7 +79,7 @@ export default function PaghahanapLarawan() {
   // Centralized voice-over streak manager
   const { triggerFeedback, resetStreaks } = useAnswerFeedback();
 
-  const [roundData, setRoundData] = useState(() => buildRound(items, 0));
+  const [roundData, setRoundData] = useState(() => buildRound(shuffleItems(rawItems), 0));
   const target = roundData.target;
   const choices = roundData.choices;
 
@@ -74,7 +87,7 @@ export default function PaghahanapLarawan() {
     if (target && !gameOver) {
       playVocabularyItem(target);
     }
-  }, [currentIdx, gameOver]);
+  }, [currentIdx, gameOver, target]);
 
   usePresence(`Paghahanap ng Larawan (${category.name})`, 'minigame_paghahanap');
 
@@ -108,24 +121,20 @@ export default function PaghahanapLarawan() {
   };
 
   const submitFinalScore = async (finalScore: number) => {
-    const sessionId = `paghahanap_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const res = await minigameService.submitResult({
-        game_type: 'paghahanap_larawan',
+      const res = await submitMinigameReward({
+        gameType: 'paghahanap_larawan',
         score: finalScore,
-        session_id: sessionId,
+        sessionId: sessionIdRef.current,
         metadata: { category: category.slug, correct: finalScore, total: totalRounds },
+        currentStarsBalance: user?.stars_balance ?? 0,
+        updateUserStars,
       });
 
-      const awarded = res?.session?.stars_awarded ?? finalScore;
-      setStarsAwarded(awarded);
-
-      if (res?.session?.stars_balance !== undefined) {
-        updateUserStars(res.session.stars_balance);
-      }
+      setStarsAwarded(res.starsAwarded);
 
       // Check if student qualifies for collectible (15-20/20)
-      if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+      if (res.session?.qualifies_for_collectible && res.session?.collectible) {
         setAwardedCollectible(res.session.collectible);
         setShowMysteryBox(true);
       } else {
@@ -134,13 +143,15 @@ export default function PaghahanapLarawan() {
     } catch {
       // offline fallback
       setStarsAwarded(finalScore);
-      updateUserStars(finalScore);
       setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    sessionIdRef.current = generateSessionId('paghahanap');
     resetStreaks();
+    const newShuffled = shuffleItems(rawItems);
+    setItems(newShuffled);
     setCurrentIdx(0);
     setSelectedId(null);
     setCorrect(0);
@@ -149,7 +160,7 @@ export default function PaghahanapLarawan() {
     setShowMysteryBox(false);
     setAwardedCollectible(null);
     setLocked(false);
-    setRoundData(buildRound(items, 0));
+    setRoundData(buildRound(newShuffled, 0));
   };
 
   return (
@@ -157,6 +168,7 @@ export default function PaghahanapLarawan() {
       <ScreenHeader
         title={`Paghahanap — ${category.name}`}
         bgColor={category.color}
+        logoImage={require('../../../../assets/images/minigames/cover-paghahanap-larawan.jpg')}
       />
 
       <View style={styles.content}>
@@ -175,12 +187,12 @@ export default function PaghahanapLarawan() {
           onPress={() => playVocabularyItem(target)}
           style={[styles.promptCard, Shadows.card]}
         >
-          <Text style={styles.promptSub}>Hanapin ang larawan ng:</Text>
+          <Text style={styles.promptSub}>Panuto (Pindutin para pakinggan):</Text>
           <View style={styles.promptTargetRow}>
             <Text style={[styles.promptTarget, { color: category.color || Colors.skyBlueDark }]}>
-              {`"${target.filipino}"`}
+              {`Hanapin ang ${target.filipino}!`}
             </Text>
-            <Ionicons name="volume-high" size={24} color={category.color || Colors.skyBlueDark} />
+            <Ionicons name="volume-high" size={26} color={category.color || Colors.skyBlueDark} />
           </View>
           <Text style={styles.promptEnglish}>({target.english})</Text>
         </PressableScale>

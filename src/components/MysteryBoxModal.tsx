@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
@@ -23,6 +24,7 @@ import * as Haptics from '@/utils/haptics';
 import { Colors, Gradients, Radius, Shadows, Typography } from '@/theme';
 import { Collectible } from '@/types';
 import { playSound, speakWordWeb } from '@/services/audio/sound-service';
+import { getCollectibleAudioSource, getCollectibleImageSource } from '@/utils/collectible-assets';
 import { PrimaryButton } from './PrimaryButton';
 import { PressableScale } from './PressableScale';
 
@@ -97,13 +99,14 @@ export function MysteryBoxModal({
     if (!collectible) return;
     setIsPlayingAudio(true);
 
-    if (collectible.audio_url) {
-      playSound(collectible.audio_url, () => {
+    const audioSource = getCollectibleAudioSource(collectible);
+    if (audioSource) {
+      playSound(audioSource, () => {
         setIsPlayingAudio(false);
       });
     } else {
       // Speech synthesis fallback for filipino description
-      const textToSpeak = `${collectible.filipino_name}. ${collectible.description}`;
+      const textToSpeak = `${collectible.filipino_name || collectible.name}. ${collectible.description}`;
       speakWordWeb(textToSpeak, () => {
         setIsPlayingAudio(false);
       });
@@ -218,15 +221,18 @@ export function MysteryBoxModal({
               <View style={styles.revealedBody}>
                 {/* Picture Display */}
                 <View style={styles.imageFrame}>
-                  {collectible?.image_url ? (
-                    <Image
-                      source={{ uri: collectible.image_url }}
-                      style={styles.cardImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <Ionicons name="trophy" size={80} color={Colors.sunYellowDark} />
-                  )}
+                  {(() => {
+                    const imgSource = getCollectibleImageSource(collectible);
+                    return imgSource ? (
+                      <Image
+                        source={imgSource}
+                        style={styles.cardImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Ionicons name="trophy" size={80} color={Colors.sunYellowDark} />
+                    );
+                  })()}
                 </View>
 
                 {/* Filipino Description */}

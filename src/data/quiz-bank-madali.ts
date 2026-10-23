@@ -10,9 +10,12 @@
  * meaningfully with a single static image.
  */
 
+import { getMadaliAudioById } from '../utils/quiz-madali-audio';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
 
 export type MadaliQuestionType = 'multiple-choice' | 'picture-id' | 'situational';
 
@@ -48,7 +51,10 @@ export interface MadaliQuestion {
   picChoices?: MadaliPicChoice[];
   /** Correct picture-choice vocabId */
   correctVocabId?: string;
+  /** Accurate pre-recorded voice audio file */
+  audio?: any;
 }
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,7 +67,8 @@ function mc(
   fil: string,
   en: string,
   choices: [string, string, string, string],
-  correctIdx: 0 | 1 | 2 | 3
+  correctIdx: 0 | 1 | 2 | 3,
+  audio?: any
 ): MadaliQuestion {
   const ids: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   return {
@@ -74,8 +81,10 @@ function mc(
     questionEn: en,
     textChoices: choices.map((text, i) => ({ id: ids[i], text })),
     correctTextId: ids[correctIdx],
+    audio: audio ?? getMadaliAudioById(id),
   };
 }
+
 
 function pic(
   id: string,
@@ -85,7 +94,8 @@ function pic(
   en: string,
   choices: [string, string, string, string], // VocabularyItem ids
   correctIdx: 0 | 1 | 2 | 3,
-  labels: [string, string, string, string]   // Filipino labels for each choice
+  labels: [string, string, string, string],   // Filipino labels for each choice
+  audio?: any
 ): MadaliQuestion {
   const ids: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   const correctVocabId = choices[correctIdx];
@@ -117,6 +127,7 @@ function pic(
     correctTextId: ids[newCorrectIdx] as 'A' | 'B' | 'C' | 'D',
     picChoices: rotatedItems.map((item, i) => ({ id: ids[i], vocabId: item.vocabId, text: item.text })),
     correctVocabId,
+    audio: audio ?? getMadaliAudioById(id),
   };
 }
 
@@ -127,7 +138,8 @@ function sit(
   fil: string,
   en: string,
   choices: [string, string, string, string],
-  correctIdx: 0 | 1 | 2 | 3
+  correctIdx: 0 | 1 | 2 | 3,
+  audio?: any
 ): MadaliQuestion {
   const ids: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   return {
@@ -140,8 +152,10 @@ function sit(
     questionEn: en,
     textChoices: choices.map((text, i) => ({ id: ids[i], text })),
     correctTextId: ids[correctIdx],
+    audio: audio ?? getMadaliAudioById(id),
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // 1. MGA HAYOP  (cat_hayop / mga-hayop)
@@ -155,14 +169,14 @@ const hayopQuestions: MadaliQuestion[] = [
     ['Pusa', 'Aso', 'Baka', 'Kabayo'], 1),
 
   mc('hayop-02', 'cat_hayop', 'mga-hayop',
-    'Ano ang Tagalog ng "Cat"?',
-    'What is the Tagalog word for "Cat"?',
-    ['Aso', 'Manok', 'Pusa', 'Daga'], 2),
+    'Ano ang Ingles ng "Pusa"?',
+    'What is the English word for "Pusa"?',
+    ['Dog', 'Chicken', 'Cat', 'Mouse'], 2),
 
   mc('hayop-03', 'cat_hayop', 'mga-hayop',
-    'Ano ang Ingles ng "Isda"?',
-    'What is the English word for "Isda"?',
-    ['Bird', 'Fish', 'Frog', 'Snake'], 1),
+    'Ano ang Tagalog ng "Cow"?',
+    'What is the Tagalog word for "Cow"?',
+    ['Kambing', 'Baka', 'Kabayo', 'Baboy'], 1),
 
   mc('hayop-04', 'cat_hayop', 'mga-hayop',
     'Ano ang Tagalog ng "Horse"?',
@@ -170,19 +184,19 @@ const hayopQuestions: MadaliQuestion[] = [
     ['Kambing', 'Kabayo', 'Kalabaw', 'Baboy'], 1),
 
   mc('hayop-05', 'cat_hayop', 'mga-hayop',
-    'Ano ang Ingles ng "Leon"?',
-    'What is the English word for "Leon"?',
-    ['Tiger', 'Bear', 'Lion', 'Monkey'], 2),
+    'Ano ang Tagalog ng "Lion"?',
+    'What is the Tagalog word for "Lion"?',
+    ['Tigre', 'Oso', 'Leon', 'Unggoy'], 2),
 
   mc('hayop-06', 'cat_hayop', 'mga-hayop',
-    'Ano ang Tagalog ng "Bird"?',
-    'What is the Tagalog word for "Bird"?',
-    ['Ibon', 'Isda', 'Ahas', 'Daga'], 0),
+    'Ano ang Ingles ng "Tigre"?',
+    'What is the English word for "Tigre"?',
+    ['Lion', 'Tiger', 'Bear', 'Wolf'], 1),
 
   mc('hayop-07', 'cat_hayop', 'mga-hayop',
-    'Ano ang Ingles ng "Palaka"?',
-    'What is the English word for "Palaka"?',
-    ['Turtle', 'Snake', 'Spider', 'Frog'], 3),
+    'Ano ang Ingles ng "Kambing"?',
+    'What is the English word for "Kambing"?',
+    ['Cow', 'Horse', 'Goat', 'Sheep'], 2),
 
   mc('hayop-08', 'cat_hayop', 'mga-hayop',
     'Ano ang Tagalog ng "Monkey"?',
@@ -190,14 +204,14 @@ const hayopQuestions: MadaliQuestion[] = [
     ['Tigre', 'Unggoy', 'Pusa', 'Manok'], 1),
 
   mc('hayop-09', 'cat_hayop', 'mga-hayop',
-    'Ano ang Ingles ng "Kambing"?',
-    'What is the English word for "Kambing"?',
-    ['Cow', 'Goat', 'Pig', 'Horse'], 1),
+    'Ano ang Ingles ng "Baboy"?',
+    'What is the English word for "Baboy"?',
+    ['Cow', 'Pig', 'Goat', 'Horse'], 1),
 
   mc('hayop-10', 'cat_hayop', 'mga-hayop',
-    'Ano ang Tagalog ng "Shark"?',
-    'What is the Tagalog word for "Shark"?',
-    ['Pugita', 'Pating', 'Isda', 'Pagong'], 1),
+    'Ano ang Tagalog ng "Chicken"?',
+    'What is the Tagalog word for "Chicken"?',
+    ['Pato', 'Manok', 'Ibon', 'Pabo'], 1),
 
   // Q11–20: Picture identification
   pic('hayop-11', 'cat_hayop', 'mga-hayop',
@@ -398,9 +412,9 @@ const gulayQuestions: MadaliQuestion[] = [
     ['Broccoli', 'Spinach', 'Eggplant', 'Radish'], 2),
 
   mc('gulay-04', 'cat_gulay', 'mga-gulay',
-    'Ano ang Tagalog ng "Corn"?',
-    'What is the Tagalog word for "Corn"?',
-    ['Okra', 'Mais', 'Sitaw', 'Upo'], 1),
+    'Ano ang Tagalog ng "Cabbage"?',
+    'What is the Tagalog word for "Cabbage"?',
+    ['Repolyo', 'Pechay', 'Espinaka', 'Koliplor'], 0),
 
   mc('gulay-05', 'cat_gulay', 'mga-gulay',
     'Ano ang Ingles ng "Kalabasa"?',
@@ -408,29 +422,29 @@ const gulayQuestions: MadaliQuestion[] = [
     ['Potato', 'Squash', 'Cabbage', 'Cucumber'], 1),
 
   mc('gulay-06', 'cat_gulay', 'mga-gulay',
-    'Ano ang Tagalog ng "Potato"?',
-    'What is the Tagalog word for "Potato"?',
-    ['Patatas', 'Pipino', 'Sitaw', 'Labanos'], 0),
+    'Ano ang Ingles ng "Patatas"?',
+    'What is the English word for "Patatas"?',
+    ['Tomato', 'Potato', 'Carrot', 'Pumpkin'], 1),
 
   mc('gulay-07', 'cat_gulay', 'mga-gulay',
-    'Ano ang Ingles ng "Brokoli"?',
-    'What is the English word for "Brokoli"?',
-    ['Cabbage', 'Broccoli', 'Spinach', 'Cauliflower'], 1),
+    'Ano ang Tagalog ng "Broccoli"?',
+    'What is the Tagalog word for "Broccoli"?',
+    ['Koliplor', 'Brokoli', 'Repolyo', 'Espinaka'], 1),
 
   mc('gulay-08', 'cat_gulay', 'mga-gulay',
-    'Ano ang Tagalog ng "Onion"?',
-    'What is the Tagalog word for "Onion"?',
-    ['Bawang', 'Luya', 'Sibuyas', 'Labanos'], 2),
+    'Ano ang Ingles ng "Koliplor"?',
+    'What is the English word for "Koliplor"?',
+    ['Broccoli', 'Cabbage', 'Cauliflower', 'Lettuce'], 2),
 
   mc('gulay-09', 'cat_gulay', 'mga-gulay',
-    'Ano ang Ingles ng "Kamatis"?',
-    'What is the English word for "Kamatis"?',
-    ['Eggplant', 'Corn', 'Tomato', 'Okra'], 2),
+    'Ano ang Ingles ng "Kangkong"?',
+    'What is the English word for "Kangkong"?',
+    ['Water Spinach', 'Cabbage', 'Eggplant', 'Corn'], 0),
 
   mc('gulay-10', 'cat_gulay', 'mga-gulay',
-    'Ano ang Tagalog ng "Garlic"?',
-    'What is the Tagalog word for "Garlic"?',
-    ['Bawang', 'Sibuyas', 'Luya', 'Repolyo'], 0),
+    'Ano ang Tagalog ng "Bitter Melon"?',
+    'What is the Tagalog word for "Bitter Melon"?',
+    ['Ampalaya', 'Upo', 'Sayote', 'Pipino'], 0),
 
   pic('gulay-11', 'cat_gulay', 'mga-gulay',
     'Anong gulay ang nasa larawan?',
@@ -514,39 +528,39 @@ const bilangQuestions: MadaliQuestion[] = [
     ['One', 'Two', 'Four', 'Three'], 3),
 
   mc('bilang-04', 'cat_bilang', 'mga-bilang',
+    'Ano ang Ingles ng "Apat"?',
+    'What is the English word for "Apat"?',
+    ['Three', 'Four', 'Five', 'Six'], 1),
+
+  mc('bilang-05', 'cat_bilang', 'mga-bilang',
     'Ano ang Tagalog ng "Five"?',
     'What is the Tagalog word for "Five"?',
     ['Anim', 'Apat', 'Lima', 'Pito'], 2),
 
-  mc('bilang-05', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Sampu"?',
-    'What is the English word for "Sampu"?',
-    ['Eight', 'Nine', 'Seven', 'Ten'], 3),
-
   mc('bilang-06', 'cat_bilang', 'mga-bilang',
+    'Ano ang Ingles ng "Anim"?',
+    'What is the English word for "Anim"?',
+    ['Five', 'Six', 'Seven', 'Eight'], 1),
+
+  mc('bilang-07', 'cat_bilang', 'mga-bilang',
     'Ano ang Tagalog ng "Seven"?',
     'What is the Tagalog word for "Seven"?',
     ['Walo', 'Siyam', 'Pito', 'Anim'], 2),
 
-  mc('bilang-07', 'cat_bilang', 'mga-bilang',
+  mc('bilang-08', 'cat_bilang', 'mga-bilang',
     'Ano ang Ingles ng "Walo"?',
     'What is the English word for "Walo"?',
     ['Six', 'Seven', 'Eight', 'Nine'], 2),
 
-  mc('bilang-08', 'cat_bilang', 'mga-bilang',
-    'Ano ang Tagalog ng "Eleven"?',
-    'What is the Tagalog word for "Eleven"?',
-    ['Labindalawa', 'Labing-isa', 'Labintatlo', 'Labing-apat'], 1),
-
   mc('bilang-09', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Labinlima"?',
-    'What is the English word for "Labinlima"?',
-    ['Thirteen', 'Fourteen', 'Sixteen', 'Fifteen'], 3),
+    'Ano ang Tagalog ng "Nine"?',
+    'What is the Tagalog word for "Nine"?',
+    ['Walo', 'Siyam', 'Sampu', 'Pito'], 1),
 
   mc('bilang-10', 'cat_bilang', 'mga-bilang',
-    'Ano ang Tagalog ng "Twenty"?',
-    'What is the Tagalog word for "Twenty"?',
-    ['Labinsiyam', 'Dalawampu', 'Labingwalo', 'Labimpito'], 1),
+    'Ano ang Ingles ng "Sampu"?',
+    'What is the English word for "Sampu"?',
+    ['Eight', 'Nine', 'Seven', 'Ten'], 3),
 
   pic('bilang-11', 'cat_bilang', 'mga-bilang',
     'Anong bilang ang nasa larawan?',
@@ -630,9 +644,9 @@ const hugisQuestions: MadaliQuestion[] = [
     ['Rectangle', 'Circle', 'Square', 'Triangle'], 2),
 
   mc('hugis-04', 'cat_hugis', 'mga-hugis',
-    'Ano ang Tagalog ng "Star"?',
-    'What is the Tagalog word for "Star"?',
-    ['Hugis-puso', 'Bituin', 'Hugis-buwan', 'Krus'], 1),
+    'Ano ang Ingles ng "Bituin"?',
+    'What is the English word for "Bituin"?',
+    ['Heart', 'Star', 'Moon', 'Sun'], 1),
 
   mc('hugis-05', 'cat_hugis', 'mga-hugis',
     'Ano ang Ingles ng "Parihaba"?',
@@ -645,24 +659,24 @@ const hugisQuestions: MadaliQuestion[] = [
     ['Hugis-puso', 'Hugis-buwan', 'Hugis-itlog', 'Bituin'], 0),
 
   mc('hugis-07', 'cat_hugis', 'mga-hugis',
-    'Ano ang Ingles ng "Tatsulok"?',
-    'What is the English word for "Tatsulok"?',
-    ['Circle', 'Square', 'Diamond', 'Triangle'], 3),
-
-  mc('hugis-08', 'cat_hugis', 'mga-hugis',
-    'Ano ang Tagalog ng "Diamond"?',
-    'What is the Tagalog word for "Diamond"?',
-    ['Bituin', 'Diyamante', 'Hugis-puso', 'Oktagono'], 1),
-
-  mc('hugis-09', 'cat_hugis', 'mga-hugis',
-    'Ano ang Ingles ng "Bilog"?',
-    'What is the English word for "Bilog"?',
-    ['Oval', 'Square', 'Circle', 'Hexagon'], 2),
-
-  mc('hugis-10', 'cat_hugis', 'mga-hugis',
     'Ano ang Tagalog ng "Oval"?',
     'What is the Tagalog word for "Oval"?',
-    ['Hugis-buwan', 'Bilog', 'Hugis-itlog', 'Parihaba'], 2),
+    ['Hugis-buwan', 'Bilog', 'Hugis-itlog (Oval)', 'Parihaba'], 2),
+
+  mc('hugis-08', 'cat_hugis', 'mga-hugis',
+    'Ano ang Ingles ng "Diyamante"?',
+    'What is the English word for "Diyamante"?',
+    ['Star', 'Diamond', 'Heart', 'Circle'], 1),
+
+  mc('hugis-09', 'cat_hugis', 'mga-hugis',
+    'Ano ang Ingles ng "Hexagono"?',
+    'What is the English word for "Hexagono"?',
+    ['Oval', 'Square', 'Hexagon', 'Circle'], 2),
+
+  mc('hugis-10', 'cat_hugis', 'mga-hugis',
+    'Ano ang Tagalog ng "Pentagon"?',
+    'What is the Tagalog word for "Pentagon"?',
+    ['Pentagono', 'Hexagono', 'Tatsulok', 'Bilog'], 0),
 
   pic('hugis-11', 'cat_hugis', 'mga-hugis',
     'Anong hugis ang nasa larawan?',
@@ -736,9 +750,9 @@ const kulayQuestions: MadaliQuestion[] = [
     ['Asul', 'Pula', 'Berde', 'Dilaw'], 1),
 
   mc('kulay-02', 'cat_kulay', 'mga-kulay',
-    'Ano ang Tagalog ng "Blue"?',
-    'What is the Tagalog word for "Blue"?',
-    ['Pula', 'Berde', 'Asul', 'Lila'], 2),
+    'Ano ang Ingles ng "Asul"?',
+    'What is the English word for "Asul"?',
+    ['Red', 'Green', 'Blue', 'Yellow'], 2),
 
   mc('kulay-03', 'cat_kulay', 'mga-kulay',
     'Ano ang Ingles ng "Dilaw"?',
@@ -751,14 +765,14 @@ const kulayQuestions: MadaliQuestion[] = [
     ['Berde', 'Pula', 'Asul', 'Lila'], 0),
 
   mc('kulay-05', 'cat_kulay', 'mga-kulay',
-    'Ano ang Ingles ng "Itim"?',
-    'What is the English word for "Itim"?',
-    ['White', 'Gray', 'Black', 'Brown'], 2),
+    'Ano ang Ingles ng "Kahel"?',
+    'What is the English word for "Kahel"?',
+    ['Purple', 'Orange', 'Pink', 'Brown'], 1),
 
   mc('kulay-06', 'cat_kulay', 'mga-kulay',
-    'Ano ang Tagalog ng "White"?',
-    'What is the Tagalog word for "White"?',
-    ['Abo', 'Puti', 'Itim', 'Kayumanggi'], 1),
+    'Ano ang Tagalog ng "Purple"?',
+    'What is the Tagalog word for "Purple"?',
+    ['Rosas', 'Lila', 'Kahel', 'Abo'], 1),
 
   mc('kulay-07', 'cat_kulay', 'mga-kulay',
     'Ano ang Ingles ng "Rosas"?',
@@ -766,19 +780,19 @@ const kulayQuestions: MadaliQuestion[] = [
     ['Purple', 'Orange', 'Red', 'Pink'], 3),
 
   mc('kulay-08', 'cat_kulay', 'mga-kulay',
-    'Ano ang Tagalog ng "Orange"?',
-    'What is the Tagalog word for "Orange"?',
-    ['Lila', 'Kahel', 'Rosas', 'Kayumanggi'], 1),
+    'Ano ang Tagalog ng "Black"?',
+    'What is the Tagalog word for "Black"?',
+    ['Puti', 'Itim', 'Abo', 'Kayumanggi'], 1),
 
   mc('kulay-09', 'cat_kulay', 'mga-kulay',
-    'Ano ang Ingles ng "Lila"?',
-    'What is the English word for "Lila"?',
-    ['Pink', 'Blue', 'Purple', 'Brown'], 2),
+    'Ano ang Tagalog ng "White"?',
+    'What is the Tagalog word for "White"?',
+    ['Abo', 'Puti', 'Itim', 'Kayumanggi'], 1),
 
   mc('kulay-10', 'cat_kulay', 'mga-kulay',
-    'Ano ang Tagalog ng "Brown"?',
-    'What is the Tagalog word for "Brown"?',
-    ['Abo', 'Kahel', 'Rosas', 'Kayumanggi'], 3),
+    'Ano ang Ingles ng "Kayumanggi"?',
+    'What is the English word for "Kayumanggi"?',
+    ['Black', 'Gray', 'White', 'Brown'], 3),
 
   pic('kulay-11', 'cat_kulay', 'mga-kulay',
     'Anong kulay ang nasa larawan?',
@@ -857,44 +871,44 @@ const katawanQuestions: MadaliQuestion[] = [
     ['Ilong', 'Bibig', 'Mata', 'Tainga'], 2),
 
   mc('katawan-03', 'cat_katawan', 'mga-bahagi-ng-katawan',
-    'Ano ang Ingles ng "Kamay"?',
-    'What is the English word for "Kamay"?',
-    ['Foot', 'Arm', 'Hand', 'Leg'], 2),
-
-  mc('katawan-04', 'cat_katawan', 'mga-bahagi-ng-katawan',
     'Ano ang Tagalog ng "Nose"?',
     'What is the Tagalog word for "Nose"?',
     ['Bibig', 'Ilong', 'Mata', 'Dila'], 1),
 
+  mc('katawan-04', 'cat_katawan', 'mga-bahagi-ng-katawan',
+    'Ano ang Ingles ng "Bibig"?',
+    'What is the English word for "Bibig"?',
+    ['Eye', 'Nose', 'Mouth', 'Ear'], 2),
+
   mc('katawan-05', 'cat_katawan', 'mga-bahagi-ng-katawan',
-    'Ano ang Ingles ng "Paa"?',
-    'What is the English word for "Paa"?',
-    ['Knee', 'Leg', 'Hand', 'Foot'], 3),
+    'Ano ang Ingles ng "Tainga"?',
+    'What is the English word for "Tainga"?',
+    ['Ear', 'Eye', 'Nose', 'Mouth'], 0),
 
   mc('katawan-06', 'cat_katawan', 'mga-bahagi-ng-katawan',
-    'Ano ang Tagalog ng "Ear"?',
-    'What is the Tagalog word for "Ear"?',
-    ['Mata', 'Bibig', 'Ilong', 'Tainga'], 3),
-
-  mc('katawan-07', 'cat_katawan', 'mga-bahagi-ng-katawan',
     'Ano ang Ingles ng "Buhok"?',
     'What is the English word for "Buhok"?',
     ['Tooth', 'Tongue', 'Hair', 'Back'], 2),
 
+  mc('katawan-07', 'cat_katawan', 'mga-bahagi-ng-katawan',
+    'Ano ang Tagalog ng "Neck"?',
+    'What is the Tagalog word for "Neck"?',
+    ['Balikat', 'Leeg', 'Ulo', 'Kamay'], 1),
+
   mc('katawan-08', 'cat_katawan', 'mga-bahagi-ng-katawan',
-    'Ano ang Tagalog ng "Mouth"?',
-    'What is the Tagalog word for "Mouth"?',
-    ['Dila', 'Ngipin', 'Bibig', 'Ilong'], 2),
+    'Ano ang Ingles ng "Balikat"?',
+    'What is the English word for "Balikat"?',
+    ['Elbow', 'Knee', 'Shoulder', 'Neck'], 2),
 
   mc('katawan-09', 'cat_katawan', 'mga-bahagi-ng-katawan',
-    'Ano ang Ingles ng "Tuhod"?',
-    'What is the English word for "Tuhod"?',
-    ['Elbow', 'Knee', 'Shoulder', 'Ankle'], 1),
+    'Ano ang Tagalog ng "Tooth"?',
+    'What is the Tagalog word for "Tooth"?',
+    ['Dila', 'Ngipin', 'Bibig', 'Ilong'], 1),
 
   mc('katawan-10', 'cat_katawan', 'mga-bahagi-ng-katawan',
-    'Ano ang Tagalog ng "Arm"?',
-    'What is the Tagalog word for "Arm"?',
-    ['Binti', 'Kamay', 'Braso', 'Balikat'], 2),
+    'Ano ang Ingles ng "Dila"?',
+    'What is the English word for "Dila"?',
+    ['Tooth', 'Lip', 'Tongue', 'Throat'], 2),
 
   pic('katawan-11', 'cat_katawan', 'mga-bahagi-ng-katawan',
     'Anong bahagi ng katawan ang nasa larawan?',
@@ -989,14 +1003,15 @@ const pagbatiQuestions: MadaliQuestion[] = [
     ['Salamat', 'Mahal Kita', 'Mabuti Ako', 'Ingat Ka'], 1),
 
   mc('pagbati-06', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Ano ang Ingles ng "Paumanhin"?',
-    'What is the English expression for "Paumanhin"?',
-    ['Thank You', 'Sorry', 'Excuse Me', 'Welcome'], 2),
+    'Ano ang Tagalog ng "How are you"?',
+    'What is the Tagalog expression for "How are you"?',
+    ['Kumusta ka?', 'Magandang Umaga', 'Paalam', 'Salamat'], 0),
 
   mc('pagbati-07', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Ano ang Tagalog ng "Good Evening"?',
-    'What is the Tagalog expression for "Good Evening"?',
-    ['Magandang Araw', 'Magandang Umaga', 'Magandang Gabi', 'Magandang Hapon'], 2),
+    'Ano ang Tagalog ng "I\'m fine"?',
+    'What is the Tagalog expression for "I\'m fine"?',
+    ['Paumanhin', 'Mabuti Ako', 'Ingat Ka', 'Walang Anuman'], 1),
+
 
   mc('pagbati-08', 'cat_pagbati', 'mga-pagbati-at-parirala',
     'Ano ang Ingles ng "Ingat Ka"?',
@@ -1025,44 +1040,44 @@ const pagbatiQuestions: MadaliQuestion[] = [
     ['Paalam', 'Salamat', 'Mabuti Ako', 'Mahal Kita'], 2),
 
   sit('pagbati-13', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Natapakan mo ang paa ng iyong kaklase. Anong sasabihin mo?',
-    "You stepped on your classmate's foot. What will you say?",
-    ['Salamat', 'Patawad', 'Kumusta', 'Paalam'], 1),
+    'Nakita mo ang iyong kaibigan sa daan. Anong sasabihin mo sa kaniya?',
+    'You saw your friend on the road. What will you say to them?',
+    ['Kumusta!', 'Patawad', 'Salamat', 'Walang Anuman'], 0),
 
   sit('pagbati-14', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Tumutulong ang iyong kaibigan sa iyo. Anong sasabihin mo?',
-    'Your friend helped you. What will you say?',
-    ['Paumanhin', 'Paalam', 'Salamat', 'Kumusta'], 2),
+    'Binigyan ka ng iyong kaibigan ng pagkain. Anong sasabihin mo?',
+    'Your friend gave you food. What will you say?',
+    ['Paumanhin', 'Paalam', 'Salamat!', 'Kumusta'], 2),
 
   sit('pagbati-15', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Hapon na at kita mo ang iyong guro. Anong sasabihin mo?',
+    'Hapon na at nakita mo ang iyong guro. Anong sasabihin mo?',
     'It is afternoon and you see your teacher. What will you say?',
     ['Magandang Umaga', 'Magandang Hapon', 'Magandang Gabi', 'Paalam'], 1),
 
   sit('pagbati-16', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Umaalis na ang iyong kaibigan. Anong sasabihin mo?',
+    'Aalis na ang iyong kaibigan. Anong sasabihin mo?',
     'Your friend is leaving. What will you say?',
-    ['Kumusta', 'Salamat', 'Paalam', 'Mahal Kita'], 2),
+    ['Kumusta', 'Salamat', 'Paalam!', 'Mahal Kita'], 2),
 
   sit('pagbati-17', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Bagong kaibigan ang nakilala mo. Anong sasabihin mo?',
-    'You met a new friend. What will you say?',
-    ['Paalam', 'Ikinagagalak Kitang Makilala', 'Ingat Ka', 'Mabuti Ako'], 1),
+    'Gusto mong makitang muli ang iyong kalaro. Anong sasabihin mo?',
+    'You want to see your playmate again. What will you say?',
+    ['Paalam na', 'Kita tayo muli!', 'Ingat Ka', 'Mabuti Ako'], 1),
 
   sit('pagbati-18', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Nakauwi na ang iyong ama mula sa trabaho. Anong sasabihin mo?',
-    'Your father came home from work. What will you say?',
-    ['Paalam', 'Maligayang Pagbabalik', 'Paumanhin', 'Kita Tayo'], 1),
+    'Bumalik na ang iyong tatay o nanay sa bahay. Anong sasabihin mo?',
+    'Your father or mother returned home. What will you say?',
+    ['Paalam', 'Maligayang Pagbabalik!', 'Paumanhin', 'Kita Tayo'], 1),
 
   sit('pagbati-19', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Lalabas ka ng bahay. Sinabi ng nanay mo na mag-ingat ka. Paano ka sasagot?',
-    'You are going out. Your mother said to be careful. How will you respond?',
-    ['Salamat, ingat ka rin!', 'Magandang Umaga!', 'Paalam na!', 'Mabuti Ako.'], 0),
+    'May nagbigay sa iyo ng regalo. Anong sasabihin mo?',
+    'Someone gave you a gift. What will you say?',
+    ['Maraming Salamat!', 'Magandang Umaga', 'Paalam na', 'Walang Anuman'], 0),
 
   sit('pagbati-20', 'cat_pagbati', 'mga-pagbati-at-parirala',
-    'Gabi na at papasok ka na sa kwarto. Anong sasabihin mo sa pamilya mo?',
-    'It is evening and you are going to your room. What will you say to your family?',
-    ['Magandang Umaga', 'Magandang Hapon', 'Magandang Gabi', 'Paalam'], 2),
+    'Bago umuwi mula sa paaralan o laro. Anong sasabihin mo sa iyong mga kalaro?',
+    'Before going home from school or play. What will you say to your playmates?',
+    ['Magandang Araw', 'Magandang Umaga', 'Paalam at Ingat Kayo!', 'Salamat'], 2),
 ];
 
 // ---------------------------------------------------------------------------

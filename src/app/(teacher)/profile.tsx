@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ export default function TeacherProfileScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     authService.getMe()
@@ -23,23 +25,20 @@ export default function TeacherProfileScreen() {
   }, []);
 
 
+  const confirmLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {}
+    finally {
+      setLoggingOut(false);
+      setShowLogoutModal(false);
+      router.replace('/login');
+    }
+  };
+
   const handleLogout = () => {
-    Alert.alert('Mag-logout', 'Sigurado ka bang gusto mong lumabas sa portal ng guro?', [
-      { text: 'Hindi', style: 'cancel' },
-      {
-        text: 'Oo, Lumabas',
-        style: 'destructive',
-        onPress: async () => {
-          setLoggingOut(true);
-          try {
-            await logout();
-          } catch {}
-          finally {
-            setLoggingOut(false);
-          }
-        },
-      },
-    ]);
+    setShowLogoutModal(true);
   };
 
   if (loading) return <LoadingView message="Kinukuha ang profile..." />;
@@ -48,13 +47,14 @@ export default function TeacherProfileScreen() {
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { paddingTop: Math.max(insets.top, 16) + 12 },
-      ]}
-      showsVerticalScrollIndicator={false}
+    <View style={{ flex: 1, backgroundColor: '#F0F9FF' }}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Math.max(insets.top, 16) + 12 },
+        ]}
+        showsVerticalScrollIndicator={false}
     >
       {/* Avatar with Teacher Gradient Ring */}
       <View style={styles.avatarSection}>
@@ -108,6 +108,48 @@ export default function TeacherProfileScreen() {
         style={{ marginTop: 8 }}
       />
     </ScrollView>
+
+    {/* Logout Confirmation Modal */}
+    <Modal
+      visible={showLogoutModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (!loggingOut) setShowLogoutModal(false);
+      }}
+    >
+      <View style={modalStyles.overlay}>
+        <View style={[modalStyles.card, Shadows.card]}>
+          <View style={modalStyles.iconCircle}>
+            <Ionicons name="log-out" size={32} color="#EF4444" />
+          </View>
+          <Text style={modalStyles.title}>Mag-logout sa Portal ng Guro?</Text>
+          <Text style={modalStyles.subtitle}>
+            Sigurado ka bang nais mong lumabas sa portal, {user?.name || 'Guro'}?
+          </Text>
+          <View style={modalStyles.btnGroup}>
+            <PrimaryButton
+              title={loggingOut ? 'Lumalabas...' : 'Oo, Lumabas'}
+              variant="danger"
+              size="md"
+              icon="log-out"
+              onPress={confirmLogout}
+              disabled={loggingOut}
+              style={{ width: '100%', marginBottom: 10 }}
+            />
+            <PrimaryButton
+              title="Bumalik"
+              variant="outline"
+              size="md"
+              onPress={() => setShowLogoutModal(false)}
+              disabled={loggingOut}
+              style={{ width: '100%' }}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  </View>
   );
 }
 
@@ -257,5 +299,50 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     fontStyle: 'italic',
+  },
+});
+
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    padding: 24,
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  btnGroup: {
+    width: '100%',
   },
 });

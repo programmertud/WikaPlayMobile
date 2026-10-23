@@ -112,11 +112,12 @@ export const quizService = {
     category_id: number;
     difficulty: QuizDifficulty;
     session_id?: string;
-    answers: { question_id: number; selected_answer: string }[];
+    answers: { question_id: any; selected_answer: string; is_correct?: boolean }[];
   }) => {
     return ApiClient.post<{
       message: string;
       session: QuizResultSession;
+      is_duplicate_submission?: boolean;
     }>('quizzes/submit', payload);
   },
 
@@ -184,6 +185,151 @@ export const rewardService = {
       total_spent: number;
       history: { data: any[] };
     }>('rewards/stars-history');
+  },
+
+  getAchievements: async () => {
+    return ApiClient.get<AchievementsResponse>('rewards/achievements');
+  },
+
+  claimBadge: async (badgeKey: string) => {
+    return ApiClient.post<{
+      message: string;
+      badge: any;
+    }>('rewards/claim-badge', { badge_key: badgeKey });
+  },
+};
+
+export interface AchievementBadge {
+  key: string;
+  title: string;
+  filipino_title: string;
+  threshold: number;
+  icon: string;
+  description: string;
+  status: 'locked' | 'unlocked' | 'claimed';
+  claimed_at?: string | null;
+}
+
+export interface LearningMission {
+  id: string;
+  type: 'daily' | 'weekly';
+  title: string;
+  description: string;
+  progress: number;
+  target: number;
+  is_completed: boolean;
+  reward_label: string;
+}
+
+export interface AchievementsResponse {
+  stars_balance: number;
+  lifetime_stars: number;
+  spent_stars: number;
+  current_milestone: AchievementBadge | null;
+  next_milestone: AchievementBadge | null;
+  milestone_progress_pct: number;
+  badges: AchievementBadge[];
+  missions: LearningMission[];
+  recent_rewards: {
+    id: number;
+    amount: number;
+    description: string;
+    balance_after: number;
+    created_at: string;
+    created_at_human: string;
+  }[];
+}
+
+export interface CategoryProgressItem {
+  id: number;
+  slug: string;
+  name: string;
+  icon: string;
+  color: string;
+  stars_earned: number;
+  max_stars: number;
+  attempts: number;
+  accuracy: number;
+  best_score: number;
+  suggested_activity: string;
+}
+
+export interface StudentProfileStatsResponse {
+  user: {
+    id: number;
+    student_id_code?: string;
+    name: string;
+    avatar?: string;
+    section?: string;
+    level: number;
+    current_badge: string;
+  };
+  stats: {
+    lifetime_stars: number;
+    spendable_stars: number;
+    spent_stars: number;
+    total_sessions: number;
+    quizzes_completed: number;
+    minigames_completed: number;
+    total_questions_answered: number;
+    correct_answers: number;
+    wrong_answers: number;
+    overall_accuracy: number;
+    collectibles_owned: number;
+    total_collectibles: number;
+    badges_earned_count: number;
+    categories_practiced_count: number;
+    personal_bests: Record<string, number>;
+  };
+  category_progress: CategoryProgressItem[];
+  badges: AchievementBadge[];
+  recent_activities: {
+    id: string;
+    type: 'quiz' | 'minigame';
+    title: string;
+    category: string;
+    score: string;
+    stars_awarded: number;
+    completed_at: string;
+    created_at_human: string;
+  }[];
+  encouragement: string;
+}
+
+export const studentService = {
+  getProfileStats: async () => {
+    return ApiClient.get<StudentProfileStatsResponse>('student/profile-stats');
+  },
+
+  updateAvatar: async (avatar: string) => {
+    return ApiClient.put<{ message: string; avatar: string }>('student/avatar', { avatar });
+  },
+};
+
+/** Collectible service — wraps rewardService with convenience helpers */
+export const collectibleService = {
+  /** Fetch all collectibles with the student's unlock status */
+  getAll: () => rewardService.getCollectibles(),
+
+  /** Fetch collectibles for a specific category slug */
+  getByCategory: async (categoryName: string) => {
+    const res = await rewardService.getCollectibles();
+    const filtered = res.collectibles.filter(
+      (c) => c.category === categoryName
+    );
+    return { ...res, collectibles: filtered };
+  },
+
+  /** Compute per-category progress from the full list */
+  getCategoryProgress: (collectibles: Collectible[]) => {
+    const map: Record<string, { total: number; unlocked: number }> = {};
+    collectibles.forEach((c) => {
+      const cat = c.category ?? 'Iba Pa';
+      if (!map[cat]) map[cat] = { total: 0, unlocked: 0 };
+      map[cat].total += 1;
+      if (c.is_unlocked) map[cat].unlocked += 1;
+    });
+    return map;
   },
 };
 

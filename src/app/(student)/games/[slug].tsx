@@ -46,7 +46,13 @@ export default function GameRouter() {
           title="Bumalik"
           variant="primary"
           icon="arrow-back"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(student)/(tabs)/minigames');
+            }
+          }}
           style={{ marginTop: 12 }}
         />
       </View>

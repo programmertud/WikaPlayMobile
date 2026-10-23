@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -41,9 +42,12 @@ import { useAuth } from '../../../../hooks/use-auth';
 import { usePresence } from '../../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../../hooks/use-answer-feedback';
 import {
+  playSound,
   stopCurrentSound,
 } from '../../../../services/audio/sound-service';
+import { ALL_MADALI_WEB_PATHS, getMadaliQuestionAudio } from '../../../../utils/quiz-madali-audio';
 import { useBgmDuck } from '../../../../services/audio/bgm-service';
+import { generateSessionId, submitQuizReward } from '../../../../services/rewards/star-reward-service';
 import { Colors, Gradients, Radius, Shadows, Typography } from '../../../../theme';
 import { VocabularyItem } from '../../../../types';
 
@@ -75,6 +79,17 @@ function findVocabItem(vocabId: string): VocabularyItem | undefined {
   return undefined;
 }
 
+const CATEGORY_SLUG_TO_ID: Record<string, number> = {
+  'mga-hayop': 1,
+  'mga-prutas': 2,
+  'mga-gulay': 3,
+  'mga-bilang': 4,
+  'mga-hugis': 5,
+  'mga-kulay': 6,
+  'bahagi-ng-katawan': 7,
+  'mga-pagbati': 8,
+};
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -82,10 +97,13 @@ function findVocabItem(vocabId: string): VocabularyItem | undefined {
 export default function MadaliQuizScreen() {
   useBgmDuck();
   const { slug } = useLocalSearchParams<{ slug: string }>();
-  const { updateUserStars } = useAuth();
+  const { user, updateUserStars } = useAuth();
 
   const category = getCategoryBySlug(slug);
   usePresence(`Nagsusulit sa ${category.name} (Madali)`, 'quiz_madali');
+
+  // Stable session ID generated at quiz mount/restart
+  const sessionIdRef = useRef<string>(generateSessionId('quiz_madali'));
 
   // ------------------------------------------------------------------
   // State
@@ -98,6 +116,8 @@ export default function MadaliQuizScreen() {
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [quizDone, setQuizDone] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [starsAwarded, setStarsAwarded] = useState<number>(0);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -113,13 +133,33 @@ export default function MadaliQuizScreen() {
   const currentQuestion = questions[currentIndex] ?? null;
   const totalQuestions = questions.length;
 
+  const playQuestionAudio = useCallback(() => {
+    if (!currentQuestion) return;
+
+    // On web, native require() assets are numbers that cannot be resolved to a URI
+    // without downloading them first. Prefer the pre-mapped static web path instead.
+    let audioSource: any;
+    if (Platform.OS === 'web' && currentQuestion.id && ALL_MADALI_WEB_PATHS[currentQuestion.id]) {
+      audioSource = ALL_MADALI_WEB_PATHS[currentQuestion.id];
+    } else {
+      audioSource = currentQuestion.audio || getMadaliQuestionAudio(currentQuestion);
+    }
+
+    if (audioSource) {
+      setIsPlayingAudio(true);
+      playSound(audioSource, () => {
+        setIsPlayingAudio(false);
+      });
+    }
+  }, [currentQuestion]);
+
   const correctCount = answers.filter((a) => a.correct).length;
   const wrongCount = answers.filter((a) => !a.correct).length;
   const percentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
   const passed = percentage >= 60;
 
   // ------------------------------------------------------------------
-  // Animate question in
+  // Animate question in & play question voice audio
   // ------------------------------------------------------------------
   useEffect(() => {
     if (quizDone) return;
@@ -144,16 +184,23 @@ export default function MadaliQuizScreen() {
       }),
     ]).start();
 
-    // Enable choices after a short delay (gives child time to read)
+    // Auto-play voice audio for the question
+    const audioTimer = setTimeout(() => {
+      playQuestionAudio();
+    }, 400);
+
+    // Enable choices after a short delay (gives child time to read/listen)
     timerRef.current = setTimeout(() => {
       setIsEnabled(true);
     }, 1200);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      clearTimeout(audioTimer);
       stopCurrentSound();
+      setIsPlayingAudio(false);
     };
-  }, [currentIndex, quizDone, fadeAnim, slideAnim]);
+  }, [currentIndex, quizDone, fadeAnim, slideAnim, playQuestionAudio]);
 
   // ------------------------------------------------------------------
   // Answer selection
@@ -205,22 +252,38 @@ export default function MadaliQuizScreen() {
           setCurrentIndex(nextIdx);
         } else {
           // Quiz complete
-          const finalCorrect = [...answers, record].filter((a) => a.correct).length;
+          const finalAnswers = [...answers, record];
+          const finalCorrect = finalAnswers.filter((a) => a.correct).length;
           const finalPassed = (finalCorrect / totalQuestions) * 100 >= 60;
-          const starsAwarded = finalPassed ? 1 : 0;
-          updateUserStars(starsAwarded);
+          setStarsAwarded(finalCorrect);
           setQuizDone(true);
           if (finalPassed) setShowCelebration(true);
+
+          const catId = CATEGORY_SLUG_TO_ID[slug ?? ''] ?? 1;
+          submitQuizReward({
+            categoryId: catId,
+            difficulty: 'madali',
+            sessionId: sessionIdRef.current,
+            answers: finalAnswers.map((a) => ({
+              question_id: a.questionId,
+              selected_answer: a.selected,
+              is_correct: a.correct,
+            })),
+            currentStarsBalance: user?.stars_balance ?? 0,
+            updateUserStars,
+          });
         }
       });
     },
-    [isEnabled, isLocked, currentQuestion, currentIndex, totalQuestions, answers, updateUserStars, shakeAnim, triggerFeedback]
+    [isEnabled, isLocked, currentQuestion, currentIndex, totalQuestions, answers, slug, user?.stars_balance, updateUserStars, shakeAnim, triggerFeedback]
   );
 
   // ------------------------------------------------------------------
   // Retry
   // ------------------------------------------------------------------
   const handleRetry = () => {
+    sessionIdRef.current = generateSessionId('quiz_madali');
+    setStarsAwarded(0);
     resetStreaks();
     setCurrentIndex(0);
     setSelectedId(null);
@@ -250,7 +313,13 @@ export default function MadaliQuizScreen() {
           </Text>
           <PrimaryButton
             title="Bumalik"
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace(`/(student)/category/${slug}` as any);
+              }
+            }}
             variant="primary"
             size="md"
             style={{ marginTop: 20 }}
@@ -299,7 +368,7 @@ export default function MadaliQuizScreen() {
             </Text>
 
             {/* Stars pill */}
-            {passed && (
+            {starsAwarded > 0 && (
               <LinearGradient
                 colors={Gradients.sun}
                 start={{ x: 0, y: 0 }}
@@ -307,7 +376,7 @@ export default function MadaliQuizScreen() {
                 style={[styles.starsPill, Shadows.colored(Colors.sunYellowDark, 0.3)]}
               >
                 <Ionicons name="star" size={20} color={Colors.white} />
-                <Text style={styles.starsPillText}>+1 Bituin!</Text>
+                <Text style={styles.starsPillText}>+{starsAwarded} Bituin!</Text>
               </LinearGradient>
             )}
 
@@ -340,23 +409,47 @@ export default function MadaliQuizScreen() {
               {correctCount} sa {totalQuestions} ang tama
             </Text>
 
-            {/* Buttons */}
-            <PrimaryButton
-              title="Subukan Muli"
-              variant="secondary"
-              size="lg"
-              icon="refresh"
-              onPress={handleRetry}
-              style={{ width: '100%', marginTop: 20 }}
-            />
-            <PrimaryButton
-              title="Bumalik sa Kategorya"
-              variant="primary"
-              size="lg"
-              icon="arrow-back"
-              onPress={() => router.back()}
-              style={{ width: '100%', marginTop: 12 }}
-            />
+            {/* Replay & Endless Learning Actions (Part C) */}
+            <View style={{ width: '100%', marginTop: 16 }}>
+              <PrimaryButton
+                title="Maglaro Muli"
+                variant="primary"
+                size="md"
+                icon="refresh"
+                onPress={handleRetry}
+                style={{ width: '100%' }}
+              />
+              <PrimaryButton
+                title="Subukan ang Mini-Games 🎮"
+                variant="secondary"
+                size="md"
+                icon="game-controller"
+                onPress={() => router.push('/(student)/(tabs)/minigames' as any)}
+                style={{ width: '100%', marginTop: 10 }}
+              />
+              <PrimaryButton
+                title="Tingnan ang Gantimpala ⭐"
+                variant="outline"
+                size="md"
+                icon="gift-outline"
+                onPress={() => router.push('/(student)/(tabs)/gantimpala' as any)}
+                style={{ width: '100%', marginTop: 10 }}
+              />
+              <PrimaryButton
+                title="Bumalik sa Pagsusulit"
+                variant="outline"
+                size="sm"
+                icon="arrow-back"
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace(`/(student)/category/${slug}` as any);
+                  }
+                }}
+                style={{ width: '100%', marginTop: 8 }}
+              />
+            </View>
           </View>
         </ScrollView>
 
@@ -450,9 +543,26 @@ export default function MadaliQuizScreen() {
             Tanong {currentIndex + 1} sa {totalQuestions}
           </Text>
 
-          {/* Question text */}
-          <Text style={styles.questionText}>{currentQuestion?.questionFil}</Text>
-          <Text style={styles.questionTextEn}>{currentQuestion?.questionEn}</Text>
+          {/* Question text with interactive voice audio speaker */}
+          <View style={styles.questionPromptRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.questionText}>{currentQuestion?.questionFil}</Text>
+              <Text style={styles.questionTextEn}>{currentQuestion?.questionEn}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.audioSpeakerBtn, isPlayingAudio && styles.audioSpeakerBtnActive]}
+              onPress={playQuestionAudio}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Pakinggan ang tanong"
+            >
+              <Ionicons
+                name={isPlayingAudio ? 'volume-high' : 'volume-medium'}
+                size={24}
+                color={isPlayingAudio ? Colors.white : Colors.vibrantPurple}
+              />
+            </TouchableOpacity>
+          </View>
 
           {/* Large clear picture of the correct answer for Picture-ID questions */}
           {currentQuestion?.type === 'picture-id' && currentQuestion?.correctVocabId && (
@@ -882,5 +992,26 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     fontWeight: Typography.weights.semibold,
     marginBottom: 4,
+  },
+  questionPromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 8,
+  },
+  audioSpeakerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.pill,
+    backgroundColor: '#EDE9FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#C4B5FD',
+  },
+  audioSpeakerBtnActive: {
+    backgroundColor: Colors.vibrantPurple,
+    borderColor: Colors.vibrantPurpleDark,
   },
 });

@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -25,7 +25,8 @@ import { getCategoryBySlug, getRandomVocabularyChoices } from '../../../../data/
 import { useAuth } from '../../../../hooks/use-auth';
 import { usePresence } from '../../../../hooks/use-presence';
 import { useQuiz } from '../../../../hooks/use-quiz';
-import { categoryService, quizService } from '../../../../services/api';
+import { categoryService } from '../../../../services/api';
+import { generateSessionId, submitQuizReward } from '../../../../services/rewards/star-reward-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../../theme';
 import { useBgmDuck } from '../../../../services/audio/sound-service';
 import { ChoiceItem, QuizDifficulty, QuizQuestion, QuizResultSession, VocabularyItem } from '../../../../types';
@@ -36,7 +37,10 @@ const CHOICE_WIDTH = (width - 48) / 2;
 export default function QuizGameplayScreen() {
   useBgmDuck();
   const { slug, difficulty } = useLocalSearchParams<{ slug: string; difficulty: QuizDifficulty }>();
-  const { updateUserStars } = useAuth();
+  const { user, updateUserStars } = useAuth();
+
+  // Stable session ID for quiz
+  const sessionIdRef = useRef<string>(generateSessionId(`quiz_${difficulty ?? 'quiz'}`));
 
   const [categoryName, setCategoryName] = useState<string>('Pagsusulit');
   const [categoryId, setCategoryId] = useState<number>(1);
@@ -101,6 +105,46 @@ export default function QuizGameplayScreen() {
             });
           }
           fetchedQuestions = [...fetchedQuestions, ...additional];
+        }
+      }
+      // For katamtaman and mahirap: ALWAYS rebuild questions from local bundled data.
+      // The API returns numeric DB IDs for choices (e.g. "1","2") which never match
+      // local string IDs (e.g. "hayop_aso"), so API images (stock photos) would show.
+      // Instead we use the shuffled local vocabulary items which carry require()'d images.
+      if (difficulty === 'katamtaman' || difficulty === 'mahirap') {
+        const cat = getCategoryBySlug(slug);
+        const localVocab = cat?.items || [];
+        if (localVocab.length > 0) {
+          const targetCount = 20;
+          const shuffled = [...localVocab].sort(() => 0.5 - Math.random());
+          fetchedQuestions = Array.from({ length: targetCount }, (_, i) => {
+            const target = shuffled[i % shuffled.length];
+            const choices = getRandomVocabularyChoices(cat.slug, target, 4);
+            const mappedChoices: ChoiceItem[] = choices.map((c) => ({
+              id: c.id,
+              image_url: c.imageUri || '',
+              text: difficulty === 'katamtaman' ? '' : c.filipino,
+              vocabularyItem: c,
+            }));
+            const qText = difficulty === 'katamtaman'
+              ? `Nasaan ang ${target.filipino}?`
+              : 'Ayusin ang mga letra.';
+            const correctAnswer = difficulty === 'katamtaman'
+              ? target.id
+              : target.filipino.toUpperCase();
+            return {
+              id: 30000 + i,
+              target_image_url: target.imageUri || '',
+              target_item_name: target.filipino.toUpperCase(),
+              targetItem: target,
+              audio_url: target.audioUri || `${target.id}.mp3`,
+              choices: mappedChoices,
+              correct_answer: correctAnswer,
+              points: 1,
+              difficulty,
+              question_text: qText,
+            };
+          });
         }
       }
       setQuestions(fetchedQuestions);
@@ -172,45 +216,27 @@ export default function QuizGameplayScreen() {
 
   const handleQuizComplete = async (answers: { question_id: number; selected_answer: string }[]) => {
     setSubmitting(true);
-    const sessionId = `quiz_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const res = await quizService.submitQuiz({
-        category_id: categoryId,
-        difficulty: difficulty || 'madali',
-        session_id: sessionId,
-        answers,
+      const res = await submitQuizReward({
+        categoryId,
+        difficulty: difficulty || 'katamtaman',
+        sessionId: sessionIdRef.current,
+        answers: answers.map((a) => {
+          const q = questions.find((item) => item.id === a.question_id);
+          const isCorrect = q ? String(q.correct_answer) === String(a.selected_answer) : undefined;
+          return {
+            question_id: a.question_id,
+            selected_answer: a.selected_answer,
+            is_correct: isCorrect,
+          };
+        }),
+        currentStarsBalance: user?.stars_balance ?? 0,
+        updateUserStars,
       });
 
-      setResultSession(res.session);
-      updateUserStars(res.session.stars_balance);
-    } catch {
-      let correct = 0;
-      answers.forEach((ans) => {
-        const q = questions.find((item) => item.id === ans.question_id);
-        if (q && String(q.correct_answer) === String(ans.selected_answer)) {
-          correct += 1;
-        }
-      });
-      const total = questions.length;
-      const wrong = total - correct;
-      const totalScore = correct; // 1 point per correct
-      const passed = correct >= Math.ceil(total * 0.7);
-      // Strict 1:1 star update: earning 20 stars adds exactly 20 stars
-      const starsAwarded = correct;
-
-      const fallbackSession: QuizResultSession = {
-        id: Date.now(),
-        score: totalScore,
-        total_questions: total,
-        correct_count: correct,
-        wrong_count: wrong,
-        passed,
-        stars_awarded: starsAwarded,
-        stars_balance: starsAwarded,
-      };
-
-      setResultSession(fallbackSession);
-      updateUserStars(starsAwarded);
+      if (res.session) {
+        setResultSession(res.session);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -329,7 +355,13 @@ export default function QuizGameplayScreen() {
               variant="primary"
               size="lg"
               icon="arrow-back"
-              onPress={() => router.back()}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace(`/(student)/category/${slug}` as any);
+                }
+              }}
               style={{ width: '100%', marginTop: 24 }}
             />
           </View>
@@ -341,7 +373,13 @@ export default function QuizGameplayScreen() {
           title="Binabati Kita!"
           subtitle={`Nakakuha ka ng ${resultSession.correct_count} tamang sagot!`}
           stars={Math.min(3, Math.max(1, resultSession.stars_awarded))}
-          onContinue={() => router.back()}
+          onContinue={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace(`/(student)/category/${slug}` as any);
+            }
+          }}
           continueText="Tapusin"
         />
       </View>

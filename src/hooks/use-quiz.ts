@@ -64,6 +64,14 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     }
     stopCurrentSound();
 
+    // In mahirap difficulty, DO NOT play the word audio (e.g. aso.mp3).
+    // The student solves from the picture alone, and only feedback audio (tama.mp3, etc.) plays on answer.
+    if (difficulty === 'mahirap') {
+      setChoicesDisabled(false);
+      setIsPlayingAudio(false);
+      return;
+    }
+
     // 2. Wait 2 seconds after the question is ready
     timerRef.current = setTimeout(async () => {
       // Check if question changed while waiting
@@ -88,7 +96,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
       if (playbackCleanupRef.current) playbackCleanupRef.current();
       stopCurrentSound();
     };
-  }, [currentIndex, currentQuestion]);
+  }, [currentIndex, currentQuestion, difficulty]);
 
   // Handle single answer selection
   const handleSelectAnswer = useCallback(
@@ -149,7 +157,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
   );
 
   const replayAudio = useCallback(async () => {
-    if (!currentQuestion || isPlayingAudio || isAnswerLocked || isEvaluating) return;
+    if (difficulty === 'mahirap' || !currentQuestion || isPlayingAudio || isAnswerLocked || isEvaluating) return;
     setIsPlayingAudio(true);
     setChoicesDisabled(true);
 
@@ -160,7 +168,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
         setChoicesDisabled(false);
       }
     });
-  }, [currentQuestion, isPlayingAudio, isAnswerLocked, isEvaluating]);
+  }, [difficulty, currentQuestion, isPlayingAudio, isAnswerLocked, isEvaluating]);
 
   return {
     currentIndex,

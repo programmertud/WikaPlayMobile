@@ -1,10 +1,16 @@
 /**
- * Hulaan ang Salita Mini-Game
- * Category-based: Displays visual clue from the selected category,
- * student spells out or guesses the Filipino word using letter tiles.
+ * Hulaan ang Salita Mini-Game — Improved
+ *
+ * Improvements:
+ * - Each letter tile has a stable unique ID so repeated letters are tracked independently
+ * - Tapping a placed slot removes just that tile back to the pool (not the whole word)
+ * - Auto-submit when all slots are filled
+ * - Manual "Suriin" button also works
+ * - Reset clears all placements
+ * - Correct answer shown on wrong guess
  */
 import { useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -24,76 +30,141 @@ import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categori
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
-import { minigameService } from '../../../services/api';
-import {
-  useBgmDuck,
-} from '../../../services/audio/sound-service';
+import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
+import { useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible, VocabularyItem } from '../../../types';
 
-const EXTRA_ALPHABET = 'AEIOUBKDGLMNPRSTW';
+interface LetterTile {
+  id: string;      // unique per tile (letter + index)
+  char: string;
+  used: boolean;   // placed in a slot
+}
 
-function buildChoices(word: string): string[] {
-  const letters = word.toUpperCase().replace(/[^A-Z]/g, '').split('');
-  const unique = Array.from(new Set(letters));
-  const extras: string[] = [];
-  for (const ch of EXTRA_ALPHABET) {
-    if (extras.length >= 4) break;
-    if (!unique.includes(ch)) extras.push(ch);
+function buildTiles(word: string): LetterTile[] {
+  const clean = word.toUpperCase().replace(/[^A-Z]/g, '');
+  const wordLetters = clean.split('');
+
+  // Shuffle until it's not identical to the expected word (if word length > 1)
+  let shuffled = [...wordLetters];
+  if (shuffled.length > 1) {
+    let attempts = 0;
+    while (shuffled.join('') === clean && attempts < 10) {
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      attempts++;
+    }
+    // If still identical after 10 tries, swap first two letters
+    if (shuffled.join('') === clean) {
+      [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+    }
   }
-  return [...letters, ...extras].sort(() => 0.5 - Math.random());
+
+  return shuffled.map((char, idx) => ({
+    id: `${char}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+    char,
+    used: false,
+  }));
+}
+
+function shuffleItems<T>(list: T[]): T[] {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export default function HulaanSalita() {
   useBgmDuck();
-  const { updateUserStars } = useAuth();
+  const { user, updateUserStars } = useAuth();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
-  const items = getCategoryVocabulary(category.slug);
+  const rawItems = getCategoryVocabulary(category.slug);
+  const [items, setItems] = useState<VocabularyItem[]>(() => shuffleItems(rawItems));
+
+  // Stable session ID — regenerated only on restart
+  const sessionIdRef = useRef<string>(generateSessionId('hulaan'));
 
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [inputLetters, setInputLetters] = useState<string[]>([]);
   const [correct, setCorrect] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [starsAwarded, setStarsAwarded] = useState(0);
   const [locked, setLocked] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState<'correct' | 'wrong' | null>(null);
-
-  // Mystery Box & Collectible state
   const [showMysteryBox, setShowMysteryBox] = useState(false);
   const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
 
-  // Centralized voice-over streak manager
   const { triggerFeedback, resetStreaks } = useAnswerFeedback();
 
-  // Exactly 20 questions / levels
-  const totalRounds = 20;
+  const TOTAL_ROUNDS = 20;
   const currentItem: VocabularyItem = items[currentIdx % items.length];
-  const targetLetters = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
-  const [choices, setChoices] = useState<string[]>(() => buildChoices(targetLetters));
+  const targetWord = currentItem.filipino.toUpperCase().replace(/[^A-Z]/g, '');
+
+  // Tile pool + placed slots (null = empty)
+  const [tiles, setTiles] = useState<LetterTile[]>(() => buildTiles(targetWord));
+  const [slots, setSlots] = useState<(LetterTile | null)[]>(() => new Array(targetWord.length).fill(null));
 
   usePresence(`Hulaan ang Salita (${category.name})`, 'minigame_hulaan');
 
-  const handleLetterPress = (ch: string) => {
-    if (locked || inputLetters.length >= targetLetters.length) return;
+  // Reset for a new question
+  const resetForQuestion = (idx: number, activeItems: VocabularyItem[] = items) => {
+    const item = activeItems[idx % activeItems.length];
+    const word = item.filipino.toUpperCase().replace(/[^A-Z]/g, '');
+    setTiles(buildTiles(word));
+    setSlots(new Array(word.length).fill(null));
+    setFeedbackStatus(null);
+    setLocked(false);
+  };
+
+  // Place a tile into the first empty slot
+  const handleTilePress = (tile: LetterTile) => {
+    if (locked || tile.used) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const nextInput = [...inputLetters, ch];
-    setInputLetters(nextInput);
 
-    if (nextInput.length === targetLetters.length) {
-      verifyAnswer(nextInput.join(''));
-    }
+    setTiles((prev) => prev.map((t) => t.id === tile.id ? { ...t, used: true } : t));
+    setSlots((prev) => {
+      const next = [...prev];
+      const emptyIdx = next.findIndex((s) => s === null);
+      if (emptyIdx === -1) return prev;
+      next[emptyIdx] = tile;
+      // Auto-submit when last slot is filled
+      const filled = next.filter(Boolean).length;
+      if (filled === targetWord.length) {
+        setTimeout(() => verifyAnswer(next as LetterTile[]), 100);
+      }
+      return next;
+    });
   };
 
-  const handleDelete = () => {
-    if (locked || inputLetters.length === 0) return;
+  // Remove tile from a slot (tap slot to return it)
+  const handleSlotPress = (slotIdx: number) => {
+    if (locked) return;
+    const tile = slots[slotIdx];
+    if (!tile) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSlots((prev) => {
+      const next = [...prev];
+      next[slotIdx] = null;
+      return next;
+    });
+    setTiles((prev) => prev.map((t) => t.id === tile.id ? { ...t, used: false } : t));
+  };
+
+  const handleReset = () => {
+    if (locked) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setInputLetters((prev) => prev.slice(0, -1));
+    setTiles((prev) => prev.map((t) => ({ ...t, used: false })));
+    setSlots(new Array(targetWord.length).fill(null));
   };
 
-  const verifyAnswer = async (guess: string) => {
+  const verifyAnswer = async (filledSlots: LetterTile[]) => {
     setLocked(true);
-    const isCorrect = guess === targetLetters;
+    const guess = filledSlots.map((t) => t.char).join('');
+    const isCorrect = guess === targetWord;
 
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -106,254 +177,306 @@ export default function HulaanSalita() {
 
     await triggerFeedback(isCorrect, () => {
       const finalCorrect = correct + (isCorrect ? 1 : 0);
-      if (currentIdx + 1 >= totalRounds) {
+      if (currentIdx + 1 >= TOTAL_ROUNDS) {
         submitFinalScore(finalCorrect);
       } else {
         const nextIdx = currentIdx + 1;
         setCurrentIdx(nextIdx);
-        const nextTarget = items[nextIdx % items.length].filipino.toUpperCase().replace(/[^A-Z]/g, '');
-        setChoices(buildChoices(nextTarget));
-        setInputLetters([]);
-        setFeedbackStatus(null);
-        setLocked(false);
+        resetForQuestion(nextIdx);
       }
     });
   };
 
+  const handleSubmit = () => {
+    if (locked) return;
+    const filled = slots.filter(Boolean) as LetterTile[];
+    if (filled.length < targetWord.length) return;
+    verifyAnswer(slots as LetterTile[]);
+  };
+
   const submitFinalScore = async (finalScore: number) => {
-    const sessionId = `hulaan_${Date.now()}_${Math.random().toString(36).substring(2)}`;
     try {
-      const res = await minigameService.submitResult({
-        game_type: 'hulaan_salita',
+      const res = await submitMinigameReward({
+        gameType: 'hulaan_salita',
         score: finalScore,
-        session_id: sessionId,
-        metadata: { category: category.slug, correct: finalScore, total: totalRounds },
+        sessionId: sessionIdRef.current,
+        metadata: { category: category.slug, correct: finalScore, total: TOTAL_ROUNDS },
+        currentStarsBalance: user?.stars_balance ?? 0,
+        updateUserStars,
       });
-
-      const awarded = res?.session?.stars_awarded ?? finalScore;
-      setStarsAwarded(awarded);
-
-      if (res?.session?.stars_balance !== undefined) {
-        updateUserStars(res.session.stars_balance);
-      }
-
-      // Check if student qualifies for collectible (15-20/20)
-      if (res?.session?.qualifies_for_collectible && res?.session?.collectible) {
+      setStarsAwarded(res.starsAwarded);
+      if (res.session?.qualifies_for_collectible && res.session?.collectible) {
         setAwardedCollectible(res.session.collectible);
         setShowMysteryBox(true);
       } else {
         setGameOver(true);
       }
     } catch {
-      // offline fallback: 1:1 stars
       setStarsAwarded(finalScore);
-      updateUserStars(finalScore);
       setGameOver(true);
     }
   };
 
   const handleRestart = () => {
+    sessionIdRef.current = generateSessionId('hulaan');
     resetStreaks();
+    const newShuffled = shuffleItems(rawItems);
+    setItems(newShuffled);
     setCurrentIdx(0);
-    setInputLetters([]);
     setCorrect(0);
     setGameOver(false);
     setShowMysteryBox(false);
     setAwardedCollectible(null);
-    setLocked(false);
-    setFeedbackStatus(null);
-    const firstTarget = items[0].filipino.toUpperCase().replace(/[^A-Z]/g, '');
-    setChoices(buildChoices(firstTarget));
+    resetForQuestion(0, newShuffled);
   };
+
+  const allFilled = slots.every((s) => s !== null);
 
   return (
     <View style={styles.container}>
       <ScreenHeader
         title={`Hulaan — ${category.name}`}
         bgColor={category.color}
+        logoImage={require('../../../../assets/images/minigames/cover-hulaan-salita.jpg')}
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Animated Progress Bar */}
+        {/* Progress */}
         <View style={styles.progressRow}>
           <ProgressIndicator
             current={currentIdx + 1}
-            total={totalRounds}
+            total={TOTAL_ROUNDS}
             gradient={Gradients.grass}
             height={10}
           />
+          <Text style={styles.progressLabel}>
+            Tanong {currentIdx + 1}/{TOTAL_ROUNDS} • ✓ {correct}
+          </Text>
         </View>
 
-        {/* Visual Card */}
+        {/* Picture card */}
         <View style={[styles.visualCard, Shadows.card]}>
-          <ItemVisual item={currentItem} size={150} />
-          <Text style={styles.englishHint}>English: {currentItem.english}</Text>
+          <ItemVisual item={currentItem} size={140} />
+          <Text style={styles.englishHint}>{currentItem.english}</Text>
+          <View style={styles.instructionBadge}>
+            <Ionicons name="bulb" size={14} color={Colors.sunYellowDark} />
+            <Text style={styles.instructionText}>Ano ang pangalan nito?</Text>
+          </View>
         </View>
 
-        {/* Word Slot Blanks */}
+        {/* Answer slots — tap to return a tile */}
         <View style={styles.slotsRow}>
-          {Array.from({ length: targetLetters.length }).map((_, i) => {
-            const letter = inputLetters[i];
-            const isFilled = !!letter;
-
-            let slotBorder: string = 'rgba(0, 0, 0, 0.08)';
-            let slotBg: string = Colors.white;
-
-            if (feedbackStatus === 'correct') {
-              slotBorder = Colors.grassGreen;
-              slotBg = '#F0FDF4';
-            } else if (feedbackStatus === 'wrong') {
-              slotBorder = Colors.coralPink;
-              slotBg = '#FFF1F2';
-            }
-
+          {slots.map((slot, i) => {
+            let borderColor: string = 'rgba(0,0,0,0.1)';
+            let bgColor: string = Colors.white;
+            if (feedbackStatus === 'correct') { borderColor = Colors.grassGreen; bgColor = '#F0FDF4'; }
+            if (feedbackStatus === 'wrong') { borderColor = Colors.coralPink; bgColor = '#FFF1F2'; }
 
             return (
-              <View
+              <PressableScale
                 key={i}
-                style={[
-                  styles.slot,
-                  { borderColor: slotBorder, backgroundColor: slotBg },
-                  isFilled && Shadows.soft,
-                ]}
+                disabled={locked || !slot}
+                onPress={() => handleSlotPress(i)}
+                activeScale={0.9}
+                style={[styles.slot, { borderColor, backgroundColor: bgColor }, slot && Shadows.subtle]}
               >
-                <Text style={styles.slotText}>{letter || ''}</Text>
-              </View>
+                <Text style={styles.slotText}>{slot?.char ?? ''}</Text>
+              </PressableScale>
             );
           })}
         </View>
 
-        {/* Letter Choices Keyboard */}
-        <View style={styles.keyboardContainer}>
-          <View style={styles.choicesRow}>
-            {choices.map((ch, idx) => (
+        {/* Wrong answer hint */}
+        {feedbackStatus === 'wrong' && (
+          <View style={styles.correctHint}>
+            <Text style={styles.correctHintLabel}>Tamang sagot: </Text>
+            <Text style={styles.correctHintWord}>{targetWord}</Text>
+          </View>
+        )}
+
+        {/* Letter tile pool */}
+        <View style={styles.tilePool}>
+          <Text style={styles.tilePoolLabel}>MGA LETRA</Text>
+          <View style={styles.tilesRow}>
+            {tiles.map((tile) => (
               <PressableScale
-                key={`${ch}-${idx}`}
-                disabled={locked}
-                onPress={() => handleLetterPress(ch)}
-                activeScale={0.9}
-                style={[styles.tileBtn, Shadows.soft]}
+                key={tile.id}
+                disabled={locked || tile.used}
+                onPress={() => handleTilePress(tile)}
+                activeScale={0.88}
+                style={[
+                  styles.tileBtn,
+                  tile.used && styles.tileBtnUsed,
+                  !tile.used && Shadows.soft,
+                ]}
               >
-                <Text style={styles.tileText}>{ch}</Text>
+                <Text style={[styles.tileText, tile.used && styles.tileTextUsed]}>
+                  {tile.char}
+                </Text>
               </PressableScale>
             ))}
           </View>
+        </View>
 
-          {/* Delete Action Button */}
+        {/* Controls */}
+        <View style={styles.controls}>
           <PressableScale
-            disabled={locked || inputLetters.length === 0}
-            onPress={handleDelete}
-            style={[
-              styles.deleteBtn,
-              inputLetters.length === 0 && styles.deleteBtnDisabled,
-              Shadows.subtle,
-            ]}
+            disabled={locked || slots.every((s) => s === null)}
+            onPress={handleReset}
+            style={[styles.resetBtn, slots.every((s) => s === null) && styles.btnDisabled]}
           >
-            <Ionicons name="backspace" size={20} color={Colors.text} />
-            <Text style={styles.deleteText}>Burahin</Text>
+            <Ionicons name="refresh" size={18} color={Colors.textMuted} />
+            <Text style={styles.resetText}>I-reset</Text>
+          </PressableScale>
+
+          <PressableScale
+            disabled={locked || !allFilled}
+            onPress={handleSubmit}
+            style={[styles.submitBtn, (!allFilled || locked) && styles.btnDisabled]}
+          >
+            <Ionicons name="checkmark-circle" size={18} color={Colors.white} />
+            <Text style={styles.submitText}>Suriin</Text>
           </PressableScale>
         </View>
       </ScrollView>
 
-      {/* WIN CELEBRATION OVERLAY */}
       <CelebrationOverlay
         visible={gameOver}
         title="Ang Galing Mo!"
-        subtitle={`Nabuo mo ang ${correct} sa ${totalRounds} mga salita!`}
+        subtitle={`Nabuo mo ang ${correct} sa ${TOTAL_ROUNDS} mga salita!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
-        stars={3}
+        stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
       />
 
-      {/* MYSTERY BOX COLLECTIBLE MODAL (Score 15-20/20) */}
       <MysteryBoxModal
         visible={showMysteryBox}
         score={correct}
-        totalQuestions={totalRounds}
+        totalQuestions={TOTAL_ROUNDS}
         starsAwarded={starsAwarded}
         collectible={awardedCollectible}
-        onClose={() => {
-          setShowMysteryBox(false);
-          setGameOver(true);
-        }}
+        onClose={() => { setShowMysteryBox(false); setGameOver(true); }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F0F9FF',
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  progressRow: {
-    width: '100%',
-    marginBottom: 16,
+  container: { flex: 1, backgroundColor: '#F0F9FF' },
+  content: { padding: 16, paddingBottom: 40, alignItems: 'center' },
+  progressRow: { width: '100%', marginBottom: 4 },
+  progressLabel: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    fontWeight: Typography.weights.semibold,
+    marginTop: 4,
+    textAlign: 'right',
   },
   visualCard: {
     backgroundColor: Colors.white,
     borderRadius: Radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    borderColor: 'rgba(0,0,0,0.05)',
     padding: 20,
     alignItems: 'center',
     width: '100%',
     marginBottom: 20,
+    marginTop: 8,
   },
   englishHint: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.semibold,
     color: Colors.textLight,
-    marginTop: 10,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  instructionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FEF9C3',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#FDE047',
+  },
+  instructionText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.bold,
+    color: '#92400E',
   },
   slotsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 24,
+    marginBottom: 8,
     width: '100%',
   },
   slot: {
-    width: 44,
-    height: 52,
+    width: 48,
+    height: 56,
     borderRadius: Radius.md,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   slotText: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
-  keyboardContainer: {
-    width: '100%',
+  correctHint: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFF1F2',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.coralPink,
   },
-  choicesRow: {
+  correctHintLabel: { fontSize: 12, color: Colors.coralPinkDark },
+  correctHintWord: {
+    fontSize: 14,
+    fontWeight: Typography.weights.heavy,
+    color: Colors.coralPinkDark,
+    letterSpacing: 2,
+  },
+  tilePool: { width: '100%', alignItems: 'center', marginBottom: 16 },
+  tilePoolLabel: {
+    fontSize: 10,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textMuted,
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  tilesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 16,
   },
   tileBtn: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     borderRadius: Radius.lg,
     backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  tileBtnUsed: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.35,
   },
   tileText: {
     fontSize: 20,
@@ -361,22 +484,45 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
-  deleteBtn: {
+  tileTextUsed: { color: Colors.textMuted },
+  controls: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  resetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderRadius: Radius.pill,
   },
-  deleteBtnDisabled: {
-    opacity: 0.45,
-  },
-  deleteText: {
+  resetText: {
     fontSize: Typography.sizes.sm,
-    fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
-    color: Colors.text,
+    color: Colors.textMuted,
   },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.grassGreen,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+    flex: 1,
+    justifyContent: 'center',
+    ...Shadows.colored(Colors.grassGreen, 0.3),
+  },
+  submitText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+  },
+  btnDisabled: { opacity: 0.4 },
 });
