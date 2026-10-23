@@ -142,7 +142,7 @@ export function useAnswerFeedback(options?: UseAnswerFeedbackOptions) {
       };
 
       // Safe fallback timeout: never leave student stuck if audio file or device audio fails
-      const timeoutDuration = options?.fallbackTimeoutMs ?? 1500;
+      const timeoutDuration = options?.fallbackTimeoutMs ?? 5000;
       fallbackTimerRef.current = setTimeout(finishFeedback, timeoutDuration);
 
       try {

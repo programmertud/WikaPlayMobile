@@ -37,6 +37,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
   const currentQuestionIdRef = useRef<number | null>(null);
   const playbackCleanupRef = useRef<(() => void) | null>(null);
   const timerRef = useRef<any>(null);
+  const nextQuestionTimerRef = useRef<any>(null);
 
   const currentQuestion = questions[currentIndex] || null;
 
@@ -61,6 +62,10 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
+    }
+    if (nextQuestionTimerRef.current) {
+      clearTimeout(nextQuestionTimerRef.current);
+      nextQuestionTimerRef.current = null;
     }
     stopCurrentSound();
 
@@ -93,6 +98,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (nextQuestionTimerRef.current) clearTimeout(nextQuestionTimerRef.current);
       if (playbackCleanupRef.current) playbackCleanupRef.current();
       stopCurrentSound();
     };
@@ -131,17 +137,18 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
         selected_answer: choiceId,
       });
 
-      // Play streak feedback voice-over immediately without 2-second delay
+      // Play streak feedback voice-over then advance with a 1-second delay
       await triggerFeedback(isCorrect, () => {
-        // Automatic progression after feedback voice-over finishes
-        if (currentQuestionIdRef.current === questionId) {
-          if (currentIndex + 1 < questions.length) {
-            setCurrentIndex((prev) => prev + 1);
-          } else {
-            // Completed all questions
-            onComplete(submittedAnswers.current);
+        nextQuestionTimerRef.current = setTimeout(() => {
+          if (currentQuestionIdRef.current === questionId) {
+            if (currentIndex + 1 < questions.length) {
+              setCurrentIndex((prev) => prev + 1);
+            } else {
+              // Completed all questions
+              onComplete(submittedAnswers.current);
+            }
           }
-        }
+        }, 1000);
       });
     },
     [

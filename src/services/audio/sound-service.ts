@@ -1,4 +1,4 @@
-﻿import { Asset } from 'expo-asset';
+import { Asset } from 'expo-asset';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Image, Platform } from 'react-native';
 import { bgm, useBgmDuck } from './bgm-service';

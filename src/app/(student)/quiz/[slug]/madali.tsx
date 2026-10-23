@@ -125,6 +125,7 @@ export default function MadaliQuizScreen() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextQuestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lockRef = useRef(false);   // prevent double-tap race
 
   // Centralized voice-over streak manager
@@ -196,6 +197,7 @@ export default function MadaliQuizScreen() {
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (nextQuestionTimerRef.current) clearTimeout(nextQuestionTimerRef.current);
       clearTimeout(audioTimer);
       stopCurrentSound();
       setIsPlayingAudio(false);
@@ -245,34 +247,36 @@ export default function MadaliQuizScreen() {
 
       setAnswers((prev) => [...prev, record]);
 
-      // Play voice-over via centralized hook then advance
+      // Play voice-over via centralized hook then advance with a 1-second delay
       await triggerFeedback(isCorrect, () => {
-        const nextIdx = currentIndex + 1;
-        if (nextIdx < totalQuestions) {
-          setCurrentIndex(nextIdx);
-        } else {
-          // Quiz complete
-          const finalAnswers = [...answers, record];
-          const finalCorrect = finalAnswers.filter((a) => a.correct).length;
-          const finalPassed = (finalCorrect / totalQuestions) * 100 >= 60;
-          setStarsAwarded(finalCorrect);
-          setQuizDone(true);
-          if (finalPassed) setShowCelebration(true);
+        nextQuestionTimerRef.current = setTimeout(() => {
+          const nextIdx = currentIndex + 1;
+          if (nextIdx < totalQuestions) {
+            setCurrentIndex(nextIdx);
+          } else {
+            // Quiz complete
+            const finalAnswers = [...answers, record];
+            const finalCorrect = finalAnswers.filter((a) => a.correct).length;
+            const finalPassed = (finalCorrect / totalQuestions) * 100 >= 60;
+            setStarsAwarded(finalCorrect);
+            setQuizDone(true);
+            if (finalPassed) setShowCelebration(true);
 
-          const catId = CATEGORY_SLUG_TO_ID[slug ?? ''] ?? 1;
-          submitQuizReward({
-            categoryId: catId,
-            difficulty: 'madali',
-            sessionId: sessionIdRef.current,
-            answers: finalAnswers.map((a) => ({
-              question_id: a.questionId,
-              selected_answer: a.selected,
-              is_correct: a.correct,
-            })),
-            currentStarsBalance: user?.stars_balance ?? 0,
-            updateUserStars,
-          });
-        }
+            const catId = CATEGORY_SLUG_TO_ID[slug ?? ''] ?? 1;
+            submitQuizReward({
+              categoryId: catId,
+              difficulty: 'madali',
+              sessionId: sessionIdRef.current,
+              answers: finalAnswers.map((a) => ({
+                question_id: a.questionId,
+                selected_answer: a.selected,
+                is_correct: a.correct,
+              })),
+              currentStarsBalance: user?.stars_balance ?? 0,
+              updateUserStars,
+            });
+          }
+        }, 1000);
       });
     },
     [isEnabled, isLocked, currentQuestion, currentIndex, totalQuestions, answers, slug, user?.stars_balance, updateUserStars, shakeAnim, triggerFeedback]

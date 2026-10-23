@@ -281,19 +281,19 @@ const hayopQuestions: MadaliQuestion[] = [
 
 const prutasQuestions: MadaliQuestion[] = [
   mc('prutas-01', 'cat_prutas', 'mga-prutas',
-    'Ano ang Tagalog ng "Banana"?',
-    'What is the Tagalog word for "Banana"?',
-    ['Mangga', 'Saging', 'Atis', 'Ubas'], 1),
+    'Ano ang Ingles ng "Saging"?',
+    'What is the English word for "Saging"?',
+    ['Mango', 'Banana', 'Guava', 'Grapes'], 1),
 
   mc('prutas-02', 'cat_prutas', 'mga-prutas',
-    'Ano ang Tagalog ng "Mango"?',
-    'What is the Tagalog word for "Mango"?',
-    ['Papaya', 'Saging', 'Mangga', 'Peras'], 2),
+    'Ano ang Ingles ng "Mangga"?',
+    'What is the English word for "Mangga"?',
+    ['Papaya', 'Pear', 'Mango', 'Grapes'], 2),
 
   mc('prutas-03', 'cat_prutas', 'mga-prutas',
-    'Ano ang Ingles ng "Pakwan"?',
-    'What is the English word for "Pakwan"?',
-    ['Melon', 'Watermelon', 'Guava', 'Mango'], 1),
+    'Ano ang Tagalog ng "Watermelon"?',
+    'What is the Tagalog word for "Watermelon"?',
+    ['Melon', 'Langka', 'Mangga', 'Pakwan'], 3),
 
   mc('prutas-04', 'cat_prutas', 'mga-prutas',
     'Ano ang Tagalog ng "Apple"?',
@@ -301,9 +301,9 @@ const prutasQuestions: MadaliQuestion[] = [
     ['Mansanas', 'Bayabas', 'Presas', 'Abukado'], 0),
 
   mc('prutas-05', 'cat_prutas', 'mga-prutas',
-    'Ano ang Ingles ng "Ubas"?',
-    'What is the English word for "Ubas"?',
-    ['Cherry', 'Strawberry', 'Grapes', 'Plum'], 2),
+    'Ano ang Tagalog ng "Grapes"?',
+    'What is the Tagalog word for "Grapes"?',
+    ['Seresa', 'Presas', 'Ubas', 'Santol'], 2),
 
   mc('prutas-06', 'cat_prutas', 'mga-prutas',
     'Ano ang Tagalog ng "Strawberry"?',
