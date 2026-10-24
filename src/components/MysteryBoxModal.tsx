@@ -23,8 +23,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 import { Colors, Gradients, Radius, Shadows, Typography } from '@/theme';
 import { Collectible } from '@/types';
-import { playSound, speakWordWeb } from '@/services/audio/sound-service';
-import { getCollectibleAudioSource, getCollectibleImageSource } from '@/utils/collectible-assets';
+import { bgm, playSound, speakWordWeb, stopCurrentSound } from '@/services/audio/sound-service';
+import { getCollectibleAudioSource, getCollectibleDescription, getCollectibleImageSource } from '@/utils/collectible-assets';
 import { PrimaryButton } from './PrimaryButton';
 import { PressableScale } from './PressableScale';
 
@@ -70,9 +70,10 @@ export function MysteryBoxModal({
   const cardScale = useSharedValue(0.4);
   const cardOpacity = useSharedValue(0);
 
-  // Reset state when modal opens
+  // Reset state when modal opens and minimize BGM (@happy.mp3)
   useEffect(() => {
     if (visible) {
+      bgm.minimize();
       setIsRevealed(false);
       setIsPlayingAudio(false);
       cardScale.value = 0.4;
@@ -91,13 +92,28 @@ export function MysteryBoxModal({
         -1,
         false
       );
+    } else {
+      stopCurrentSound();
+      bgm.restore();
     }
+
+    return () => {
+      stopCurrentSound();
+      bgm.restore();
+    };
   }, [visible]);
+
+  const handleClose = () => {
+    stopCurrentSound();
+    bgm.restore();
+    onClose();
+  };
 
   // Audio Playback
   const playCardAudio = () => {
     if (!collectible) return;
     setIsPlayingAudio(true);
+    bgm.minimize();
 
     const audioSource = getCollectibleAudioSource(collectible);
     if (audioSource) {
@@ -106,7 +122,8 @@ export function MysteryBoxModal({
       });
     } else {
       // Speech synthesis fallback for filipino description
-      const textToSpeak = `${collectible.filipino_name || collectible.name}. ${collectible.description}`;
+      const cardDesc = getCollectibleDescription(collectible);
+      const textToSpeak = `${collectible.filipino_name || collectible.name}. ${cardDesc}`;
       speakWordWeb(textToSpeak, () => {
         setIsPlayingAudio(false);
       });
@@ -138,7 +155,7 @@ export function MysteryBoxModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <View style={styles.container}>
           {!isRevealed ? (
@@ -237,7 +254,7 @@ export function MysteryBoxModal({
 
                 {/* Filipino Description */}
                 <Text style={styles.descriptionText}>
-                  {collectible?.description || 'Isang natatanging kolektible mula sa WikaPlay!'}
+                  {getCollectibleDescription(collectible)}
                 </Text>
 
                 {/* Audio Playback Controls (Rule 8) */}
@@ -261,7 +278,7 @@ export function MysteryBoxModal({
                   title="Itabi sa Aking Nakolekta 🏆"
                   gradient={Gradients.grass}
                   size="md"
-                  onPress={onClose}
+                  onPress={handleClose}
                   style={{ width: '100%', marginTop: 12 }}
                 />
               </View>

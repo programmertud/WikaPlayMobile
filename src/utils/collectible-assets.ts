@@ -61,10 +61,13 @@ export function getCollectibleImageSource(item?: {
   return null;
 }
 
+import { COLLECTIBLE_NARRATION_AUDIO } from '../data/collectible-audio';
+
 /**
  * Returns the resolved Audio source for a Collectible:
- * Prefers bundled local voice MP3 asset,
- * otherwise falls back to remote audio_url string or null.
+ * 1. Prefers bundled description narration (.m4a) asset,
+ * 2. Falls back to bundled local vocabulary pronunciation MP3 asset,
+ * 3. Falls back to remote audio_url string or null.
  */
 export function getCollectibleAudioSource(item?: {
   filipino_name?: string;
@@ -73,6 +76,20 @@ export function getCollectibleAudioSource(item?: {
   audio_url?: string | null;
 } | null): any {
   if (!item) return null;
+
+  // 1. Prefer full description voice narration audio
+  const normF = (item.filipino_name || '').toLowerCase().trim();
+  const rawSlug = (item.slug || '').toLowerCase().replace(/_/g, '-');
+  if (COLLECTIBLE_NARRATION_AUDIO[rawSlug]) {
+    return COLLECTIBLE_NARRATION_AUDIO[rawSlug];
+  }
+  if (COLLECTIBLE_NARRATION_AUDIO[normF]) {
+    return COLLECTIBLE_NARRATION_AUDIO[normF];
+  }
+  const cleanKey = rawSlug.replace(/^hayop-|^prutas-|^gulay-|^kulay-|^katawan-|^hugis-|^bilang-|^pagbati-/, '');
+  if (COLLECTIBLE_NARRATION_AUDIO[cleanKey]) {
+    return COLLECTIBLE_NARRATION_AUDIO[cleanKey];
+  }
 
   const visual = getCollectibleVisual(item);
   if (visual?.audio) {
@@ -85,3 +102,6 @@ export function getCollectibleAudioSource(item?: {
 
   return null;
 }
+
+export { getCollectibleDescription, COLLECTIBLE_DESCRIPTIONS } from '../data/collectible-descriptions';
+

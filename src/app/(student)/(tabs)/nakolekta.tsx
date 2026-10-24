@@ -28,8 +28,8 @@ import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { collectibleService } from '../../../services/api';
-import { playSound, speakWordWeb } from '../../../services/audio/sound-service';
-import { getCollectibleAudioSource, getCollectibleImageSource } from '@/utils/collectible-assets';
+import { bgm, playSound, speakWordWeb, stopCurrentSound } from '../../../services/audio/sound-service';
+import { getCollectibleAudioSource, getCollectibleDescription, getCollectibleImageSource } from '@/utils/collectible-assets';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible } from '../../../types';
 
@@ -113,25 +113,40 @@ function CollectibleDetailModal({ item, onClose }: { item: Collectible; onClose:
   const rarityColor = RARITY_COLORS[item.rarity] ?? Colors.skyBlueDark;
   const displayName = item.filipino_name || item.name;
 
+  const handleClose = useCallback(() => {
+    stopCurrentSound();
+    bgm.restore();
+    onClose();
+  }, [onClose]);
+
   const handlePlayAudio = useCallback(() => {
     if (playing) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setPlaying(true);
+    bgm.minimize();
     const audioSource = getCollectibleAudioSource(item);
     if (audioSource) {
       playSound(audioSource, () => setPlaying(false));
     } else {
-      speakWordWeb(`${displayName}. ${item.description ?? ''}`, () => setPlaying(false));
+      const desc = getCollectibleDescription(item);
+      speakWordWeb(`${displayName}. ${desc}`, () => setPlaying(false));
     }
   }, [playing, item, displayName]);
 
   useEffect(() => {
+    // Minimize @happy.mp3 sound so narration is clear and pleasant
+    bgm.minimize();
+
     const t = setTimeout(handlePlayAudio, 400);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      stopCurrentSound();
+      bgm.restore();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" onRequestClose={handleClose}>
       <View style={modalStyles.overlay}>
         <View style={[modalStyles.card, Shadows.card]}>
           <LinearGradient colors={[rarityColor, rarityColor + 'BB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={modalStyles.header}>
@@ -139,7 +154,7 @@ function CollectibleDetailModal({ item, onClose }: { item: Collectible; onClose:
               <View style={modalStyles.rarityPill}>
                 <Text style={modalStyles.rarityText}>{catEmoji(item.category ?? '')} {RARITY_LABELS[item.rarity] ?? item.rarity}</Text>
               </View>
-              <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <TouchableOpacity onPress={handleClose} style={modalStyles.closeBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="close" size={20} color={Colors.white} />
               </TouchableOpacity>
             </View>
@@ -159,7 +174,7 @@ function CollectibleDetailModal({ item, onClose }: { item: Collectible; onClose:
               })()}
             </View>
 
-            <Text style={modalStyles.description}>{item.description || 'Isang espesyal na kard mula sa WikaPlay!'}</Text>
+            <Text style={modalStyles.description}>{getCollectibleDescription(item)}</Text>
 
             {item.unlocked_at && (
               <View style={modalStyles.dateRow}>
@@ -177,7 +192,7 @@ function CollectibleDetailModal({ item, onClose }: { item: Collectible; onClose:
               </Text>
             </TouchableOpacity>
 
-            <PrimaryButton title="Isara" variant="outline" size="md" onPress={onClose} style={{ width: '100%', marginTop: 10 }} />
+            <PrimaryButton title="Isara" variant="outline" size="md" onPress={handleClose} style={{ width: '100%', marginTop: 10 }} />
           </View>
         </View>
       </View>
@@ -205,7 +220,7 @@ function UnlockedCard({ item, onPress }: { item: Collectible; onPress: () => voi
       <View style={[styles.rarityPill, { backgroundColor: rarityColor }]}>
         <Text style={styles.rarityPillText}>{RARITY_LABELS[item.rarity]}</Text>
       </View>
-      <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
+      <Text style={styles.cardDesc} numberOfLines={2}>{getCollectibleDescription(item)}</Text>
     </PressableScale>
   );
 }
@@ -254,6 +269,18 @@ export default function NakolektaScreen() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // When a card is opened in nakolekta, minimize @happy.mp3 sound
+  useEffect(() => {
+    if (selectedCard) {
+      bgm.minimize();
+    } else {
+      bgm.restore();
+    }
+    return () => {
+      bgm.restore();
+    };
+  }, [selectedCard]);
 
   // Refresh when tab gains focus (after returning from minigame)
   useFocusEffect(useCallback(() => {
