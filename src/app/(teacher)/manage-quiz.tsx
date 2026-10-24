@@ -1,6 +1,6 @@
-import { Redirect } from 'expo-router';
 import React from 'react';
+import ContentManagementScreen from './content';
 
 export default function ManageQuizScreen() {
-  return <Redirect href={{ pathname: '/(teacher)/content', params: { mode: 'quizzes' } } as any} />;
+  return <ContentManagementScreen initialMode="quizzes" showBackToDashboard={true} />;
 }

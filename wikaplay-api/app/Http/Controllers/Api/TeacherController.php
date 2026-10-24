@@ -754,6 +754,17 @@ class TeacherController extends Controller
         $this->authorizeTeacher($request);
 
         $flashcard = Flashcard::findOrFail($id);
+
+        $hasQuestions = QuizQuestion::where('flashcard_id', $flashcard->id)->exists();
+        if ($hasQuestions) {
+            $flashcard->is_published = false;
+            $flashcard->save();
+            return response()->json([
+                'message' => 'Nai-archive ang flashcard (itinago mula sa mga mag-aaral upang maprotektahan ang mga nakaraang pagsusulit).',
+                'archived' => true,
+            ]);
+        }
+
         $flashcard->delete();
 
         return response()->json(['message' => 'Matagumpay na nabura ang flashcard.']);
@@ -768,23 +779,34 @@ class TeacherController extends Controller
 
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
-            'difficulty' => 'required|in:madali,katamtaman,mahirap',
+            'difficulty' => 'nullable|in:madali,katamtaman,mahirap,all',
             'is_locked' => 'required|boolean',
         ]);
 
-        $availability = QuizAvailability::updateOrCreate(
-            [
-                'category_id' => $validated['category_id'],
-                'difficulty' => $validated['difficulty'],
-            ],
-            [
-                'is_locked' => $validated['is_locked'],
-            ]
-        );
+        $diffs = ($request->filled('difficulty') && in_array($request->difficulty, ['madali', 'katamtaman', 'mahirap']))
+            ? [$request->difficulty]
+            : ['madali', 'katamtaman', 'mahirap'];
+
+        $updated = [];
+        foreach ($diffs as $diff) {
+            $updated[$diff] = QuizAvailability::updateOrCreate(
+                [
+                    'category_id' => $validated['category_id'],
+                    'difficulty' => $diff,
+                ],
+                [
+                    'is_locked' => $validated['is_locked'],
+                ]
+            );
+        }
 
         return response()->json([
-            'message' => $validated['is_locked'] ? 'Naka-lock na ang pagsusulit.' : 'Naka-unlock na ang pagsusulit.',
-            'availability' => $availability,
+            'message' => $validated['is_locked']
+                ? 'Naka-lock na ang pagsusulit para sa kategoryang ito.'
+                : 'Bukas at naka-unlock na ang pagsusulit para sa kategoryang ito.',
+            'availabilities' => $updated,
+            'availability' => reset($updated),
+            'is_locked' => $validated['is_locked'],
         ]);
     }
 
@@ -867,6 +889,10 @@ class TeacherController extends Controller
         $this->authorizeTeacher($request);
 
         $question = QuizQuestion::findOrFail($id);
+
+        // Detach or nullify foreign key in student answers so attempts are never deleted
+        QuizAnswer::where('question_id', $question->id)->update(['question_id' => null]);
+
         $question->delete();
 
         return response()->json(['message' => 'Matagumpay na nabura ang tanong.']);

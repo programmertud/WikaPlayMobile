@@ -70,7 +70,9 @@ class QuizController extends Controller
 
         if ($availability && $availability->is_locked) {
             return response()->json([
-                'message' => 'Naka-lock ang pagsusulit na ito.',
+                'error_code' => 'QUIZ_LOCKED',
+                'message' => 'Naka-lock ang pagsusulit na ito. Hindi pinapayagan ang pagsusumite.',
+                'is_locked' => true,
             ], 403);
         }
 

@@ -1,4 +1,5 @@
 import { LearningCategory, VocabularyItem } from '../types';
+import { storage } from '../utils/storage';
 
 export const LEARNING_CATEGORIES: LearningCategory[] = [
   {
@@ -303,3 +304,17 @@ export function overrideVocabularyItem(filipinoOrId: string, updates: Partial<Vo
     }
   }
 }
+
+export async function hydrateCategoryOverrides(slug: string) {
+  if (!slug) return;
+  try {
+    const raw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
+    if (raw) {
+      const overrides = JSON.parse(raw);
+      Object.entries(overrides).forEach(([word, update]: [string, any]) => {
+        overrideVocabularyItem(word, update);
+      });
+    }
+  } catch {}
+}
+

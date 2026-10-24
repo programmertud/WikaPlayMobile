@@ -389,8 +389,8 @@ export const teacherService = {
     return ApiClient.delete(`teacher/flashcards/${id}`);
   },
 
-  toggleQuizLock: async (payload: { category_id: number; difficulty: QuizDifficulty; is_locked: boolean }) => {
-    return ApiClient.post<{ message: string; availability: any }>('teacher/quizzes/toggle-lock', payload);
+  toggleQuizLock: async (payload: { category_id: number; difficulty?: QuizDifficulty | 'all' | string; is_locked: boolean }) => {
+    return ApiClient.post<{ message: string; availability: any; availabilities?: any; is_locked: boolean }>('teacher/quizzes/toggle-lock', payload);
   },
 
   getQuizQuestions: async (categoryId: number, difficulty: QuizDifficulty) => {

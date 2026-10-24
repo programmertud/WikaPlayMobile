@@ -30,6 +30,8 @@ export interface Category {
   icon?: string;
   flashcards_count?: number;
   quiz_availabilities?: Record<QuizDifficulty, QuizAvailabilityItem>;
+  quizAvailabilities?: any;
+  is_locked?: boolean;
   flashcards?: Flashcard[];
 }
 

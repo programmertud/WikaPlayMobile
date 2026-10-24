@@ -16,6 +16,8 @@ import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Typography } from '../../../theme';
 
+import { hydrateCategoryOverrides } from '../../../data/categories';
+
 type GameSlug =
   | 'memory-match'
   | 'paghahanap-larawan'
@@ -33,7 +35,14 @@ const GAME_MAP: Record<GameSlug, React.ComponentType> = {
 
 export default function GameRouter() {
   useBgmDuck();
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug, category } = useLocalSearchParams<{ slug: string; category?: string }>();
+  
+  React.useEffect(() => {
+    if (category) {
+      hydrateCategoryOverrides(category);
+    }
+  }, [category]);
+
   const GameComponent = GAME_MAP[slug as GameSlug];
 
   if (!GameComponent) {

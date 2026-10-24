@@ -1,6 +1,6 @@
-import { Redirect } from 'expo-router';
 import React from 'react';
+import ContentManagementScreen from './content';
 
 export default function ManageFlashcardsScreen() {
-  return <Redirect href={{ pathname: '/(teacher)/content', params: { mode: 'flashcards' } } as any} />;
+  return <ContentManagementScreen initialMode="flashcards" showBackToDashboard={true} />;
 }

@@ -133,6 +133,7 @@ class CategoryController extends Controller
 
         if ($availability && $availability->is_locked) {
             return response()->json([
+                'error_code' => 'QUIZ_LOCKED',
                 'message' => 'Naka-lock pa ang pagsusulit na ito. Maghintay sa tagubilin ng guro.',
                 'is_locked' => true,
             ], 403);

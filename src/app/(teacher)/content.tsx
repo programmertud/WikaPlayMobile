@@ -63,7 +63,12 @@ const DIFF_COLORS: Record<QuizDifficulty, string> = {
   mahirap: Colors.coralPink,
 };
 
-type ManagementMode = 'flashcards' | 'quizzes' | 'minigames';
+export type ManagementMode = 'flashcards' | 'quizzes' | 'minigames';
+
+export interface ContentManagementScreenProps {
+  initialMode?: ManagementMode;
+  showBackToDashboard?: boolean;
+}
 
 const DEFAULT_STUDENT_CATEGORIES: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
   id: idx + 1, slug: c.slug, name: c.name, title: c.name, description: c.description,
@@ -118,7 +123,10 @@ function getFlashcardImageSource(card?: Partial<Flashcard & { localImageSource?:
   return null;
 }
 
-export default function ContentManagementScreen({ initialMode }: { initialMode?: ManagementMode } = {}) {
+export default function ContentManagementScreen({
+  initialMode,
+  showBackToDashboard,
+}: ContentManagementScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const searchParams = useLocalSearchParams<{ mode?: ManagementMode }>();
   const [activeMode, setActiveMode] = useState<ManagementMode>(
@@ -211,6 +219,11 @@ export default function ContentManagementScreen({ initialMode }: { initialMode?:
             color: matched?.color || defCat.color,
             description: matched?.description || defCat.description,
             flashcards_count: defCat.flashcards_count,
+            quizAvailabilities: matched?.quiz_availabilities || matched?.quizAvailabilities || [],
+            is_locked: Boolean(
+              matched?.is_locked ||
+              (matched?.quiz_availabilities || matched?.quizAvailabilities || []).some((qa: any) => qa.is_locked)
+            ),
           };
         });
       }
@@ -343,6 +356,61 @@ export default function ContentManagementScreen({ initialMode }: { initialMode?:
     } finally {
       setSavingLock(false);
     }
+  };
+
+  const handleToggleCategoryQuizLock = (cat: Category, currentlyLocked: boolean) => {
+    Alert.alert(
+      'Kumpirmahin ang Aksyon',
+      `Sigurado ka bang nais mong ${currentlyLocked ? 'i-unlock (buksan)' : 'i-lock'} ang pagsusulit para sa "${cat.name}"?\n\n${
+        currentlyLocked
+          ? 'Maaari nang sagutan at laruin ng mga mag-aaral ang pagsusulit para sa kategoryang ito.'
+          : 'Hindi na mabubuksan o masasagutan ng mga mag-aaral ang pagsusulit para sa kategoryang ito hangga\'t naka-lock.'
+      }`,
+      [
+        { text: 'Kanselahin', style: 'cancel' },
+        {
+          text: currentlyLocked ? 'I-unlock' : 'I-lock',
+          style: currentlyLocked ? 'default' : 'destructive',
+          onPress: async () => {
+            try {
+              await teacherService.toggleQuizLock({
+                category_id: cat.id,
+                difficulty: 'all',
+                is_locked: !currentlyLocked,
+              });
+              setCategories((prev) =>
+                prev.map((c) => {
+                  if (c.id === cat.id) {
+                    const newAvails = (c.quizAvailabilities || []).map((qa: any) => ({
+                      ...qa,
+                      is_locked: !currentlyLocked,
+                    }));
+                    return {
+                      ...c,
+                      is_locked: !currentlyLocked,
+                      quizAvailabilities: newAvails.length > 0 ? newAvails : [
+                        { difficulty: 'madali', is_locked: !currentlyLocked },
+                        { difficulty: 'katamtaman', is_locked: !currentlyLocked },
+                        { difficulty: 'mahirap', is_locked: !currentlyLocked },
+                      ],
+                    };
+                  }
+                  return c;
+                })
+              );
+              Alert.alert(
+                'Tagumpay',
+                !currentlyLocked
+                  ? `Nai-lock na ang pagsusulit para sa ${cat.name}. Hindi na ito mabubuksan ng mga mag-aaral.`
+                  : `Nabuksan na ang pagsusulit para sa ${cat.name}. Maaari na itong sagutan ng mga mag-aaral.`
+              );
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Nabigong baguhin ang estado ng pagsusulit.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ── Flashcard Actions ───────────────────────────────────────────────────
@@ -510,6 +578,12 @@ export default function ContentManagementScreen({ initialMode }: { initialMode?:
           audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
         };
         await storage.setItem(`@wikaplay_flashcards_${catSlug}`, JSON.stringify(overrides));
+        overrideVocabularyItem(c.filipino_name, {
+          filipino: c.filipino_name.trim(),
+          english: c.english_name?.trim() || undefined,
+          imageUri: (c.image_url && !c.image_url.startsWith('blob:')) ? c.image_url : undefined,
+          audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
+        });
       } catch (storeErr) {
         console.warn('Storage override saving failed:', storeErr);
       }
@@ -691,107 +765,49 @@ export default function ContentManagementScreen({ initialMode }: { initialMode?:
         />
       }
     >
+      {/* Back button if opened from dedicated Manage screen */}
+      {showBackToDashboard && (
+        <TouchableOpacity
+          style={styles.backToDashboardButton}
+          onPress={() => router.replace('/(teacher)' as any)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={20} color={Colors.teacherPurple} />
+          <Text style={styles.backToDashboardText}>Bumalik sa Dashboard</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Header */}
       <View style={styles.topHeader}>
         <View style={styles.topHeaderIcon}>
-          <Ionicons name="book" size={24} color={Colors.teacherPurple} />
+          <Ionicons
+            name={
+              activeMode === 'flashcards'
+                ? 'albums'
+                : activeMode === 'quizzes'
+                ? 'newspaper'
+                : 'game-controller'
+            }
+            size={24}
+            color={Colors.teacherPurple}
+          />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>Pamahalaan ang Nilalaman</Text>
+          <Text style={styles.pageTitle}>
+            {activeMode === 'flashcards'
+              ? 'Pamahalaan ang Flashcards'
+              : activeMode === 'quizzes'
+              ? 'Pamahalaan ang Pagsusulit'
+              : 'Pamahalaan ang Mini-Games'}
+          </Text>
           <Text style={styles.pageSub}>
-            Pumili sa ibaba upang pamahalaan ang Flashcards, Pagsusulit, o Mini-Games.
+            {activeMode === 'flashcards'
+              ? 'Pamahalaan ang 151 bokabularyo, larawan, audio recording, at pagsasalin.'
+              : activeMode === 'quizzes'
+              ? 'Ayusin ang mga tanong at i-lock o i-unlock ang pagsusulit bawat kategorya.'
+              : 'Pamahalaan ang 5 mini-games, patakaran sa puntos, at kategorya.'}
           </Text>
         </View>
-      </View>
-
-      {/* 3 HERO MANAGEMENT CARDS */}
-      <View style={styles.heroCardsContainer}>
-        {/* CARD 1: MANAGE FLASHCARDS */}
-        <TouchableOpacity
-          style={[
-            styles.heroActionCard,
-            activeMode === 'flashcards' && styles.heroActionCardActive,
-            Shadows.soft,
-          ]}
-          onPress={() => setActiveMode('flashcards')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.heroCardTopRow}>
-            <View style={[styles.heroIconCircle, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="albums" size={22} color={Colors.teacherPurple} />
-            </View>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>{flashcards.length} Flashcards</Text>
-            </View>
-          </View>
-          <Text style={styles.heroCardTitle}>Pamahalaan ang Flashcards</Text>
-          <Text style={styles.heroCardSubtitle}>
-            Magdagdag, mag-edit ng mga salita, larawan, audio recording, at pagsasalin.
-          </Text>
-          <View style={styles.heroCardFooter}>
-            <Text style={[styles.heroCardActionText, { color: Colors.teacherPurple }]}>
-              {activeMode === 'flashcards' ? '✓ Kasalukuyang Bukas' : 'Buksan ang Flashcards →'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* CARD 2: MANAGE QUIZ */}
-        <TouchableOpacity
-          style={[
-            styles.heroActionCard,
-            activeMode === 'quizzes' && [styles.heroActionCardActive, { borderColor: '#0284C7', backgroundColor: '#F0F9FF' }],
-            Shadows.soft,
-          ]}
-          onPress={() => setActiveMode('quizzes')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.heroCardTopRow}>
-            <View style={[styles.heroIconCircle, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="newspaper" size={22} color="#0284C7" />
-            </View>
-            <View style={[styles.heroBadge, { backgroundColor: '#E0F2FE' }]}>
-              <Text style={[styles.heroBadgeText, { color: '#0369A1' }]}>3 Antas ng Hirap</Text>
-            </View>
-          </View>
-          <Text style={styles.heroCardTitle}>Pamahalaan ang Pagsusulit</Text>
-          <Text style={styles.heroCardSubtitle}>
-            Ayusin ang mga tanong, choices, Katamtaman flashcard audio, at locking status.
-          </Text>
-          <View style={styles.heroCardFooter}>
-            <Text style={[styles.heroCardActionText, { color: '#0284C7' }]}>
-              {activeMode === 'quizzes' ? '✓ Kasalukuyang Bukas' : 'Buksan ang Pagsusulit →'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* CARD 3: MANAGE MINI-GAMES */}
-        <TouchableOpacity
-          style={[
-            styles.heroActionCard,
-            activeMode === 'minigames' && [styles.heroActionCardActive, { borderColor: '#DB2777', backgroundColor: '#FDF2F8' }],
-            Shadows.soft,
-          ]}
-          onPress={() => setActiveMode('minigames')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.heroCardTopRow}>
-            <View style={[styles.heroIconCircle, { backgroundColor: '#FCE7F3' }]}>
-              <Ionicons name="game-controller" size={22} color="#DB2777" />
-            </View>
-            <View style={[styles.heroBadge, { backgroundColor: '#FCE7F3' }]}>
-              <Text style={[styles.heroBadgeText, { color: '#BE185D' }]}>5 Mini-Games</Text>
-            </View>
-          </View>
-          <Text style={styles.heroCardTitle}>Pamahalaan ang Mini-Games</Text>
-          <Text style={styles.heroCardSubtitle}>
-            Memory Match, Paghahanap, Hulaan, Gulong, Pop Balloon at Mystery Box policy.
-          </Text>
-          <View style={styles.heroCardFooter}>
-            <Text style={[styles.heroCardActionText, { color: '#DB2777' }]}>
-              {activeMode === 'minigames' ? '✓ Kasalukuyang Bukas' : 'Buksan ang Mini-Games →'}
-            </Text>
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* Quick Mode Toggle Bar */}
@@ -1029,9 +1045,80 @@ export default function ContentManagementScreen({ initialMode }: { initialMode?:
         <View style={styles.sectionWrap}>
           {!selectedCategory ? (
             <>
-              <View style={styles.sectionHeaderRow}>
+              {/* Category-Level Quiz Access Management (Quiz Locking by Category) */}
+              <View style={[styles.accessSectionCard, Shadows.soft]}>
+                <View style={styles.accessSectionHeader}>
+                  <View style={styles.accessHeaderIcon}>
+                    <Ionicons name="lock-closed" size={20} color={Colors.teacherPurple} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.accessSectionTitle}>Pamamahala sa Akses ng Pagsusulit</Text>
+                    <Text style={styles.accessSectionSub}>
+                      I-lock o i-unlock ang pagsusulit bawat kategorya. Ang naka-lock na kategorya ay awtomatikong hindi mabubuksan ng mga mag-aaral sa app at haharangin ng backend API (HTTP 403 QUIZ_LOCKED).
+                    </Text>
+                  </View>
+                </View>
+
+                {categories.map((cat) => {
+                  const isLocked = Boolean(
+                    (cat as any).is_locked ||
+                    cat.quizAvailabilities?.some((qa: any) => qa.is_locked)
+                  );
+                  return (
+                    <View key={`access_cat_${cat.id}`} style={styles.accessRow}>
+                      <View style={styles.accessRowInfo}>
+                        <Text style={styles.accessCatName}>{cat.name}</Text>
+                        <Text style={styles.accessCatMeta}>
+                          {cat.flashcards_count ?? 20} Flashcards · 15 Tanong (3 Antas)
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.accessStatusBadge,
+                          { backgroundColor: isLocked ? '#FEE2E2' : '#DCFCE7' },
+                        ]}
+                      >
+                        <Ionicons
+                          name={isLocked ? 'lock-closed' : 'lock-open'}
+                          size={13}
+                          color={isLocked ? Colors.coralPinkDark : Colors.grassGreenDark}
+                        />
+                        <Text
+                          style={[
+                            styles.accessStatusText,
+                            { color: isLocked ? Colors.coralPinkDark : Colors.grassGreenDark },
+                          ]}
+                        >
+                          {isLocked ? 'Naka-lock' : 'Bukas'}
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.accessActionBtn,
+                          isLocked ? styles.accessUnlockBtn : styles.accessLockBtn,
+                        ]}
+                        onPress={() => handleToggleCategoryQuizLock(cat, isLocked)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.accessActionBtnText,
+                            isLocked ? styles.accessUnlockBtnText : styles.accessLockBtnText,
+                          ]}
+                        >
+                          {isLocked ? 'I-unlock' : 'I-lock'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={[styles.sectionHeaderRow, { marginTop: 12 }]}>
                 <View>
-                  <Text style={styles.sectionHeading}>Pumili ng Kategorya para sa Quiz</Text>
+                  <Text style={styles.sectionHeading}>Pumili ng Kategorya para i-edit ang Tanong</Text>
                   <Text style={styles.sectionSubText}>
                     I-configure ang Madali, Katamtaman, at Mahirap na tanong bawat aralin.
                   </Text>
@@ -2411,5 +2498,131 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 6,
     fontStyle: 'italic',
+  },
+  backToDashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+    marginBottom: 14,
+    gap: 6,
+  },
+  backToDashboardText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.teacherPurple,
+  },
+  accessSectionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  accessSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  accessHeaderIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accessSectionTitle: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  accessSectionSub: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  accessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+    gap: 10,
+  },
+  accessRowInfo: {
+    flex: 1,
+  },
+  accessCatName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  accessCatMeta: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  accessStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+  },
+  accessStatusText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  accessActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  accessActionBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  accessLockBtn: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  accessLockBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.coralPinkDark,
+  },
+  accessUnlockBtn: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  accessUnlockBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.grassGreenDark,
   },
 });

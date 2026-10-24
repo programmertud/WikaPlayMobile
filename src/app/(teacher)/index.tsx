@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorView } from '../../components/ErrorView';
@@ -201,8 +202,85 @@ export default function TeacherDashboardScreen() {
       {/* VIEW: OVERVIEW */}
       {activeTab === 'overview' && (
         <>
-          {/* Section: 11 Summary Cards */}
+          {/* Section: Content Management Navigation */}
           <View style={styles.sectionHeaderRow}>
+            <Ionicons name="folder-open" size={18} color={Colors.teacherPurple} />
+            <Text style={styles.sectionTitle}>Pamamahala ng Nilalaman</Text>
+          </View>
+
+          <View style={styles.dashboardHeroCards}>
+            {/* Card 1: Manage Flashcards */}
+            <TouchableOpacity
+              style={[styles.dashboardHeroCard, Shadows.soft]}
+              onPress={() => router.push('/(teacher)/manage-flashcards' as any)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.dashboardHeroTop}>
+                <View style={[styles.dashboardHeroIcon, { backgroundColor: '#EDE9FE' }]}>
+                  <Ionicons name="albums" size={22} color={Colors.teacherPurple} />
+                </View>
+                <View style={[styles.dashboardHeroBadge, { backgroundColor: '#EDE9FE' }]}>
+                  <Text style={[styles.dashboardHeroBadgeText, { color: Colors.teacherPurple }]}>151 Kard</Text>
+                </View>
+              </View>
+              <Text style={styles.dashboardHeroTitle}>Manage Flashcards</Text>
+              <Text style={styles.dashboardHeroSub}>
+                Magdagdag at mag-edit ng mga salita, larawan, audio recording, at pagsasalin.
+              </Text>
+              <View style={styles.dashboardHeroFooter}>
+                <Text style={[styles.dashboardHeroAction, { color: Colors.teacherPurple }]}>Buksan ang Flashcards →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Card 2: Manage Quiz */}
+            <TouchableOpacity
+              style={[styles.dashboardHeroCard, Shadows.soft]}
+              onPress={() => router.push('/(teacher)/manage-quiz' as any)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.dashboardHeroTop}>
+                <View style={[styles.dashboardHeroIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="newspaper" size={22} color="#0284C7" />
+                </View>
+                <View style={[styles.dashboardHeroBadge, { backgroundColor: '#E0F2FE' }]}>
+                  <Text style={[styles.dashboardHeroBadgeText, { color: '#0369A1' }]}>Lock & Questions</Text>
+                </View>
+              </View>
+              <Text style={styles.dashboardHeroTitle}>Manage Quiz</Text>
+              <Text style={styles.dashboardHeroSub}>
+                Ayusin ang mga tanong at i-lock o i-unlock ang pagsusulit bawat kategorya.
+              </Text>
+              <View style={styles.dashboardHeroFooter}>
+                <Text style={[styles.dashboardHeroAction, { color: '#0284C7' }]}>Buksan ang Pagsusulit →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Card 3: Manage Mini-Games */}
+            <TouchableOpacity
+              style={[styles.dashboardHeroCard, Shadows.soft]}
+              onPress={() => router.push('/(teacher)/manage-minigames' as any)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.dashboardHeroTop}>
+                <View style={[styles.dashboardHeroIcon, { backgroundColor: '#FCE7F3' }]}>
+                  <Ionicons name="game-controller" size={22} color="#DB2777" />
+                </View>
+                <View style={[styles.dashboardHeroBadge, { backgroundColor: '#FCE7F3' }]}>
+                  <Text style={[styles.dashboardHeroBadgeText, { color: '#BE185D' }]}>5 Laro</Text>
+                </View>
+              </View>
+              <Text style={styles.dashboardHeroTitle}>Manage Mini-Games</Text>
+              <Text style={styles.dashboardHeroSub}>
+                Memory Match, Paghahanap, Hulaan, Gulong, Pop Balloon at patakaran sa puntos.
+              </Text>
+              <View style={styles.dashboardHeroFooter}>
+                <Text style={[styles.dashboardHeroAction, { color: '#DB2777' }]}>Buksan ang Mini-Games →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Section: 11 Summary Cards */}
+          <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
             <Ionicons name="stats-chart" size={18} color={Colors.teacherPurple} />
             <Text style={styles.sectionTitle}>Pangkalahatang Datos ng Klase</Text>
           </View>
@@ -1137,5 +1215,64 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     textAlign: 'center',
     marginTop: 4,
+  },
+  dashboardHeroCards: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  dashboardHeroCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  dashboardHeroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dashboardHeroIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashboardHeroBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+  },
+  dashboardHeroBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  dashboardHeroTitle: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginTop: 2,
+  },
+  dashboardHeroSub: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  dashboardHeroFooter: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  dashboardHeroAction: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
   },
 });
