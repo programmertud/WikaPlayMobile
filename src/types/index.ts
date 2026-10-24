@@ -55,6 +55,7 @@ export interface ChoiceItem {
 
 export interface QuizQuestion {
   id: number;
+  category_id?: number;
   flashcard_id?: number | null;
   question_text?: string;
   audio_url?: string | null;
@@ -113,6 +114,9 @@ export interface StudentMonitoringItem {
   avatar?: string | null;
   section?: string | null;
   stars_balance: number;
+  lifetime_stars?: number;
+  stars_spent?: number;
+  badges_count?: number;
   quizzes_passed: number;
   games_played: number;
   collectibles_count: number;

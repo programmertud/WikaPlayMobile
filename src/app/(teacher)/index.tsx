@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,26 +19,63 @@ import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { StudentMonitoringItem } from '../../types';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface DashboardStatsData {
+  total_students: number;
+  online_students: number;
+  recently_active_students: number;
+  offline_students: number;
+  total_quiz_attempts: number;
+  completed_minigames: number;
+  total_sessions: number;
+  average_quiz_score: number;
+  average_accuracy: number;
+  average_progress: number;
+  total_stars_earned: number;
+  total_stars_available: number;
+  total_stars_spent: number;
+  total_badges_earned: number;
+  total_collectibles_claimed: number;
+}
+
 export default function TeacherDashboardScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [students, setStudents] = useState<StudentMonitoringItem[]>([]);
-  const [dashboardStats, setDashboardStats] = useState<{
-    total_students: number;
-    online_students: number;
-    offline_students: number;
-    total_quiz_attempts: number;
-    average_quiz_score: number;
-    total_stars_awarded: number;
-  }>({
+  const [stats, setStats] = useState<DashboardStatsData>({
     total_students: 0,
     online_students: 0,
+    recently_active_students: 0,
     offline_students: 0,
     total_quiz_attempts: 0,
+    completed_minigames: 0,
+    total_sessions: 0,
     average_quiz_score: 0,
-    total_stars_awarded: 0,
+    average_accuracy: 0,
+    average_progress: 0,
+    total_stars_earned: 0,
+    total_stars_available: 0,
+    total_stars_spent: 0,
+    total_badges_earned: 0,
+    total_collectibles_claimed: 0,
   });
+
+  const [charts, setCharts] = useState<{
+    participation_over_time: { day: string; date: string; quizzes: number; minigames: number; total: number }[];
+    category_performance: { id: number; name: string; color: string; attempts: number; accuracy: number; avg_score: number }[];
+    activity_completion: { quizzes_passed: number; quizzes_failed: number; minigames_completed: number; mystery_box_qualified: number };
+    star_history: { day: string; date: string; earned: number; spent: number }[];
+  }>({
+    participation_over_time: [],
+    category_performance: [],
+    activity_completion: { quizzes_passed: 0, quizzes_failed: 0, minigames_completed: 0, mystery_box_qualified: 0 },
+    star_history: [],
+  });
+
   const [recentQuizResults, setRecentQuizResults] = useState<any[]>([]);
+  const [recentMinigames, setRecentMinigames] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'feed'>('overview');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,11 +93,15 @@ export default function TeacherDashboardScreen() {
       }
 
       if (statsRes.status === 'fulfilled') {
-        setDashboardStats(statsRes.value.stats);
+        setStats(statsRes.value.stats);
+        if (statsRes.value.charts) {
+          setCharts(statsRes.value.charts);
+        }
         setRecentQuizResults(statsRes.value.recent_quiz_results || []);
+        setRecentMinigames(statsRes.value.recent_minigame_results || []);
       }
     } catch (err: any) {
-      setError(err.message || 'Nabigong kunin ang datos ng dashboard.');
+      setError(err?.message || 'Nabigong kunin ang datos ng dashboard.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -67,21 +110,22 @@ export default function TeacherDashboardScreen() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(loadData, 20000);
     return () => clearInterval(interval);
   }, [loadData]);
 
-  if (loading && !refreshing) return <LoadingView message="Kinukuha ang dashboard..." />;
+  if (loading && !refreshing) return <LoadingView message="Kinukuha ang Teacher Dashboard..." />;
   if (error && students.length === 0) return <ErrorView message={error} onRetry={loadData} />;
 
   const greeting = user?.name ? user.name.split(' ')[0] : 'Guro';
+  const onlineStudents = students.filter((s) => s.is_online);
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={[
         styles.scrollContent,
-        { paddingTop: Math.max(insets.top, 16) + 12 },
+        { paddingTop: Math.max(insets.top, 16) + 8 },
       ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
@@ -95,343 +139,476 @@ export default function TeacherDashboardScreen() {
         />
       }
     >
-      {/* Header */}
+      {/* Top Header */}
       <View style={styles.topBar}>
         <View style={styles.brandingCol}>
           <Text style={styles.appTitle}>WikaPlay Guro</Text>
           <Text style={styles.greeting}>Magandang araw, {greeting}! 👋</Text>
         </View>
         <View style={[styles.onlineBadge, Shadows.subtle]}>
-          <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>{dashboardStats.online_students} Online</Text>
+          <View style={[styles.onlineDot, { backgroundColor: stats.online_students > 0 ? Colors.grassGreen : '#94A3B8' }]} />
+          <Text style={styles.onlineText}>
+            {stats.online_students} Online
+          </Text>
         </View>
       </View>
 
-      {/* Stats Cards Row */}
-      <View style={styles.statsRow}>
-        <StatCard icon="people" value={dashboardStats.total_students} label="Estudyante" color={Colors.teacherPurple} />
-        <StatCard icon="radio-button-on" value={dashboardStats.online_students} label="Online" color={Colors.grassGreen} />
-        <StatCard icon="checkmark-done" value={dashboardStats.total_quiz_attempts} label="Pagsusulit" color={Colors.skyBlueDark} />
-        <StatCard icon="analytics" value={dashboardStats.average_quiz_score} label="Avg Score" color={Colors.sunYellowDark} />
+      {/* Navigation Pills */}
+      <View style={styles.tabNavRow}>
+        <TouchableOpacity
+          style={[styles.tabNavBtn, activeTab === 'overview' && styles.tabNavBtnActive]}
+          onPress={() => setActiveTab('overview')}
+        >
+          <Ionicons
+            name="grid"
+            size={16}
+            color={activeTab === 'overview' ? Colors.white : Colors.teacherPurple}
+          />
+          <Text style={[styles.tabNavText, activeTab === 'overview' && styles.tabNavTextActive]}>
+            Buod (Overview)
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabNavBtn, activeTab === 'charts' && styles.tabNavBtnActive]}
+          onPress={() => setActiveTab('charts')}
+        >
+          <Ionicons
+            name="bar-chart"
+            size={16}
+            color={activeTab === 'charts' ? Colors.white : Colors.teacherPurple}
+          />
+          <Text style={[styles.tabNavText, activeTab === 'charts' && styles.tabNavTextActive]}>
+            Tsart at Graph
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabNavBtn, activeTab === 'feed' && styles.tabNavBtnActive]}
+          onPress={() => setActiveTab('feed')}
+        >
+          <Ionicons
+            name="pulse"
+            size={16}
+            color={activeTab === 'feed' ? Colors.white : Colors.teacherPurple}
+          />
+          <Text style={[styles.tabNavText, activeTab === 'feed' && styles.tabNavTextActive]}>
+            Live Feed ({onlineStudents.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Recent Quiz Results */}
-      {recentQuizResults.length > 0 && (
-        <View style={styles.recentSection}>
-          <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
-            <Ionicons name="newspaper-outline" size={20} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Pinakabagong Resulta ng Quiz</Text>
+      {/* VIEW: OVERVIEW */}
+      {activeTab === 'overview' && (
+        <>
+          {/* Section: 11 Summary Cards */}
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="stats-chart" size={18} color={Colors.teacherPurple} />
+            <Text style={styles.sectionTitle}>Pangkalahatang Datos ng Klase</Text>
           </View>
-          {recentQuizResults.slice(0, 5).map((result, idx) => (
-            <View key={result.id || idx} style={[recentStyles.card, Shadows.soft]}>
-              <View style={[recentStyles.badge, { backgroundColor: result.passed ? '#DCFCE7' : '#FEE2E2' }]}>
-                <Ionicons
-                  name={result.passed ? 'checkmark-circle' : 'close-circle'}
-                  size={18}
-                  color={result.passed ? Colors.grassGreenDark : Colors.coralPinkDark}
-                />
+
+          {/* Grid of 11 Cards */}
+          <View style={styles.statsGrid}>
+            <MetricCard
+              icon="people"
+              value={stats.total_students}
+              label="Kabuuan ng Mag-aaral"
+              color={Colors.teacherPurple}
+              sub={`${stats.offline_students} offline`}
+            />
+            <MetricCard
+              icon="radio-button-on"
+              value={stats.online_students}
+              label="Kasalukuyang Online"
+              color={Colors.grassGreenDark}
+              sub="Huling 3 minuto"
+            />
+            <MetricCard
+              icon="time"
+              value={stats.recently_active_students}
+              label="Kamakailang Aktibo"
+              color={Colors.skyBlueDark}
+              sub="Huling 15 minuto"
+            />
+            <MetricCard
+              icon="newspaper"
+              value={stats.total_quiz_attempts}
+              label="Pagsusulit na Kinuha"
+              color="#6366F1"
+              sub={`Avg: ${stats.average_quiz_score} pts`}
+            />
+            <MetricCard
+              icon="game-controller"
+              value={stats.completed_minigames}
+              label="Natapos na Mini-Games"
+              color="#EC4899"
+              sub="Lahat ng 5 laro"
+            />
+            <MetricCard
+              icon="shield-checkmark"
+              value={`${stats.average_accuracy}%`}
+              label="Katumpakan (Accuracy)"
+              color={Colors.grassGreenDark}
+              sub="Tamang sagot"
+            />
+            <MetricCard
+              icon="trending-up"
+              value={`${stats.average_progress}%`}
+              label="Katamtamang Antas"
+              color="#F59E0B"
+              sub="Patungo sa 480 milestone"
+            />
+            <MetricCard
+              icon="star"
+              value={stats.total_stars_earned.toLocaleString()}
+              label="Kabuuang Bituin (Lifetime)"
+              color={Colors.sunYellowDark}
+              sub="Lahat ng naipong bituin"
+            />
+            <MetricCard
+              icon="wallet"
+              value={stats.total_stars_available.toLocaleString()}
+              label="Bituin na Magagamit"
+              color="#10B981"
+              sub="Hawak ng mga bata ngayon"
+            />
+            <MetricCard
+              icon="ribbon"
+              value={stats.total_badges_earned}
+              label="Mga Badges na Na-claim"
+              color="#8B5CF6"
+              sub="Gantimpala milestones"
+            />
+            <MetricCard
+              icon="albums"
+              value={stats.total_collectibles_claimed}
+              label="Kolektibles na Nakuha"
+              color="#F97316"
+              sub="Nakolekta cards (151 items)"
+            />
+          </View>
+
+          {/* Quick Notice on Star Balance (No 480 Cap) */}
+          <View style={[styles.infoBanner, Shadows.subtle]}>
+            <Ionicons name="information-circle" size={20} color={Colors.teacherPurple} />
+            <Text style={styles.infoBannerText}>
+              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Bituin:</Text> Walang 480-star cap ang kabuuang bituin ng mga mag-aaral. Ang 480 ay milestone lamang para sa badge na "Ultimate Learner". Patuloy na makakaipon ng bituin ang bata nang walang limitasyon.
+            </Text>
+          </View>
+
+          {/* Mini-Games Overview Row */}
+          <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
+            <Ionicons name="game-controller" size={18} color="#EC4899" />
+            <Text style={styles.sectionTitle}>5 Mini-Games ng WikaPlay</Text>
+          </View>
+
+          <View style={styles.miniGamesRow}>
+            {[
+              { name: 'Memory Match', tag: '20 Antas', color: '#10B981' },
+              { name: 'Paghahanap ng Larawan', tag: 'Makinig', color: '#F59E0B' },
+              { name: 'Hulaan ang Salita', tag: 'Talas-Isip', color: '#3B82F6' },
+              { name: 'Gulong ng Letra', tag: 'Ayusin', color: '#8B5CF6' },
+              { name: 'Pop Balloon', tag: 'Bilis', color: '#EC4899' },
+            ].map((g, i) => (
+              <View key={i} style={[styles.gameMiniChip, { borderColor: g.color + '40' }]}>
+                <View style={[styles.gameMiniDot, { backgroundColor: g.color }]} />
+                <Text style={styles.gameMiniName}>{g.name}</Text>
+                <Text style={[styles.gameMiniTag, { color: g.color }]}>{g.tag}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={recentStyles.studentName}>{result.user?.name || 'Estudyante'}</Text>
-                <Text style={recentStyles.meta}>
-                  {result.category?.name || 'Aralin'} · {result.difficulty ? result.difficulty.toUpperCase() : 'MADALI'}
-                </Text>
+            ))}
+          </View>
+
+          {/* Recent Quiz Results */}
+          <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
+            <Ionicons name="newspaper-outline" size={18} color={Colors.teacherPurple} />
+            <Text style={styles.sectionTitle}>Pinakabagong Resulta ng Pagsusulit</Text>
+          </View>
+
+          {recentQuizResults.length > 0 ? (
+            recentQuizResults.slice(0, 5).map((result, idx) => (
+              <View key={result.id || idx} style={[styles.resultCard, Shadows.soft]}>
+                <View
+                  style={[
+                    styles.resultBadge,
+                    { backgroundColor: result.passed ? '#DCFCE7' : '#FEE2E2' },
+                  ]}
+                >
+                  <Ionicons
+                    name={result.passed ? 'checkmark-circle' : 'close-circle'}
+                    size={20}
+                    color={result.passed ? Colors.grassGreenDark : Colors.coralPinkDark}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.resultStudentName}>
+                    {result.user?.name || 'Estudyante'}
+                  </Text>
+                  <Text style={styles.resultMeta}>
+                    {result.category?.name || 'Aralin'} · {result.difficulty ? result.difficulty.toUpperCase() : 'MADALI'}
+                  </Text>
+                </View>
+                <View style={styles.resultScoreCol}>
+                  <Text
+                    style={[
+                      styles.resultScoreText,
+                      { color: result.passed ? Colors.grassGreenDark : Colors.coralPinkDark },
+                    ]}
+                  >
+                    {result.score} pts
+                  </Text>
+                  <Text style={styles.resultStarsText}>+{result.stars_awarded ?? 0} ⭐</Text>
+                </View>
               </View>
-              <View style={recentStyles.scoreCol}>
-                <Text style={[recentStyles.scoreText, { color: result.passed ? Colors.grassGreenDark : Colors.coralPinkDark }]}>
-                  {result.score} pts
-                </Text>
-                <Text style={recentStyles.starsText}>+{result.stars_awarded ?? 0} ⭐</Text>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Wala pang naitalang pagsusulit.</Text>
+            </View>
+          )}
+
+          {/* Top Performers by Lifetime Stars */}
+          <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
+            <Ionicons name="trophy" size={18} color={Colors.sunYellowDark} />
+            <Text style={styles.sectionTitle}>Mga Nangunguna sa Klase (Bituin)</Text>
+          </View>
+
+          {[...students]
+            .sort((a, b) => (b.lifetime_stars ?? b.stars_balance) - (a.lifetime_stars ?? a.stars_balance))
+            .slice(0, 5)
+            .map((student, idx) => (
+              <View key={student.id} style={[styles.leaderboardCard, Shadows.soft]}>
+                <View style={styles.rankCircle}>
+                  <Text style={styles.rankNum}>{idx + 1}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.lbStudentName}>{student.name}</Text>
+                  <Text style={styles.lbMeta}>
+                    {student.student_id_code || 'ID-' + student.id} · {student.quizzes_passed} naipasang quiz
+                  </Text>
+                </View>
+                <View style={styles.lbStarBadge}>
+                  <Ionicons name="star" size={14} color={Colors.sunYellowDark} />
+                  <Text style={styles.lbStars}>
+                    {(student.lifetime_stars ?? student.stars_balance).toLocaleString()} ⭐
+                  </Text>
+                </View>
+              </View>
+            ))}
+        </>
+      )}
+
+      {/* VIEW: CHARTS & ANALYTICS */}
+      {activeTab === 'charts' && (
+        <>
+          {/* Chart 1: 7-Day Participation */}
+          <View style={[styles.chartContainer, Shadows.soft]}>
+            <View style={styles.chartHeader}>
+              <Ionicons name="calendar-outline" size={18} color={Colors.teacherPurple} />
+              <Text style={styles.chartTitle}>Partisipasyon sa Nakaraang 7 Araw</Text>
+            </View>
+            <Text style={styles.chartSub}>Kabuuan ng kinuha na quiz at nilarong mini-games bawat araw</Text>
+
+            <View style={styles.barChartRow}>
+              {charts.participation_over_time.length > 0 ? (
+                charts.participation_over_time.map((d, i) => {
+                  const maxVal = Math.max(1, ...charts.participation_over_time.map((item) => item.total));
+                  const heightPct = Math.min(100, Math.max(10, Math.round((d.total / maxVal) * 100)));
+
+                  return (
+                    <View key={i} style={styles.barCol}>
+                      <Text style={styles.barValText}>{d.total}</Text>
+                      <View style={styles.barTrack}>
+                        <View style={[styles.barFill, { height: `${heightPct}%` }]} />
+                      </View>
+                      <Text style={styles.barLabel}>{d.day}</Text>
+                    </View>
+                  );
+                })
+              ) : (
+                <Text style={styles.emptyText}>Wala pang sapat na datos para sa tsart.</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Chart 2: Category Performance & Accuracy */}
+          <View style={[styles.chartContainer, Shadows.soft, { marginTop: 16 }]}>
+            <View style={styles.chartHeader}>
+              <Ionicons name="pie-chart-outline" size={18} color="#0284C7" />
+              <Text style={styles.chartTitle}>Katumpakan ayon sa Kategorya</Text>
+            </View>
+            <Text style={styles.chartSub}>Porsyento ng tamang sagot ng mga estudyante sa bawat paksa</Text>
+
+            {charts.category_performance.length > 0 ? (
+              charts.category_performance.map((c) => (
+                <View key={c.id} style={styles.catProgressItem}>
+                  <View style={styles.catProgressHead}>
+                    <Text style={styles.catNameText}>{c.name}</Text>
+                    <Text style={styles.catStatText}>
+                      {c.accuracy}% ({c.attempts} kinuha)
+                    </Text>
+                  </View>
+                  <View style={styles.catProgressBarTrack}>
+                    <View
+                      style={[
+                        styles.catProgressBarFill,
+                        {
+                          width: `${Math.min(100, Math.max(5, c.accuracy))}%`,
+                          backgroundColor: c.color || Colors.teacherPurple,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>Wala pang natapos na quiz sa mga kategorya.</Text>
+            )}
+          </View>
+
+          {/* Chart 3: Activity Completion Metrics */}
+          <View style={[styles.chartContainer, Shadows.soft, { marginTop: 16 }]}>
+            <View style={styles.chartHeader}>
+              <Ionicons name="checkmark-done-circle-outline" size={18} color={Colors.grassGreenDark} />
+              <Text style={styles.chartTitle}>Katayuan ng Pagkumpleto ng Gawain</Text>
+            </View>
+
+            <View style={styles.completionGrid}>
+              <View style={[styles.compCard, { backgroundColor: '#DCFCE7' }]}>
+                <Ionicons name="checkmark-circle" size={24} color={Colors.grassGreenDark} />
+                <Text style={styles.compVal}>{charts.activity_completion.quizzes_passed}</Text>
+                <Text style={styles.compLabel}>Naipasang Quiz</Text>
+              </View>
+
+              <View style={[styles.compCard, { backgroundColor: '#FEE2E2' }]}>
+                <Ionicons name="alert-circle" size={24} color={Colors.coralPinkDark} />
+                <Text style={styles.compVal}>{charts.activity_completion.quizzes_failed}</Text>
+                <Text style={styles.compLabel}>Kailangang Ulitin</Text>
+              </View>
+
+              <View style={[styles.compCard, { backgroundColor: '#EDE9FE' }]}>
+                <Ionicons name="game-controller" size={24} color={Colors.teacherPurple} />
+                <Text style={styles.compVal}>{charts.activity_completion.minigames_completed}</Text>
+                <Text style={styles.compLabel}>Natapos na Laro</Text>
+              </View>
+
+              <View style={[styles.compCard, { backgroundColor: '#FEF08A' }]}>
+                <Ionicons name="gift" size={24} color={Colors.sunYellowDark} />
+                <Text style={styles.compVal}>{charts.activity_completion.mystery_box_qualified}</Text>
+                <Text style={styles.compLabel}>Mahiwagang Kahon</Text>
               </View>
             </View>
-          ))}
-        </View>
+          </View>
+        </>
       )}
 
-      {/* Live Activity Feed */}
-      <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
-        <Ionicons name="pulse" size={20} color={Colors.teacherPurple} />
-        <Text style={styles.sectionTitle}>Live na Aktibidad</Text>
-      </View>
+      {/* VIEW: LIVE FEED & MONITORING */}
+      {activeTab === 'feed' && (
+        <>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="pulse" size={18} color={Colors.teacherPurple} />
+            <Text style={styles.sectionTitle}>Kasalukuyang Aktibidad ng mga Bata</Text>
+          </View>
 
-      {students
-        .filter((s) => s.is_online)
-        .map((student) => (
-          <LiveCard key={student.id} student={student} />
-        ))}
-      {students.filter((s) => s.is_online).length === 0 && (
-        <View style={[styles.emptyCard, Shadows.subtle]}>
-          <Ionicons name="moon-outline" size={32} color={Colors.textMuted} style={{ marginBottom: 6 }} />
-          <Text style={styles.emptyText}>Walang estudyante na online ngayon.</Text>
-        </View>
-      )}
+          {onlineStudents.length > 0 ? (
+            onlineStudents.map((s) => (
+              <View key={s.id} style={[styles.liveCard, Shadows.soft]}>
+                <LinearGradient
+                  colors={Gradients.teacher}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.avatarCircle}
+                >
+                  <Text style={styles.avatarLetter}>{s.name.charAt(0).toUpperCase()}</Text>
+                </LinearGradient>
 
-      {/* Top Performers */}
-      <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
-        <Ionicons name="trophy" size={20} color={Colors.sunYellowDark} />
-        <Text style={styles.sectionTitle}>Mga Nangungunang Estudyante</Text>
-      </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.liveNameRow}>
+                    <Text style={styles.liveName}>{s.name}</Text>
+                    <View style={styles.onlinePip} />
+                  </View>
+                  <Text style={styles.liveActivityText} numberOfLines={1}>
+                    {s.current_activity || 'Nag-aaral sa WikaPlay'}
+                  </Text>
+                  {s.section ? <Text style={styles.liveSectionText}>{s.section}</Text> : null}
+                </View>
 
-      {[...students]
-        .sort((a, b) => b.quizzes_passed - a.quizzes_passed)
-        .slice(0, 5)
-        .map((student, idx) => (
-          <LeaderboardCard key={student.id} student={student} rank={idx + 1} />
-        ))}
-      {students.length === 0 && (
-        <View style={[styles.emptyCard, Shadows.subtle]}>
-          <Text style={styles.emptyText}>Walang datos na estudyante pa.</Text>
-        </View>
+                <View style={styles.liveStarPill}>
+                  <Ionicons name="star" size={14} color={Colors.sunYellowDark} />
+                  <Text style={styles.liveStarCount}>{s.stars_balance}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={[styles.emptyContainer, Shadows.subtle]}>
+              <Ionicons name="moon-outline" size={36} color={Colors.textMuted} style={{ marginBottom: 6 }} />
+              <Text style={styles.emptyTitle}>Walang Online Ngayon</Text>
+              <Text style={styles.emptyText}>
+                Awtomatikong lalabas dito ang mga mag-aaral kapag nagbukas sila ng WikaPlay Mobile.
+              </Text>
+            </View>
+          )}
+
+          {/* Recent Mini-Game Sessions Feed */}
+          <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
+            <Ionicons name="game-controller" size={18} color="#EC4899" />
+            <Text style={styles.sectionTitle}>Kamakailang Mini-Game Sessions</Text>
+          </View>
+
+          {recentMinigames.length > 0 ? (
+            recentMinigames.slice(0, 5).map((game, i) => (
+              <View key={game.id || i} style={[styles.gameFeedCard, Shadows.soft]}>
+                <View style={[styles.gameFeedIcon, { backgroundColor: '#FCE7F3' }]}>
+                  <Ionicons name="game-controller" size={18} color="#DB2777" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gameFeedStudent}>{game.user?.name || 'Estudyante'}</Text>
+                  <Text style={styles.gameFeedType}>{game.game_type}</Text>
+                </View>
+                <View style={styles.gameFeedScore}>
+                  <Text style={styles.gameFeedPoints}>{game.score} / 20 pts</Text>
+                  <Text style={styles.gameFeedStars}>+{game.stars_awarded ?? 0} ⭐</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Wala pang naitalang nilarong mini-game.</Text>
+            </View>
+          )}
+        </>
       )}
     </ScrollView>
   );
 }
 
-function StatCard({
+function MetricCard({
   icon,
   value,
   label,
   color,
+  sub,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  value: number;
+  value: string | number;
   label: string;
   color: string;
+  sub: string;
 }) {
   return (
-    <View style={[statStyles.card, Shadows.soft]}>
-      <Ionicons name={icon} size={22} color={color} style={{ marginBottom: 4 }} />
-      <Text style={[statStyles.value, { color }]}>{value}</Text>
-      <Text style={statStyles.label} numberOfLines={1}>{label}</Text>
+    <View style={[styles.metricCard, Shadows.soft]}>
+      <View style={[styles.metricIconWrap, { backgroundColor: color + '15' }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <Text style={[styles.metricValue, { color }]}>{value}</Text>
+      <Text style={styles.metricLabel} numberOfLines={2}>
+        {label}
+      </Text>
+      <Text style={styles.metricSub} numberOfLines={1}>
+        {sub}
+      </Text>
     </View>
   );
 }
-
-function LiveCard({ student }: { student: StudentMonitoringItem }) {
-  return (
-    <View style={[liveStyles.card, Shadows.soft]}>
-      <LinearGradient
-        colors={Gradients.teacher}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={liveStyles.avatar}
-      >
-        <Text style={liveStyles.avatarText}>{student.name.charAt(0).toUpperCase()}</Text>
-      </LinearGradient>
-      <View style={{ flex: 1 }}>
-        <View style={liveStyles.nameRow}>
-          <Text style={liveStyles.name}>{student.name}</Text>
-          <View style={liveStyles.onlinePip} />
-        </View>
-        <Text style={liveStyles.activity} numberOfLines={1}>
-          {student.current_activity || 'Nag-aaral...'}
-        </Text>
-        {student.section ? <Text style={liveStyles.section}>{student.section}</Text> : null}
-      </View>
-      <View style={liveStyles.starsBadge}>
-        <Ionicons name="star" size={14} color={Colors.sunYellowDark} />
-        <Text style={liveStyles.stars}>{student.stars_balance}</Text>
-      </View>
-    </View>
-  );
-}
-
-function LeaderboardCard({ student, rank }: { student: StudentMonitoringItem; rank: number }) {
-  const getRankBadge = () => {
-    if (rank === 1) return { color: Colors.sunYellowDark, icon: 'trophy' as const };
-    if (rank === 2) return { color: '#94A3B8', icon: 'medal' as const };
-    if (rank === 3) return { color: '#B45309', icon: 'ribbon' as const };
-    return { color: Colors.textMuted, icon: null };
-  };
-
-  const badge = getRankBadge();
-
-  return (
-    <View style={[lbStyles.card, Shadows.soft]}>
-      <View style={lbStyles.rankBox}>
-        {badge.icon ? (
-          <Ionicons name={badge.icon} size={20} color={badge.color} />
-        ) : (
-          <Text style={lbStyles.rankNum}>#{rank}</Text>
-        )}
-      </View>
-      <LinearGradient
-        colors={Gradients.purpleLight}
-        style={lbStyles.avatar}
-      >
-        <Text style={lbStyles.avatarText}>{student.name.charAt(0).toUpperCase()}</Text>
-      </LinearGradient>
-      <View style={{ flex: 1 }}>
-        <Text style={lbStyles.name}>{student.name}</Text>
-        <Text style={lbStyles.meta}>
-          {student.quizzes_passed} quiz naipasa · {student.games_played} laro
-        </Text>
-      </View>
-      <View style={lbStyles.starsBadge}>
-        <Ionicons name="star" size={14} color={Colors.sunYellowDark} />
-        <Text style={lbStyles.stars}>{student.stars_balance}</Text>
-      </View>
-    </View>
-  );
-}
-
-const statStyles = StyleSheet.create({
-  card: {
-    flex: 1,
-    marginHorizontal: 4,
-    backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 14,
-    alignItems: 'center',
-  },
-  value: {
-    fontSize: Typography.sizes.xl,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-  },
-  label: {
-    fontSize: 11,
-    color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-});
-
-const liveStyles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    padding: 14,
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: Colors.white,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-    fontSize: Typography.sizes.md,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  name: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-    flex: 1,
-  },
-  onlinePip: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.grassGreen,
-    marginLeft: 6,
-  },
-  activity: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textLight,
-    marginTop: 2,
-  },
-  section: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  starsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  stars: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-    color: '#92400E',
-  },
-});
-
-const lbStyles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 14,
-    marginBottom: 10,
-  },
-  rankBox: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  rankNum: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.bold,
-    color: Colors.textLight,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: Colors.teacherPurple,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-  },
-  name: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-  },
-  meta: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textLight,
-    marginTop: 2,
-  },
-  starsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  stars: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-    color: '#92400E',
-  },
-});
 
 const styles = StyleSheet.create({
   container: {
@@ -440,54 +617,83 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 48,
   },
   topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   brandingCol: {
     flex: 1,
   },
   appTitle: {
-    fontSize: Typography.sizes.lg,
+    fontSize: Typography.sizes.sm,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
-    color: Colors.teacherPurpleDark,
+    color: Colors.teacherPurple,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   greeting: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textLight,
-    marginTop: 1,
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.black,
+    color: Colors.text,
+    marginTop: 2,
   },
   onlineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#D1FAE5',
+    gap: 6,
+    backgroundColor: Colors.white,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   onlineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.grassGreen,
-    marginRight: 6,
   },
   onlineText: {
     fontSize: Typography.sizes.xs,
-    fontFamily: Typography.family.display,
+    fontFamily: Typography.family.body,
     fontWeight: Typography.weights.bold,
-    color: '#065F46',
+    color: Colors.text,
   },
-  statsRow: {
+  tabNavRow: {
     flexDirection: 'row',
-    marginBottom: 24,
+    backgroundColor: Colors.white,
+    padding: 4,
+    borderRadius: Radius.pill,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  tabNavBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+  },
+  tabNavBtnActive: {
+    backgroundColor: Colors.teacherPurple,
+  },
+  tabNavText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textMuted,
+  },
+  tabNavTextActive: {
+    color: Colors.white,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -501,64 +707,435 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
-  emptyCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  emptyText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-  },
-  recentSection: {
-    marginBottom: 8,
-  },
-});
-
-const recentStyles = StyleSheet.create({
-  card: {
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  metricCard: {
+    width: (SCREEN_WIDTH - 42) / 2,
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
     padding: 12,
-    marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
-  badge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
+  metricIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
     alignItems: 'center',
-    marginRight: 10,
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  studentName: {
+  metricValue: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.black,
+  },
+  metricLabel: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginTop: 2,
+    minHeight: 30,
+  },
+  metricSub: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    marginTop: 4,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#F3E8FF',
+    borderRadius: Radius.md,
+    padding: 12,
+    marginTop: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.teacherPurple,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.text,
+    lineHeight: 18,
+  },
+  miniGamesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  gameMiniChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+  gameMiniDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  gameMiniName: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  gameMiniTag: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+  },
+  resultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  resultBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultStudentName: {
     fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  resultMeta: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    marginTop: 2,
+  },
+  resultScoreCol: {
+    alignItems: 'flex-end',
+  },
+  resultScoreText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  resultStarsText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.sunYellowDark,
+    marginTop: 2,
+  },
+  leaderboardCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  rankCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.teacherPurpleLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankNum: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.black,
+    color: Colors.teacherPurple,
+  },
+  lbStudentName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  lbMeta: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    marginTop: 2,
+  },
+  lbStarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF08A',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+  },
+  lbStars: {
+    fontSize: Typography.sizes.xs,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
     color: Colors.text,
   },
-  meta: {
-    fontSize: 11,
+  chartContainer: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chartTitle: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  chartSub: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  barChartRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 120,
+    paddingTop: 16,
+  },
+  barCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  barValText: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textLight,
+    marginBottom: 4,
+  },
+  barTrack: {
+    width: 14,
+    height: 70,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 7,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  barFill: {
+    width: '100%',
+    backgroundColor: Colors.teacherPurple,
+    borderRadius: 7,
+  },
+  barLabel: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textMuted,
+    marginTop: 6,
+  },
+  catProgressItem: {
+    marginBottom: 12,
+  },
+  catProgressHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  catNameText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  catStatText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+  },
+  catProgressBarTrack: {
+    height: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  catProgressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  completionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+  },
+  compCard: {
+    width: (SCREEN_WIDTH - 64) / 2,
+    borderRadius: Radius.md,
+    padding: 12,
+    alignItems: 'center',
+  },
+  compVal: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.black,
+    color: Colors.text,
+    marginTop: 4,
+  },
+  compLabel: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textLight,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  liveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLetter: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+  },
+  liveNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  onlinePip: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.grassGreen,
+  },
+  liveActivityText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.teacherPurple,
+    marginTop: 2,
+  },
+  liveSectionText: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+  },
+  liveStarPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF08A',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+  },
+  liveStarCount: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  gameFeedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  gameFeedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gameFeedStudent: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  gameFeedType: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
     color: Colors.textLight,
     marginTop: 2,
   },
-  scoreCol: {
+  gameFeedScore: {
     alignItems: 'flex-end',
   },
-  scoreText: {
-    fontSize: Typography.sizes.sm,
+  gameFeedPoints: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  gameFeedStars: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.sunYellowDark,
+    marginTop: 2,
+  },
+  emptyContainer: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 24,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  emptyTitle: {
+    fontSize: Typography.sizes.md,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginTop: 8,
   },
-  starsText: {
-    fontSize: 11,
-    color: Colors.sunYellowDark,
-    fontWeight: Typography.weights.bold,
+  emptyText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

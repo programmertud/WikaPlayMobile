@@ -68,8 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/students', [TeacherController::class, 'students']);
         Route::get('/students/{id}/history', [TeacherController::class, 'studentHistory']);
         Route::match(['put', 'patch'], '/students/{id}/status', [TeacherController::class, 'updateStudentStatus']);
+        Route::post('/students/{id}/adjust-stars', [TeacherController::class, 'adjustStudentStars']);
+        Route::get('/minigames', [TeacherController::class, 'getMinigamesOverview']);
+        Route::get('/collectibles', [TeacherController::class, 'getCollectibles']);
+        Route::post('/collectibles', [TeacherController::class, 'saveCollectible']);
+        Route::get('/rewards-audit', [TeacherController::class, 'getRewardAudit']);
         Route::get('/categories', [TeacherController::class, 'categories']);
         Route::post('/categories', [TeacherController::class, 'saveCategory']);
+        Route::get('/flashcards', [TeacherController::class, 'getFlashcards']);
         Route::post('/flashcards', [TeacherController::class, 'saveFlashcard']);
         Route::delete('/flashcards/{id}', [TeacherController::class, 'deleteFlashcard']);
         Route::post('/quizzes/toggle-lock', [TeacherController::class, 'toggleQuizLock']);

@@ -102,6 +102,19 @@ export default function TeacherLayout() {
         }}
       />
       <Tabs.Screen
+        name="rewards"
+        options={{
+          title: 'Gantimpala',
+          tabBarIcon: ({ focused }) => (
+            <TeacherTabBarIcon
+              name="gift"
+              outlineName="gift-outline"
+              focused={focused}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Ako',

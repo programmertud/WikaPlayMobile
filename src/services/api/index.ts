@@ -368,6 +368,14 @@ export const teacherService = {
     return ApiClient.post<{ message: string; category: Category }>('teacher/categories', category);
   },
 
+  getFlashcards: async (params?: { category_id?: number; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.category_id) query.append('category_id', params.category_id.toString());
+    if (params?.search) query.append('search', params.search);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return ApiClient.get<{ flashcards: (Flashcard & { category?: Category })[]; total_flashcards: number }>(`teacher/flashcards${qs}`);
+  },
+
   saveFlashcard: async (flashcard: Partial<Flashcard>) => {
     return ApiClient.post<{ message: string; flashcard: Flashcard }>('teacher/flashcards', flashcard);
   },
@@ -415,18 +423,89 @@ export const teacherService = {
       stats: {
         total_students: number;
         online_students: number;
+        recently_active_students: number;
         offline_students: number;
         total_quiz_attempts: number;
+        completed_minigames: number;
+        total_sessions: number;
         average_quiz_score: number;
-        total_stars_awarded: number;
+        average_accuracy: number;
+        average_progress: number;
+        total_stars_earned: number;
+        total_stars_available: number;
+        total_stars_spent: number;
+        total_badges_earned: number;
+        total_collectibles_claimed: number;
+      };
+      charts?: {
+        participation_over_time: { day: string; date: string; quizzes: number; minigames: number; total: number }[];
+        category_performance: { id: number; name: string; color: string; attempts: number; accuracy: number; avg_score: number }[];
+        activity_completion: { quizzes_passed: number; quizzes_failed: number; minigames_completed: number; mystery_box_qualified: number };
+        star_history: { day: string; date: string; earned: number; spent: number }[];
       };
       recent_activities: any[];
       recent_quiz_results: any[];
-      active_students: any[];
+      recent_minigame_results?: any[];
+      active_students?: any[];
     }>('teacher/dashboard');
   },
 
-  exportReportsCsv: async () => {
-    return ApiClient.get<{ csv: string; filename: string }>('teacher/reports/export-csv');
+  adjustStudentStars: async (studentId: number, amount: number, reason: string) => {
+    return ApiClient.post<{
+      message: string;
+      student: { id: number; name: string; stars_balance: number };
+      transaction: any;
+    }>(`teacher/students/${studentId}/adjust-stars`, { amount, reason });
+  },
+
+  getMinigamesOverview: async () => {
+    return ApiClient.get<{
+      games: {
+        id: string;
+        title: string;
+        description: string;
+        rules: string;
+        color: string;
+        total_plays: number;
+        average_score: number;
+        qualifiers_count: number;
+        stars_awarded: number;
+      }[];
+      recent_sessions: any[];
+      total_completed_sessions: number;
+      total_qualifying_sessions: number;
+    }>('teacher/minigames');
+  },
+
+  getCollectibles: async (params?: { category?: string; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.category) query.append('category', params.category);
+    if (params?.search) query.append('search', params.search);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return ApiClient.get<{
+      collectibles: (Collectible & { claims_count?: number })[];
+      total_collectibles: number;
+      total_claims: number;
+      categories: string[];
+    }>(`teacher/collectibles${qs}`);
+  },
+
+  saveCollectible: async (collectible: Partial<Collectible>) => {
+    return ApiClient.post<{ message: string; collectible: Collectible }>('teacher/collectibles', collectible);
+  },
+
+  getRewardAudit: async () => {
+    return ApiClient.get<{
+      total_earned: number;
+      total_spendable: number;
+      total_spent: number;
+      badge_stats: { key: string; title: string; threshold: number; claimed_count: number }[];
+      recent_transactions: any[];
+    }>('teacher/rewards-audit');
+  },
+
+  exportReportsCsv: async (type: 'quizzes' | 'minigames' | 'stars' | 'students' = 'quizzes') => {
+    return ApiClient.get<{ csv: string; filename: string; total_records: number }>(`teacher/reports/export-csv?type=${type}`);
   },
 };
+

@@ -195,7 +195,7 @@ export default function GantimpalaScreen() {
                   : 'Nakamit ang Lahat ng Milestone! 👑'}
               </Text>
               <Text style={styles.milestoneCounter}>
-                {nextMilestone ? `${lifetimeStars} / ${nextMilestone.threshold} ⭐` : '480 / 480 ⭐'}
+                {nextMilestone ? `${lifetimeStars} / ${nextMilestone.threshold} ⭐` : `${lifetimeStars} ⭐ (Naabot Lahat!)`}
               </Text>
             </View>
             <View style={styles.milestoneBarTrack}>

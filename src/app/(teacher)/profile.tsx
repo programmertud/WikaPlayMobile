@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LoadingView } from '../../components/LoadingView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../hooks/use-auth';
-import { authService } from '../../services/api';
+import { authService, teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 
 export default function TeacherProfileScreen() {
@@ -97,6 +97,115 @@ export default function TeacherProfileScreen() {
         <Text style={styles.version}>Bersyon: 1.0.0 (Expo SDK 58)</Text>
       </View>
 
+      {/* Reports & CSV Export Hub */}
+      <View style={[styles.aboutCard, Shadows.card]}>
+        <View style={styles.aboutHeader}>
+          <Ionicons name="document-text" size={20} color={Colors.teacherPurple} />
+          <Text style={styles.aboutTitle}>Mga Ulat at CSV Export</Text>
+        </View>
+        <Text style={styles.aboutText}>
+          I-download o i-export ang opisyal na mga datos ng mag-aaral para sa pagtatala ng grado at ebalwasyon ng klase:
+        </Text>
+
+        <View style={styles.exportList}>
+          <TouchableOpacity
+            style={styles.exportItemBtn}
+            onPress={async () => {
+              try {
+                const res = await teacherService.exportReportsCsv('quizzes');
+                Alert.alert(
+                  'Ulat ng Pagsusulit (CSV)',
+                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} rekord ng pagsusulit.`
+                );
+              } catch (e: any) {
+                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+              }
+            }}
+          >
+            <View style={[styles.exportIconCircle, { backgroundColor: '#EDE9FE' }]}>
+              <Ionicons name="newspaper" size={18} color={Colors.teacherPurple} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exportItemTitle}>Ulat ng Pagsusulit (Quiz Records)</Text>
+              <Text style={styles.exportItemSub}>Mga marka, kahirapan, tamang sagot, at resulta</Text>
+            </View>
+            <Ionicons name="download-outline" size={18} color={Colors.teacherPurple} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.exportItemBtn}
+            onPress={async () => {
+              try {
+                const res = await teacherService.exportReportsCsv('minigames');
+                Alert.alert(
+                  'Ulat ng Mini-Games (CSV)',
+                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} sesyon ng laro.`
+                );
+              } catch (e: any) {
+                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+              }
+            }}
+          >
+            <View style={[styles.exportIconCircle, { backgroundColor: '#FCE7F3' }]}>
+              <Ionicons name="game-controller" size={18} color="#DB2777" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exportItemTitle}>Ulat ng Mini-Games</Text>
+              <Text style={styles.exportItemSub}>Puntos sa 5 mini-games at mystery box qualifiers</Text>
+            </View>
+            <Ionicons name="download-outline" size={18} color="#DB2777" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.exportItemBtn}
+            onPress={async () => {
+              try {
+                const res = await teacherService.exportReportsCsv('stars');
+                Alert.alert(
+                  'Ledger ng mga Bituin (CSV)',
+                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} transaksyon.`
+                );
+              } catch (e: any) {
+                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+              }
+            }}
+          >
+            <View style={[styles.exportIconCircle, { backgroundColor: '#FEF08A' }]}>
+              <Ionicons name="star" size={18} color={Colors.sunYellowDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exportItemTitle}>Ledger ng mga Bituin (Star Audit)</Text>
+              <Text style={styles.exportItemSub}>Pumasok, lumabas, at adjustments ng guro</Text>
+            </View>
+            <Ionicons name="download-outline" size={18} color={Colors.sunYellowDark} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.exportItemBtn}
+            onPress={async () => {
+              try {
+                const res = await teacherService.exportReportsCsv('students');
+                Alert.alert(
+                  'Talaan ng Mag-aaral (CSV)',
+                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} mag-aaral.`
+                );
+              } catch (e: any) {
+                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+              }
+            }}
+          >
+            <View style={[styles.exportIconCircle, { backgroundColor: '#DCFCE7' }]}>
+              <Ionicons name="people" size={18} color={Colors.grassGreenDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exportItemTitle}>Talaan ng Mag-aaral (Roster)</Text>
+              <Text style={styles.exportItemSub}>Pangalan, Student ID, seksyon, at estado ng account</Text>
+            </View>
+            <Ionicons name="download-outline" size={18} color={Colors.grassGreenDark} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Logout Button */}
       <PrimaryButton
         title={loggingOut ? 'Lumalabas...' : 'Mag-logout'}
@@ -105,7 +214,7 @@ export default function TeacherProfileScreen() {
         icon="log-out"
         onPress={handleLogout}
         disabled={loggingOut}
-        style={{ marginTop: 8 }}
+        style={{ marginTop: 12 }}
       />
     </ScrollView>
 
@@ -299,6 +408,38 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     fontStyle: 'italic',
+  },
+  exportList: {
+    marginTop: 8,
+    gap: 8,
+  },
+  exportItemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    padding: 10,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  exportIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportItemTitle: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  exportItemSub: {
+    fontSize: 10,
+    color: Colors.textLight,
+    marginTop: 1,
   },
 });
 

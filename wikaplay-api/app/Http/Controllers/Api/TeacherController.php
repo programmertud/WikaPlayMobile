@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Collectible;
 use App\Models\Flashcard;
 use App\Models\MinigameSession;
+use App\Models\QuizAnswer;
 use App\Models\QuizAvailability;
 use App\Models\QuizQuestion;
 use App\Models\QuizSession;
 use App\Models\StarTransaction;
+use App\Models\StudentBadge;
+use App\Models\StudentCollectible;
 use App\Models\StudentPresence;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TeacherController extends Controller
@@ -29,19 +34,39 @@ class TeacherController extends Controller
     }
 
     /**
-     * Real-time student monitoring list.
+     * Real-time student monitoring list with accurate star metrics.
      */
     public function students(Request $request)
     {
         $this->authorizeTeacher($request);
 
-        // Mark stale presences as offline first
+        // Mark stale presences as offline (> 3 minutes)
         StudentPresence::where('is_online', true)
             ->where('last_active_at', '<', now()->subMinutes(3))
             ->update([
                 'is_online' => false,
                 'current_activity' => 'Hindi aktibo',
             ]);
+
+        $studentIds = User::where('role', 'student')->pluck('id');
+
+        $lifetimeStarsMap = StarTransaction::whereIn('user_id', $studentIds)
+            ->where('amount', '>', 0)
+            ->groupBy('user_id')
+            ->selectRaw('user_id, sum(amount) as total')
+            ->pluck('total', 'user_id');
+
+        $starsSpentMap = StarTransaction::whereIn('user_id', $studentIds)
+            ->where('amount', '<', 0)
+            ->groupBy('user_id')
+            ->selectRaw('user_id, sum(abs(amount)) as total')
+            ->pluck('total', 'user_id');
+
+        $badgesMap = StudentBadge::whereIn('user_id', $studentIds)
+            ->whereNotNull('claimed_at')
+            ->groupBy('user_id')
+            ->selectRaw('user_id, count(*) as count')
+            ->pluck('count', 'user_id');
 
         $students = User::where('role', 'student')
             ->with('presence')
@@ -51,20 +76,28 @@ class TeacherController extends Controller
                 'studentCollectibles as collectibles_count',
             ])
             ->get()
-            ->map(function ($s) {
+            ->map(function ($s) use ($lifetimeStarsMap, $starsSpentMap, $badgesMap) {
                 $presence = $s->presence;
                 $isOnline = $presence ? $presence->is_online : false;
+                $lifetime = (int) ($lifetimeStarsMap[$s->id] ?? $s->stars_balance);
+                $spent = (int) ($starsSpentMap[$s->id] ?? 0);
+                $badges = (int) ($badgesMap[$s->id] ?? 0);
 
                 return [
                     'id' => $s->id,
                     'name' => $s->name,
                     'email' => $s->email,
+                    'student_id_code' => $s->student_id_code,
                     'avatar' => $s->avatar,
                     'section' => $s->section,
-                    'stars_balance' => $s->stars_balance,
-                    'quizzes_passed' => $s->quizzes_passed,
-                    'games_played' => $s->games_played,
-                    'collectibles_count' => $s->collectibles_count,
+                    'status' => $s->status ?? 'active',
+                    'stars_balance' => (int) $s->stars_balance,
+                    'lifetime_stars' => $lifetime,
+                    'stars_spent' => $spent,
+                    'quizzes_passed' => (int) $s->quizzes_passed,
+                    'games_played' => (int) $s->games_played,
+                    'collectibles_count' => (int) $s->collectibles_count,
+                    'badges_count' => $badges,
                     'is_online' => $isOnline,
                     'current_activity' => $presence ? $presence->current_activity : 'Offline',
                     'current_screen' => $presence ? $presence->current_screen : null,
@@ -81,13 +114,24 @@ class TeacherController extends Controller
     }
 
     /**
-     * Student history review.
+     * Detailed Student History & Learning Statistics.
      */
     public function studentHistory(Request $request, $id)
     {
         $this->authorizeTeacher($request);
 
         $student = User::where('role', 'student')->findOrFail($id);
+
+        $lifetimeStars = (int) StarTransaction::where('user_id', $student->id)
+            ->where('amount', '>', 0)
+            ->sum('amount');
+        if ($lifetimeStars === 0 && $student->stars_balance > 0) {
+            $lifetimeStars = $student->stars_balance;
+        }
+
+        $starsSpent = abs((int) StarTransaction::where('user_id', $student->id)
+            ->where('amount', '<', 0)
+            ->sum('amount'));
 
         $quizHistory = QuizSession::where('user_id', $student->id)
             ->with('category:id,name,color')
@@ -105,11 +149,459 @@ class TeacherController extends Controller
             ->limit(30)
             ->get();
 
+        $badges = StudentBadge::where('user_id', $student->id)->get();
+
+        $collectibles = StudentCollectible::where('user_id', $student->id)
+            ->with('collectible:id,name,filipino_name,category,image_url,rarity')
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        // Calculate accuracy
+        $userSessionIds = QuizSession::where('user_id', $student->id)->pluck('id');
+        $totalAnswers = QuizAnswer::whereIn('quiz_session_id', $userSessionIds)->count();
+        $correctAnswers = QuizAnswer::whereIn('quiz_session_id', $userSessionIds)->where('is_correct', true)->count();
+        $accuracy = $totalAnswers > 0 ? round(($correctAnswers / $totalAnswers) * 100) : 0;
+
+        // Categories progress
+        $categories = Category::all()->map(function ($cat) use ($student) {
+            $sessions = QuizSession::where('user_id', $student->id)
+                ->where('category_id', $cat->id)
+                ->get();
+            $stars = min(60, (int) $sessions->sum('stars_awarded'));
+            $attempts = $sessions->count();
+            return [
+                'id' => $cat->id,
+                'name' => $cat->name,
+                'color' => $cat->color,
+                'stars_earned' => $stars,
+                'attempts' => $attempts,
+            ];
+        });
+
         return response()->json([
-            'student' => $student,
+            'student' => [
+                'id' => $student->id,
+                'name' => $student->name,
+                'email' => $student->email,
+                'student_id_code' => $student->student_id_code,
+                'section' => $student->section,
+                'avatar' => $student->avatar,
+                'status' => $student->status ?? 'active',
+                'stars_balance' => (int) $student->stars_balance,
+                'lifetime_stars' => $lifetimeStars,
+                'stars_spent' => $starsSpent,
+                'accuracy' => $accuracy,
+                'quizzes_count' => $quizHistory->count(),
+                'games_count' => $gameHistory->count(),
+            ],
             'quiz_history' => $quizHistory,
             'game_history' => $gameHistory,
             'star_transactions' => $starTransactions,
+            'badges' => $badges,
+            'collectibles' => $collectibles,
+            'category_progress' => $categories,
+        ]);
+    }
+
+    /**
+     * Teacher Star Adjustment with Required Reason and Audit Trail.
+     * Prevents negative balances and strictly maintains transaction ledger.
+     */
+    public function adjustStudentStars(Request $request, $id)
+    {
+        $this->authorizeTeacher($request);
+
+        $validated = $request->validate([
+            'amount' => 'required|integer|not_in:0',
+            'reason' => 'required|string|min:3|max:255',
+        ]);
+
+        $student = User::where('role', 'student')->findOrFail($id);
+
+        return DB::transaction(function () use ($request, $student, $validated) {
+            $currentBalance = (int) $student->stars_balance;
+            $adjustment = (int) $validated['amount'];
+            $newBalance = $currentBalance + $adjustment;
+
+            if ($newBalance < 0) {
+                return response()->json([
+                    'message' => "Hindi maaaring maging negatibo ang balanse ng bituin. Kasalukuyang balanse: {$currentBalance}.",
+                ], 422);
+            }
+
+            $teacher = $request->user();
+            $student->update(['stars_balance' => $newBalance]);
+
+            $tx = StarTransaction::create([
+                'user_id' => $student->id,
+                'amount' => $adjustment,
+                'balance_after' => $newBalance,
+                'source_type' => 'teacher_adjustment',
+                'source_id' => $teacher->id,
+                'description' => "Pagsasaayos ng guro ({$teacher->name}): {$validated['reason']}",
+            ]);
+
+            return response()->json([
+                'message' => 'Matagumpay na naisaayos ang balanse ng bituin!',
+                'student' => [
+                    'id' => $student->id,
+                    'name' => $student->name,
+                    'stars_balance' => $newBalance,
+                ],
+                'transaction' => $tx,
+            ]);
+        });
+    }
+
+    /**
+     * Live Dashboard Statistics for Teacher Overview with all 11 required metrics and charts.
+     */
+    public function dashboardStats(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        // Update stale presences (> 3 minutes without heartbeat)
+        StudentPresence::where('is_online', true)
+            ->where('last_active_at', '<', now()->subMinutes(3))
+            ->update([
+                'is_online' => false,
+                'current_activity' => 'Hindi aktibo',
+            ]);
+
+        $totalStudents = User::where('role', 'student')->count();
+        $onlineStudents = StudentPresence::where('is_online', true)
+            ->where('last_active_at', '>=', now()->subMinutes(3))
+            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->count();
+        $recentlyActiveStudents = StudentPresence::where('last_active_at', '>=', now()->subMinutes(15))
+            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->count();
+        $offlineStudents = max(0, $totalStudents - $onlineStudents);
+
+        $totalQuizAttempts = QuizSession::count();
+        $completedMinigames = MinigameSession::count();
+        $totalSessions = $totalQuizAttempts + $completedMinigames;
+        $avgScore = round((float) (QuizSession::avg('score') ?? 0), 1);
+
+        // Accuracy calculation
+        $totalAnswers = QuizAnswer::count();
+        $correctAnswers = QuizAnswer::where('is_correct', true)->count();
+        $averageAccuracy = $totalAnswers > 0 ? round(($correctAnswers / $totalAnswers) * 100) : 0;
+
+        // Star accounting aggregates across all students
+        $totalStarsEarned = (int) StarTransaction::where('amount', '>', 0)->sum('amount');
+        $totalStarsAvailable = (int) User::where('role', 'student')->sum('stars_balance');
+        $totalStarsSpent = abs((int) StarTransaction::where('amount', '<', 0)->sum('amount'));
+
+        // Badges and Collectibles
+        $totalBadgesEarned = StudentBadge::whereNotNull('claimed_at')->count();
+        $totalCollectiblesClaimed = StudentCollectible::count();
+
+        // Average Learning Progress (% out of 480 milestone)
+        $avgLifetimeStars = $totalStudents > 0 ? ($totalStarsEarned / $totalStudents) : 0;
+        $averageProgress = round(min(100, ($avgLifetimeStars / 480) * 100));
+
+        // 7-day Participation Chart Data
+        $participationOverTime = [];
+        $starHistory = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $day = now()->subDays($i);
+            $dayStart = $day->copy()->startOfDay();
+            $dayEnd = $day->copy()->endOfDay();
+
+            $qCount = QuizSession::whereBetween('created_at', [$dayStart, $dayEnd])->count();
+            $gCount = MinigameSession::whereBetween('created_at', [$dayStart, $dayEnd])->count();
+            $participationOverTime[] = [
+                'day' => $day->format('D'),
+                'date' => $day->format('M d'),
+                'quizzes' => $qCount,
+                'minigames' => $gCount,
+                'total' => $qCount + $gCount,
+            ];
+
+            $earnedDay = (int) StarTransaction::where('amount', '>', 0)
+                ->whereBetween('created_at', [$dayStart, $dayEnd])
+                ->sum('amount');
+            $spentDay = abs((int) StarTransaction::where('amount', '<', 0)
+                ->whereBetween('created_at', [$dayStart, $dayEnd])
+                ->sum('amount'));
+            $starHistory[] = [
+                'day' => $day->format('D'),
+                'date' => $day->format('M d'),
+                'earned' => $earnedDay,
+                'spent' => $spentDay,
+            ];
+        }
+
+        // Category Quiz Performance
+        $categoryPerformance = Category::withCount('quizSessions')
+            ->get()
+            ->map(function ($cat) {
+                $sessionIds = $cat->quizSessions()->pluck('id');
+                $catTotal = QuizAnswer::whereIn('quiz_session_id', $sessionIds)->count();
+                $catCorrect = QuizAnswer::whereIn('quiz_session_id', $sessionIds)->where('is_correct', true)->count();
+                $catAccuracy = $catTotal > 0 ? round(($catCorrect / $catTotal) * 100) : 0;
+                $avgScore = round((float) ($cat->quizSessions()->avg('score') ?? 0), 1);
+                return [
+                    'id' => $cat->id,
+                    'name' => $cat->name,
+                    'color' => $cat->color ?: '#8B5CF6',
+                    'attempts' => (int) $cat->quiz_sessions_count,
+                    'accuracy' => $catAccuracy,
+                    'avg_score' => $avgScore,
+                ];
+            });
+
+        // Activity Completion
+        $activityCompletion = [
+            'quizzes_passed' => QuizSession::where('passed', true)->count(),
+            'quizzes_failed' => QuizSession::where('passed', false)->count(),
+            'minigames_completed' => $completedMinigames,
+            'mystery_box_qualified' => MinigameSession::where('score', '>=', 15)->count(),
+        ];
+
+        // Recent live activities
+        $recentActivities = StudentPresence::where('is_online', true)
+            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->with('user:id,name,student_id_code,avatar,section')
+            ->orderByDesc('last_active_at')
+            ->limit(8)
+            ->get();
+
+        // Recent quiz sessions
+        $recentQuizResults = QuizSession::with(['user:id,name,student_id_code', 'category:id,name,color'])
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        // Recent mini-game sessions
+        $recentMinigameResults = MinigameSession::with('user:id,name,student_id_code')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        $statsData = [
+            'total_students' => $totalStudents,
+            'online_students' => $onlineStudents,
+            'recently_active_students' => $recentlyActiveStudents,
+            'offline_students' => $offlineStudents,
+            'total_quiz_attempts' => $totalQuizAttempts,
+            'completed_minigames' => $completedMinigames,
+            'total_sessions' => $totalSessions,
+            'average_quiz_score' => $avgScore,
+            'average_accuracy' => $averageAccuracy,
+            'average_progress' => $averageProgress,
+            'total_stars_earned' => $totalStarsEarned,
+            'total_stars_available' => $totalStarsAvailable,
+            'total_stars_spent' => $totalStarsSpent,
+            'total_badges_earned' => $totalBadgesEarned,
+            'total_collectibles_claimed' => $totalCollectiblesClaimed,
+        ];
+
+        return response()->json([
+            'overview' => $statsData,
+            'stats' => $statsData,
+            'charts' => [
+                'participation_over_time' => $participationOverTime,
+                'category_performance' => $categoryPerformance,
+                'activity_completion' => $activityCompletion,
+                'star_history' => $starHistory,
+            ],
+            'recent_activities' => $recentActivities,
+            'recent_results' => $recentQuizResults,
+            'recent_quiz_results' => $recentQuizResults,
+            'recent_minigame_results' => $recentMinigameResults,
+        ]);
+    }
+
+    /**
+     * Mini-game management and statistics overview.
+     * Supports Memory Match, Paghahanap ng Larawan, Hulaan ang Salita, Gulong ng mga Letra, Pop Balloon.
+     */
+    public function getMinigamesOverview(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        $gamesCatalog = [
+            [
+                'id' => 'memory_match',
+                'title' => 'Memory Match',
+                'description' => 'Ipares ang magkakatulad na larawan (20 antas, 5-segundong silip).',
+                'rules' => 'Puntos: 0–20 puntos. 1:1 bituin. 15–20 puntos: Kwalipikado sa mahiwagang kahon.',
+                'color' => '#10B981',
+            ],
+            [
+                'id' => 'paghahanap_larawan',
+                'title' => 'Paghahanap ng Larawan',
+                'description' => 'Makinig sa tunog at piliin ang tamang larawan mula sa mga pagpipilian.',
+                'rules' => 'Puntos: 0–20 puntos. 1:1 bituin. 15–20 puntos: Kwalipikado sa mahiwagang kahon.',
+                'color' => '#F59E0B',
+            ],
+            [
+                'id' => 'hulaan_salita',
+                'title' => 'Hulaan ang Salita',
+                'description' => 'Tingnan ang pahiwatig at hulaan ang wastong salitang Filipino.',
+                'rules' => 'Puntos: 0–20 puntos. 1:1 bituin. 15–20 puntos: Kwalipikado sa mahiwagang kahon.',
+                'color' => '#3B82F6',
+            ],
+            [
+                'id' => 'gulong_letra',
+                'title' => 'Gulong ng mga Letra',
+                'description' => 'Ayusin ang mga letra upang mabuo ang tamang salita.',
+                'rules' => 'Puntos: 0–20 puntos. 1:1 bituin. 15–20 puntos: Kwalipikado sa mahiwagang kahon.',
+                'color' => '#8B5CF6',
+            ],
+            [
+                'id' => 'pop_balloon',
+                'title' => 'Pop Balloon',
+                'description' => 'Paputukin ang lobo na nagtataglay ng tamang sagot bago ito umalis sa screen.',
+                'rules' => 'Puntos: 0–20 puntos. 1:1 bituin. 15–20 puntos: Kwalipikado sa mahiwagang kahon.',
+                'color' => '#EC4899',
+            ],
+        ];
+
+        $stats = collect($gamesCatalog)->map(function ($game) {
+            $sessions = MinigameSession::where('game_type', $game['id']);
+            $totalPlays = $sessions->count();
+            $avgScore = round((float) ($sessions->avg('score') ?? 0), 1);
+            $qualifiers = $sessions->where('score', '>=', 15)->count();
+            $starsAwarded = (int) $sessions->sum('stars_awarded');
+
+            return array_merge($game, [
+                'total_plays' => $totalPlays,
+                'average_score' => $avgScore,
+                'qualifiers_count' => $qualifiers,
+                'stars_awarded' => $starsAwarded,
+            ]);
+        });
+
+        $recentSessions = MinigameSession::with('user:id,name,student_id_code,avatar')
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'games' => $stats,
+            'recent_sessions' => $recentSessions,
+            'total_completed_sessions' => MinigameSession::count(),
+            'total_qualifying_sessions' => MinigameSession::where('score', '>=', 15)->count(),
+        ]);
+    }
+
+    /**
+     * Collectibles catalog management (Nakolekta).
+     */
+    public function getCollectibles(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        $category = $request->query('category');
+        $search = $request->query('search');
+
+        $query = Collectible::withCount('students as claims_count');
+
+        if ($category) {
+            $query->where('category', $category);
+        }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('filipino_name', 'like', "%{$search}%");
+            });
+        }
+
+        $collectibles = $query->orderBy('id')->get();
+        $totalCollectibles = Collectible::count();
+        $totalClaims = StudentCollectible::count();
+        $categoriesList = Collectible::distinct()->pluck('category')->filter()->values();
+
+        return response()->json([
+            'collectibles' => $collectibles,
+            'total_collectibles' => $totalCollectibles,
+            'total_claims' => $totalClaims,
+            'categories' => $categoriesList,
+        ]);
+    }
+
+    /**
+     * Create or update collectible metadata.
+     */
+    public function saveCollectible(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        $validated = $request->validate([
+            'id' => 'nullable|exists:collectibles,id',
+            'name' => 'required|string|max:191',
+            'filipino_name' => 'required|string|max:191',
+            'category' => 'required|string|max:100',
+            'description' => 'required|string',
+            'image_url' => 'required|string',
+            'audio_url' => 'nullable|string',
+            'rarity' => 'nullable|string|in:common,rare,epic,legendary',
+        ]);
+
+        $slug = \Illuminate\Support\Str::slug($validated['name']);
+
+        $collectible = Collectible::updateOrCreate(
+            ['id' => $validated['id'] ?? null],
+            [
+                'slug' => $slug,
+                'name' => $validated['name'],
+                'filipino_name' => $validated['filipino_name'],
+                'category' => $validated['category'],
+                'description' => $validated['description'],
+                'image_url' => $validated['image_url'],
+                'audio_url' => $validated['audio_url'] ?? null,
+                'rarity' => $validated['rarity'] ?? 'common',
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Nai-save ang collectible kard!',
+            'collectible' => $collectible,
+        ]);
+    }
+
+    /**
+     * Gantimpala & Star Audit Overview for Teachers.
+     */
+    public function getRewardAudit(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        $totalEarned = (int) StarTransaction::where('amount', '>', 0)->sum('amount');
+        $totalSpendable = (int) User::where('role', 'student')->sum('stars_balance');
+        $totalSpent = abs((int) StarTransaction::where('amount', '<', 0)->sum('amount'));
+
+        // Badges milestone breakdown
+        $milestones = [
+            ['key' => 'star_collector', 'title' => 'Star Collector', 'threshold' => 50],
+            ['key' => 'super_learner', 'title' => 'Super Learner', 'threshold' => 100],
+            ['key' => 'quiz_master', 'title' => 'Quiz Master', 'threshold' => 200],
+            ['key' => 'learning_champion', 'title' => 'Learning Champion', 'threshold' => 300],
+            ['key' => 'ultimate_learner', 'title' => 'Ultimate Learner', 'threshold' => 480],
+        ];
+
+        $badgeStats = collect($milestones)->map(function ($m) {
+            $claimedCount = StudentBadge::where('badge_key', $m['key'])
+                ->whereNotNull('claimed_at')
+                ->count();
+            return array_merge($m, ['claimed_count' => $claimedCount]);
+        });
+
+        $recentTransactions = StarTransaction::with('user:id,name,student_id_code')
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get();
+
+        return response()->json([
+            'total_earned' => $totalEarned,
+            'total_spendable' => $totalSpendable,
+            'total_spent' => $totalSpent,
+            'badge_stats' => $badgeStats,
+            'recent_transactions' => $recentTransactions,
         ]);
     }
 
@@ -126,6 +618,37 @@ class TeacherController extends Controller
             ->get();
 
         return response()->json(['categories' => $categories]);
+    }
+
+    /**
+     * List all flashcards or filter by category.
+     */
+    public function getFlashcards(Request $request)
+    {
+        $this->authorizeTeacher($request);
+
+        $categoryId = $request->query('category_id');
+        $search = $request->query('search');
+
+        $query = Flashcard::with('category:id,name,color');
+
+        if ($categoryId) {
+            $query->where('category_id', $categoryId);
+        }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('filipino_name', 'like', "%{$search}%")
+                  ->orWhere('english_name', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
+        $flashcards = $query->orderBy('id')->get();
+
+        return response()->json([
+            'flashcards' => $flashcards,
+            'total_flashcards' => $flashcards->count(),
+        ]);
     }
 
     /**
@@ -206,9 +729,6 @@ class TeacherController extends Controller
             ]
         );
 
-        // Notice: Any Katamtaman quiz question linked to this flashcard
-        // will automatically use this updated audio_url and image_url!
-
         return response()->json([
             'message' => 'Nai-save ang flashcard!',
             'flashcard' => $flashcard,
@@ -286,7 +806,7 @@ class TeacherController extends Controller
     }
 
     /**
-     * Save quiz question with Katamtaman link and validation.
+     * Save quiz question with validation.
      */
     public function saveQuizQuestion(Request $request)
     {
@@ -326,6 +846,19 @@ class TeacherController extends Controller
             'message' => 'Nai-save ang tanong sa pagsusulit!',
             'question' => $question->load('flashcard'),
         ]);
+    }
+
+    /**
+     * Delete a quiz question.
+     */
+    public function deleteQuizQuestion(Request $request, $id)
+    {
+        $this->authorizeTeacher($request);
+
+        $question = QuizQuestion::findOrFail($id);
+        $question->delete();
+
+        return response()->json(['message' => 'Matagumpay na nabura ang tanong.']);
     }
 
     /**
@@ -371,60 +904,6 @@ class TeacherController extends Controller
     }
 
     /**
-     * Live Dashboard Statistics for Teacher Overview.
-     */
-    public function dashboardStats(Request $request)
-    {
-        $this->authorizeTeacher($request);
-
-        // Update stale presences (> 3 minutes without heartbeat)
-        StudentPresence::where('is_online', true)
-            ->where('last_active_at', '<', now()->subMinutes(3))
-            ->update([
-                'is_online' => false,
-                'current_activity' => 'Hindi aktibo',
-            ]);
-
-        $totalStudents = User::where('role', 'student')->count();
-        $onlineStudents = StudentPresence::where('is_online', true)
-            ->whereHas('user', fn($q) => $q->where('role', 'student'))
-            ->count();
-        $offlineStudents = max(0, $totalStudents - $onlineStudents);
-
-        $totalQuizAttempts = QuizSession::count();
-        $avgScore = round((float) (QuizSession::avg('score') ?? 0), 1);
-
-        $recentActivities = StudentPresence::where('is_online', true)
-            ->whereHas('user', fn($q) => $q->where('role', 'student'))
-            ->with('user:id,name,student_id_code,avatar,section')
-            ->orderByDesc('last_active_at')
-            ->limit(8)
-            ->get();
-
-        $recentResults = QuizSession::with(['user:id,name,student_id_code', 'category:id,name,color'])
-            ->orderByDesc('created_at')
-            ->limit(10)
-            ->get();
-
-        $statsData = [
-            'total_students' => $totalStudents,
-            'online_students' => $onlineStudents,
-            'offline_students' => $offlineStudents,
-            'total_quiz_attempts' => $totalQuizAttempts,
-            'average_quiz_score' => $avgScore,
-            'average_score' => $avgScore,
-        ];
-
-        return response()->json([
-            'overview' => $statsData,
-            'stats' => $statsData,
-            'recent_activities' => $recentActivities,
-            'recent_results' => $recentResults,
-            'recent_quiz_results' => $recentResults,
-        ]);
-    }
-
-    /**
      * Approve, disable, or reactivate student account.
      */
     public function updateStudentStatus(Request $request, $id)
@@ -454,50 +933,100 @@ class TeacherController extends Controller
     }
 
     /**
-     * Delete a quiz question.
-     */
-    public function deleteQuizQuestion(Request $request, $id)
-    {
-        $this->authorizeTeacher($request);
-
-        $question = QuizQuestion::findOrFail($id);
-        $question->delete();
-
-        return response()->json(['message' => 'Matagumpay na nabura ang tanong.']);
-    }
-
-    /**
-     * Export quiz performance report to CSV.
+     * Export reports to CSV.
+     * Supports type=quizzes, type=minigames, type=stars, type=students.
      */
     public function exportReportsCsv(Request $request)
     {
         $this->authorizeTeacher($request);
 
-        $sessions = QuizSession::with(['user:id,name,student_id_code,section', 'category:id,name'])
-            ->orderByDesc('created_at')
-            ->get();
+        $type = $request->query('type', 'quizzes');
 
-        $filename = 'wikaplay_quiz_report_' . date('Y-m-d') . '.csv';
-        $csvHeader = ['Student ID', 'Student Name', 'Section', 'Category', 'Difficulty', 'Score', 'Total Questions', 'Correct', 'Wrong', 'Passed', 'Date'];
+        if ($type === 'minigames') {
+            $sessions = MinigameSession::with('user:id,name,student_id_code,section')
+                ->orderByDesc('created_at')
+                ->get();
+            $filename = 'wikaplay_minigames_report_' . date('Y-m-d') . '.csv';
+            $csvHeader = ['Student ID', 'Student Name', 'Section', 'Game Type', 'Score', 'Stars Awarded', 'Date'];
+            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
 
-        $rows = [];
-        $rows[] = implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader));
+            foreach ($sessions as $s) {
+                $row = [
+                    $s->user->student_id_code ?? ('ID-' . $s->user_id),
+                    $s->user->name ?? 'Unknown',
+                    $s->user->section ?? 'N/A',
+                    $s->game_type,
+                    $s->score,
+                    $s->stars_awarded,
+                    $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
+                ];
+                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+            }
+        } elseif ($type === 'stars') {
+            $txs = StarTransaction::with('user:id,name,student_id_code')
+                ->orderByDesc('created_at')
+                ->get();
+            $filename = 'wikaplay_stars_ledger_' . date('Y-m-d') . '.csv';
+            $csvHeader = ['Transaction ID', 'Student ID', 'Student Name', 'Amount', 'Balance After', 'Source Type', 'Description', 'Date'];
+            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
 
-        foreach ($sessions as $s) {
-            $row = [
-                $s->user->student_id_code ?? ('ID-' . $s->user_id),
-                $s->user->name ?? 'Unknown',
-                $s->user->section ?? 'N/A',
-                $s->category->name ?? 'N/A',
-                strtoupper($s->difficulty),
-                $s->score,
-                $s->total_questions,
-                $s->correct_count,
-                $s->wrong_count,
-                $s->passed ? 'YES' : 'NO',
-                $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
-            ];
-            $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+            foreach ($txs as $t) {
+                $row = [
+                    $t->id,
+                    $t->user->student_id_code ?? ('ID-' . $t->user_id),
+                    $t->user->name ?? 'Unknown',
+                    $t->amount,
+                    $t->balance_after,
+                    $t->source_type,
+                    $t->description,
+                    $t->created_at ? $t->created_at->format('Y-m-d H:i:s') : '',
+                ];
+                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+            }
+        } elseif ($type === 'students') {
+            $students = User::where('role', 'student')->get();
+            $filename = 'wikaplay_students_roster_' . date('Y-m-d') . '.csv';
+            $csvHeader = ['Student ID', 'Name', 'Email', 'Section', 'Stars Balance', 'Status', 'Registered At'];
+            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
+
+            foreach ($students as $s) {
+                $row = [
+                    $s->student_id_code ?? ('ID-' . $s->id),
+                    $s->name,
+                    $s->email,
+                    $s->section ?? 'N/A',
+                    $s->stars_balance,
+                    $s->status ?? 'active',
+                    $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
+                ];
+                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+            }
+        } else {
+            // Default: quizzes
+            $sessions = QuizSession::with(['user:id,name,student_id_code,section', 'category:id,name'])
+                ->orderByDesc('created_at')
+                ->get();
+
+            $filename = 'wikaplay_quiz_report_' . date('Y-m-d') . '.csv';
+            $csvHeader = ['Student ID', 'Student Name', 'Section', 'Category', 'Difficulty', 'Score', 'Total Questions', 'Correct', 'Wrong', 'Passed', 'Date'];
+            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
+
+            foreach ($sessions as $s) {
+                $row = [
+                    $s->user->student_id_code ?? ('ID-' . $s->user_id),
+                    $s->user->name ?? 'Unknown',
+                    $s->user->section ?? 'N/A',
+                    $s->category->name ?? 'N/A',
+                    strtoupper($s->difficulty),
+                    $s->score,
+                    $s->total_questions,
+                    $s->correct_count,
+                    $s->wrong_count,
+                    $s->passed ? 'YES' : 'NO',
+                    $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
+                ];
+                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+            }
         }
 
         $csvContent = implode("\n", $rows);
@@ -512,7 +1041,7 @@ class TeacherController extends Controller
         return response()->json([
             'filename' => $filename,
             'csv' => $csvContent,
-            'total_records' => $sessions->count(),
+            'total_records' => count($rows) - 1,
         ]);
     }
 }
