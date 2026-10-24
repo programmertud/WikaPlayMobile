@@ -42,12 +42,14 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (loading) return;
+
     setErrorMessage(null);
     setLoading(true);
 
     try {
       await studentRegister(trimmedName, section.trim() || undefined);
-      router.replace('/');
+      router.replace('/loading');
     } catch (err: any) {
       setErrorMessage(err.message || 'Nabigong magrehistro. Pakisubukang muli.');
     } finally {
@@ -82,12 +84,12 @@ export default function RegisterScreen() {
 
           {/* Form Card */}
           <View style={[styles.card, Shadows.card]}>
-            {errorMessage && (
+            {errorMessage ? (
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle" size={18} color={Colors.error} style={{ marginRight: 6 }} />
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
-            )}
+            ) : null}
 
             <InputField
               label="Buong Pangalan ng Mag-aaral"

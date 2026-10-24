@@ -64,7 +64,7 @@ export const InputField: React.FC<InputFieldProps> = ({
 
   return (
     <View style={[styles.wrapper, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <Animated.View
         style={[
           styles.inputContainer,
@@ -73,14 +73,14 @@ export const InputField: React.FC<InputFieldProps> = ({
           isFocused && styles.focusedGlow,
         ]}
       >
-        {icon && (
+        {icon ? (
           <Ionicons
             name={icon}
             size={20}
             color={isFocused ? Colors.skyBlueDark : Colors.textMuted}
             style={styles.icon}
           />
-        )}
+        ) : null}
         <TextInput
           placeholderTextColor={Colors.textMuted}
           secureTextEntry={isPassword ? !showPassword : secureTextEntry}

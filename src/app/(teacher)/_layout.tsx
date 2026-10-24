@@ -101,6 +101,9 @@ export default function TeacherLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="manage-flashcards" options={{ href: null }} />
+      <Tabs.Screen name="manage-quiz" options={{ href: null }} />
+      <Tabs.Screen name="manage-minigames" options={{ href: null }} />
       <Tabs.Screen
         name="rewards"
         options={{

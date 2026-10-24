@@ -169,9 +169,9 @@ export function CelebrationOverlay({
             ))}
           </View>
 
-          {scoreText && <Text style={styles.scoreText}>{scoreText}</Text>}
+          {scoreText ? <Text style={styles.scoreText}>{scoreText}</Text> : null}
 
-          {onContinue && (
+          {onContinue ? (
             <View style={styles.btnContainer}>
               <PrimaryButton
                 title={continueText}
@@ -180,7 +180,7 @@ export function CelebrationOverlay({
                 icon="arrow-forward-circle"
               />
             </View>
-          )}
+          ) : null}
         </Animated.View>
       </View>
     </View>

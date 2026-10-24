@@ -230,6 +230,10 @@ export class ApiClient {
 
     const data = await response.json();
     if (!response.ok) {
+      if (response.status === 422 && data.errors) {
+        const firstErr = Object.values(data.errors)[0] as string[];
+        throw new Error(firstErr?.[0] || data.message || 'Maling impormasyon.');
+      }
       throw new Error(data.message || 'Nabigong mag-upload ng file.');
     }
 

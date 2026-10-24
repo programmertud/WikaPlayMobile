@@ -29,7 +29,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         <Text style={styles.emoji}>{emoji}</Text>
       )}
       <Text style={styles.title}>{title}</Text>
-      {displayText && <Text style={styles.subtitle}>{displayText}</Text>}
+      {displayText ? <Text style={styles.subtitle}>{displayText}</Text> : null}
     </View>
   );
 };

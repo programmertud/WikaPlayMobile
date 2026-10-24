@@ -117,13 +117,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
             {category.name}
           </Text>
 
-          {category.flashcards_count !== undefined && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {category.flashcards_count} Salita
-              </Text>
-            </View>
-          )}
+
 
           {/* Progress bar at bottom if visited */}
           {typeof progress === 'number' && progress > 0 && (

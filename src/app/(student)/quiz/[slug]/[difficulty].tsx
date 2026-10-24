@@ -64,6 +64,11 @@ export default function QuizGameplayScreen() {
       setLoading(true);
       setError(null);
       const res = await categoryService.getQuizQuestions(slug, difficulty);
+      if (res.is_locked) {
+        const category = getCategoryBySlug(slug);
+        router.replace({ pathname: '/(student)/quiz-locked' as any, params: { category: res.category.name || category?.name || slug, difficulty } } as any);
+        return;
+      }
       setCategoryName(res.category.name);
       setCategoryId(res.category.id);
       setCategoryColor(res.category.color || Colors.skyBlue);
@@ -107,19 +112,48 @@ export default function QuizGameplayScreen() {
           fetchedQuestions = [...fetchedQuestions, ...additional];
         }
       }
-      // For katamtaman and mahirap: ALWAYS rebuild questions from local bundled data.
-      // The API returns numeric DB IDs for choices (e.g. "1","2") which never match
-      // local string IDs (e.g. "hayop_aso"), so API images (stock photos) would show.
-      // Instead we use the shuffled local vocabulary items which carry require()'d images.
-      if (difficulty === 'katamtaman' || difficulty === 'mahirap') {
+      // For katamtaman and mahirap: rebuild questions from local bundled data,
+      // but overlay any teacher-updated images/audio from the backend API.
+      if ((difficulty === 'katamtaman' || difficulty === 'mahirap') && fetchedQuestions.length === 0) {
         const cat = getCategoryBySlug(slug);
-        const localVocab = cat?.items || [];
+        let localVocab = cat?.items || [];
         if (localVocab.length > 0) {
+          // Fetch and apply teacher image/audio overrides so quiz reflects flashcard changes
+          try {
+            const fcRes = await categoryService.getFlashcards(slug);
+            if (fcRes?.flashcards) {
+              localVocab = localVocab.map((item) => {
+                const norm = item.filipino.toLowerCase().trim();
+                const match = fcRes.flashcards.find(
+                  (f) => f.filipino_name?.toLowerCase().trim() === norm || f.name?.toLowerCase().trim() === norm
+                );
+                if (match) {
+                  const isUnsplash = typeof match.image_url === 'string' && match.image_url.includes('images.unsplash.com');
+                  const isBlobUrl = typeof match.image_url === 'string' && match.image_url.startsWith('blob:');
+                  const validImage = match.image_url && !isUnsplash && !isBlobUrl ? match.image_url : undefined;
+                  const validAudio = match.audio_url && !match.audio_url.startsWith('blob:') ? match.audio_url : undefined;
+                  return {
+                    ...item,
+                    imageUri: validImage ?? item.imageUri,
+                    audioUri: validAudio || item.audioUri,
+                  };
+                }
+                return item;
+              });
+            }
+          } catch {
+            // Offline: use bundled local data as-is
+          }
+
           const targetCount = 20;
           const shuffled = [...localVocab].sort(() => 0.5 - Math.random());
           fetchedQuestions = Array.from({ length: targetCount }, (_, i) => {
             const target = shuffled[i % shuffled.length];
-            const choices = getRandomVocabularyChoices(cat.slug, target, 4);
+            const choices = getRandomVocabularyChoices(cat.slug, target, 4).map((c) => {
+              // Also apply overrides to choices
+              const matchedFc = (cat?.items || []).find((item) => item.id === c.id);
+              return matchedFc ? { ...c, imageUri: matchedFc.imageUri ?? c.imageUri } : c;
+            });
             const mappedChoices: ChoiceItem[] = choices.map((c) => ({
               id: c.id,
               image_url: c.imageUri || '',

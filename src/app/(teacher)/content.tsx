@@ -11,6 +11,7 @@ import {
   Dimensions,
   Image,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,10 +20,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorView } from '../../components/ErrorView';
@@ -32,8 +37,19 @@ import { teacherService } from '../../services/api';
 import { playSound } from '../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { Category, Flashcard, QuizDifficulty, QuizQuestion } from '../../types';
+import { LEARNING_CATEGORIES, overrideVocabularyItem } from '../../data/categories';
+import { getMadaliQuestionsBySlug } from '../../data/quiz-bank-madali';
+import { storage } from '../../utils/storage';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const EMPTY_FLASHCARD: Partial<Flashcard & { localImageSource?: any; localAudioSource?: any }> = {
+  category_id: 1,
+  filipino_name: '',
+  english_name: '',
+  description: '',
+  image_url: '',
+  audio_url: '',
+  is_published: true,
+};
 
 const DIFFICULTIES: QuizDifficulty[] = ['madali', 'katamtaman', 'mahirap'];
 const DIFF_LABELS: Record<QuizDifficulty, string> = {
@@ -49,30 +65,104 @@ const DIFF_COLORS: Record<QuizDifficulty, string> = {
 
 type ManagementMode = 'flashcards' | 'quizzes' | 'minigames';
 
-export default function ContentManagementScreen() {
+const DEFAULT_STUDENT_CATEGORIES: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
+  id: idx + 1, slug: c.slug, name: c.name, title: c.name, description: c.description,
+  color: c.color, cover_image: null, icon: c.icon, flashcards_count: c.items.length,
+}));
+
+function buildDefaultFlashcards(categoriesList: Category[] = DEFAULT_STUDENT_CATEGORIES): (Flashcard & { category?: Category; localImageSource?: any; localAudioSource?: any })[] {
+  const cards: any[] = [];
+  let idCounter = 1;
+  LEARNING_CATEGORIES.forEach((cat, catIdx) => {
+    const catObj = categoriesList.find((c) => {
+      if (c.slug === cat.slug) return true;
+      const cSlugNorm = (c.slug || '').toLowerCase().replace(/^mga-/, '');
+      const catSlugNorm = cat.slug.toLowerCase().replace(/^mga-/, '');
+      if (cSlugNorm === catSlugNorm) return true;
+      if (cSlugNorm.includes('katawan') && catSlugNorm.includes('katawan')) return true;
+      if (cSlugNorm.includes('pagbati') && catSlugNorm.includes('pagbati')) return true;
+      if (normalizeWord(c.name) === normalizeWord(cat.name)) return true;
+      return false;
+    }) || DEFAULT_STUDENT_CATEGORIES[catIdx];
+
+    cat.items.forEach((item, itemIdx) => cards.push({
+      id: idCounter++, category_id: catObj.id, name: item.filipino, filipino_name: item.filipino,
+      english_name: item.english, description: `${item.filipino} (${item.english})`,
+      image_url: typeof item.image === 'string' ? item.image : '', audio_url: typeof item.audio === 'string' ? item.audio : '',
+      is_published: true, sort_order: itemIdx + 1, category: catObj, localImageSource: item.image, localAudioSource: item.audio,
+    }));
+  });
+  return cards;
+}
+
+function normalizeWord(str?: string): string {
+  if (!str) return '';
+  return str.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
+}
+
+// Complete standard category definitions matching student curriculum
+function getFlashcardImageSource(card?: Partial<Flashcard & { localImageSource?: any }>) {
+  if (!card) return null;
+  // If user explicitly picked/uploaded a custom file from device or local gallery:
+  if (card.image_url && !card.image_url.includes('images.unsplash.com') && card.image_url.trim().length > 0) {
+    return { uri: card.image_url };
+  }
+  // Authentic student flashcard bundled illustration:
+  if (card.localImageSource) {
+    return card.localImageSource;
+  }
+  // Fallback to server URL if valid and not empty
+  if (card.image_url && card.image_url.trim().length > 0) {
+    return { uri: card.image_url };
+  }
+  return null;
+}
+
+export default function ContentManagementScreen({ initialMode }: { initialMode?: ManagementMode } = {}) {
   const insets = useSafeAreaInsets();
-  const [activeMode, setActiveMode] = useState<ManagementMode>('flashcards');
+  const searchParams = useLocalSearchParams<{ mode?: ManagementMode }>();
+  const [activeMode, setActiveMode] = useState<ManagementMode>(
+    searchParams.mode || initialMode || 'flashcards'
+  );
+
+  useEffect(() => {
+    if (searchParams.mode && ['flashcards', 'quizzes', 'minigames'].includes(searchParams.mode)) {
+      setActiveMode(searchParams.mode);
+    }
+  }, [searchParams.mode]);
 
   // Categories & Global Data
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_STUDENT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Flashcard Management State ──────────────────────────────────────────
-  const [flashcards, setFlashcards] = useState<(Flashcard & { category?: Category })[]>([]);
+  // ── Flashcard Management State (Initialized with accurate 151 cards) ────
+  const [flashcards, setFlashcards] = useState<(Flashcard & { category?: Category; localImageSource?: any; localAudioSource?: any })[]>(() => buildDefaultFlashcards());
   const [flashcardCategoryFilter, setFlashcardCategoryFilter] = useState<number | 'all'>('all');
   const [flashcardSearch, setFlashcardSearch] = useState('');
   const [flashcardModal, setFlashcardModal] = useState<{
     open: boolean;
-    card: Partial<Flashcard>;
+    card: Partial<Flashcard & { localImageSource?: any; localAudioSource?: any }>;
     isEditing: boolean;
   }>({
     open: false,
-    card: {},
+    card: EMPTY_FLASHCARD,
     isEditing: false,
   });
   const [isSavingFlashcard, setIsSavingFlashcard] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+
+  // Per-game category assignments (teacher-configurable)
+  const LOCAL_CATEGORIES = LEARNING_CATEGORIES.map((c, i) => ({ id: i + 1, name: c.name, slug: c.slug, count: c.items.length }));
+  const [gameCategories, setGameCategories] = useState<Record<string, string[]>>({
+    memory_match: ['mga-hayop', 'mga-prutas', 'mga-gulay'],
+    paghahanap_larawan: ['mga-hayop', 'mga-prutas', 'mga-kulay'],
+    hulaan_salita: ['mga-hayop', 'mga-prutas', 'mga-gulay', 'mga-hugis'],
+    gulong_letra: ['mga-hayop', 'mga-prutas', 'mga-gulay', 'mga-numero'],
+    pop_balloon: ['mga-hayop', 'mga-prutas', 'mga-kulay', 'mga-hugis'],
+  });
 
   // ── Quiz Management State ───────────────────────────────────────────────
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -109,13 +199,66 @@ export default function ContentManagementScreen() {
         teacherService.getMinigamesOverview(),
       ]);
 
-      if (catsRes.status === 'fulfilled') {
-        setCategories(catsRes.value);
+      let loadedCategories = DEFAULT_STUDENT_CATEGORIES;
+      if (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value) && catsRes.value.length > 0) {
+        loadedCategories = DEFAULT_STUDENT_CATEGORIES.map((defCat) => {
+          const matched = catsRes.value.find(
+            (c: any) => c.slug === defCat.slug || normalizeWord(c.name) === normalizeWord(defCat.name)
+          );
+          return {
+            ...defCat,
+            id: matched?.id || defCat.id,
+            color: matched?.color || defCat.color,
+            description: matched?.description || defCat.description,
+            flashcards_count: defCat.flashcards_count,
+          };
+        });
       }
-      if (fcRes.status === 'fulfilled') {
-        setFlashcards(fcRes.value.flashcards);
+      setCategories(loadedCategories);
+
+      // Build full 151 base flashcards linked to loaded categories
+      const base151Cards = buildDefaultFlashcards(loadedCategories);
+
+      if (fcRes.status === 'fulfilled' && fcRes.value?.flashcards && Array.isArray(fcRes.value.flashcards)) {
+        const backendMap = new Map<string, Flashcard>();
+        fcRes.value.flashcards.forEach((bf: Flashcard) => {
+          const key = normalizeWord(bf.filipino_name || bf.name);
+          if (key) backendMap.set(key, bf);
+        });
+
+        const merged = base151Cards.map((baseCard) => {
+          const key = normalizeWord(baseCard.filipino_name);
+          const backendCard = backendMap.get(key);
+          if (backendCard) {
+            return {
+              ...baseCard,
+              id: backendCard.id || baseCard.id,
+              is_published: backendCard.is_published,
+              image_url: backendCard.image_url || baseCard.image_url,
+              audio_url: backendCard.audio_url || baseCard.audio_url,
+            };
+          }
+          return baseCard;
+        });
+
+        // Keep any custom teacher-added cards outside the standard 151
+        fcRes.value.flashcards.forEach((bf: Flashcard) => {
+          const key = normalizeWord(bf.filipino_name || bf.name);
+          if (key && !base151Cards.some((b) => normalizeWord(b.filipino_name) === key)) {
+            merged.push({
+              ...bf,
+              localImageSource: null,
+              localAudioSource: null,
+            });
+          }
+        });
+
+        setFlashcards(merged);
+      } else {
+        setFlashcards(base151Cards);
       }
-      if (mgRes.status === 'fulfilled') {
+
+      if (mgRes.status === 'fulfilled' && mgRes.value) {
         setMinigamesData(mgRes.value);
       }
     } catch (err: any) {
@@ -130,23 +273,46 @@ export default function ContentManagementScreen() {
     loadAllData();
   }, [loadAllData]);
 
-  // Load quiz questions for a category & difficulty
+  // Load quiz questions for a category & difficulty matching the student quiz experience
   const loadQuiz = useCallback(async (catId: number, diff: QuizDifficulty) => {
     setLoadingQuiz(true);
     setQuizData(null);
     try {
+      const cat = categories.find((c) => c.id === catId) || DEFAULT_STUDENT_CATEGORIES.find((c) => c.id === catId);
+      const catSlug = cat?.slug || 'mga-hayop';
+      const catObj = LEARNING_CATEGORIES.find((c) => c.slug === catSlug || c.name === cat?.name) || LEARNING_CATEGORIES[0];
+      let availability: any = { is_locked: false, pass_score: 3 };
       const res = await teacherService.getQuizQuestions(catId, diff);
+      if (res?.availability) availability = res.availability;
+      let questions = Array.isArray(res?.questions) ? res.questions : [];
+      if (questions.length < 10) {
+        if (diff === 'madali') {
+          questions = getMadaliQuestionsBySlug(catSlug).map((q, idx) => ({
+            id: idx + 1, category_id: catId, flashcard_id: null,
+            question_text: q.questionFil || q.questionEn, target_image_url: '', target_item_name: '',
+            choices: q.textChoices?.map((choice) => ({ id: choice.id, text: choice.text, image_url: '' })) || [],
+            correct_answer: q.correctTextId || q.correctVocabId || 'A', points: 1, difficulty: diff,
+          })) as QuizQuestion[];
+        } else {
+          questions = catObj.items.map((item, idx) => ({
+            id: idx + 1, category_id: catId, flashcard_id: null,
+            question_text: diff === 'katamtaman' ? `Pakinggan ang tunog at piliin ang tamang larawan para sa "${item.filipino}":` : 'Ano ang wastong baybay o pangalan ng nasa larawan?',
+            target_image_url: typeof item.image === 'string' ? item.image : '', target_item_name: item.filipino,
+            choices: [], correct_answer: item.filipino, points: diff === 'katamtaman' ? 2 : 3, difficulty: diff,
+          })) as QuizQuestion[];
+        }
+      }
       setQuizData({
-        availability: res.availability,
-        questions: res.questions,
-        available_flashcards: res.available_flashcards,
+        availability,
+        questions,
+        available_flashcards: res?.available_flashcards ?? flashcards.filter((f) => f.category_id === catId),
       });
     } catch {
       setQuizData(null);
     } finally {
       setLoadingQuiz(false);
     }
-  }, []);
+  }, [categories, flashcards]);
 
   const handleSelectQuizCategory = (cat: Category) => {
     setSelectedCategory(cat);
@@ -180,26 +346,129 @@ export default function ContentManagementScreen() {
   };
 
   // ── Flashcard Actions ───────────────────────────────────────────────────
+  const handlePickImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Pahintulot', 'Kailangan ng pahintulot para ma-access ang gallery ng iyong device o computer.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setIsUploadingImage(true);
+      try {
+        const form = new FormData();
+        if (Platform.OS === 'web') {
+          // On Web, fetch the blob URL and wrap in a real File instance so FormData transmits as multipart file
+          const resp = await fetch(asset.uri);
+          const blob = await resp.blob();
+          const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
+          const file = new File([blob], asset.fileName || `image_${Date.now()}.${ext}`, {
+            type: blob.type || asset.mimeType || 'image/jpeg',
+          });
+          form.append('image', file);
+        } else {
+          form.append('image', {
+            uri: asset.uri,
+            name: asset.fileName || 'image.jpg',
+            type: asset.mimeType || 'image/jpeg',
+          } as any);
+        }
+        const res = await teacherService.uploadImage(form);
+        setFlashcardModal((prev) => ({
+          ...prev,
+          card: { ...prev.card, image_url: res.url, localImageSource: undefined },
+        }));
+      } catch (uploadErr: any) {
+        console.warn('Image upload error, fallback to local asset:', uploadErr);
+        // Direct local device/computer file URI fallback
+        setFlashcardModal((prev) => ({
+          ...prev,
+          card: { ...prev.card, image_url: asset.uri, localImageSource: undefined },
+        }));
+      }
+    } catch (err: any) {
+      Alert.alert('Pumili ng Larawan', err?.message || 'Hindi napili ang larawan.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handlePickAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setIsUploadingAudio(true);
+      try {
+        const form = new FormData();
+        if (Platform.OS === 'web') {
+          const resp = await fetch(asset.uri);
+          const blob = await resp.blob();
+          const ext = (asset.mimeType || blob.type || 'audio/mpeg').split('/')[1] || 'mp3';
+          const file = new File([blob], asset.name || `audio_${Date.now()}.${ext}`, {
+            type: blob.type || asset.mimeType || 'audio/mpeg',
+          });
+          form.append('audio', file);
+        } else {
+          form.append('audio', {
+            uri: asset.uri,
+            name: asset.name,
+            type: asset.mimeType || 'audio/mpeg',
+          } as any);
+        }
+        const res = await teacherService.uploadAudio(form);
+        setFlashcardModal((prev) => ({
+          ...prev,
+          card: { ...prev.card, audio_url: res.url, localAudioSource: undefined },
+        }));
+      } catch (uploadErr: any) {
+        console.warn('Audio upload error, fallback to local asset:', uploadErr);
+        // Direct local device/computer file URI fallback
+        setFlashcardModal((prev) => ({
+          ...prev,
+          card: { ...prev.card, audio_url: asset.uri, localAudioSource: undefined },
+        }));
+      }
+    } catch (err: any) {
+      Alert.alert('Pumili ng Audio', err?.message || 'Hindi napili ang audio.');
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  };
+
   const handleOpenAddFlashcard = () => {
     setFlashcardModal({
       open: true,
       card: {
+        ...EMPTY_FLASHCARD,
         category_id: categories[0]?.id ?? 1,
-        filipino_name: '',
-        english_name: '',
-        description: '',
-        image_url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&q=80',
-        audio_url: '',
-        is_published: true,
       },
       isEditing: false,
     });
   };
 
-  const handleOpenEditFlashcard = (card: Flashcard) => {
+  const handleOpenEditFlashcard = (card: Flashcard & { localImageSource?: any; localAudioSource?: any }) => {
     setFlashcardModal({
       open: true,
-      card: { ...card },
+      card: {
+        ...EMPTY_FLASHCARD,
+        ...card,
+        filipino_name: card.filipino_name || card.name || '',
+        english_name: card.english_name || '',
+        description: card.description || '',
+        image_url: card.image_url || '',
+        audio_url: card.audio_url || '',
+      },
       isEditing: true,
     });
   };
@@ -213,22 +482,66 @@ export default function ContentManagementScreen() {
 
     setIsSavingFlashcard(true);
     try {
-      await teacherService.saveFlashcard({
-        id: c.id,
-        category_id: c.category_id,
-        filipino_name: c.filipino_name.trim(),
-        english_name: c.english_name?.trim() || null,
-        description: c.description?.trim() || null,
-        image_url: c.image_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&q=80',
-        audio_url: c.audio_url || null,
-        is_published: c.is_published ?? true,
+      const catObj = categories.find((cat) => cat.id === c.category_id);
+      let savedCard: any = null;
+      try {
+        const res = await teacherService.saveFlashcard({
+          id: c.id,
+          category_id: c.category_id,
+          filipino_name: c.filipino_name.trim(),
+          english_name: c.english_name?.trim() || null,
+          description: c.description?.trim() || null,
+          image_url: (c.image_url && !c.image_url.startsWith('blob:')) ? c.image_url : null,
+          audio_url: c.audio_url || null,
+          is_published: c.is_published ?? true,
+        });
+        savedCard = res.flashcard;
+      } catch (err: any) {
+        console.warn('Backend saveFlashcard failed, saving to local cache:', err);
+      }
+
+      const catSlug = catObj?.slug || 'mga-hayop';
+      try {
+        const raw = await storage.getItem(`@wikaplay_flashcards_${catSlug}`);
+        const overrides = raw ? JSON.parse(raw) : {};
+        const norm = c.filipino_name.toLowerCase().trim();
+        overrides[norm] = {
+          imageUri: (c.image_url && !c.image_url.startsWith('blob:')) ? c.image_url : undefined,
+          audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
+        };
+        await storage.setItem(`@wikaplay_flashcards_${catSlug}`, JSON.stringify(overrides));
+      } catch (storeErr) {
+        console.warn('Storage override saving failed:', storeErr);
+      }
+
+      setFlashcards((prev) => {
+        if (c.id) {
+          return prev.map((f) => (f.id === c.id ? { ...f, ...c, category: catObj || f.category } : f));
+        } else {
+          const newId = savedCard?.id || Math.max(...prev.map((p) => p.id), 151) + 1;
+          return [
+            {
+              id: newId,
+              category_id: c.category_id!,
+              name: c.filipino_name!.trim(),
+              filipino_name: c.filipino_name!.trim(),
+              english_name: c.english_name?.trim() || '',
+              description: c.description?.trim() || '',
+              image_url: c.image_url || '',
+              audio_url: c.audio_url || '',
+              is_published: c.is_published ?? true,
+              sort_order: prev.length + 1,
+              category: catObj,
+              localImageSource: c.localImageSource,
+              localAudioSource: c.localAudioSource,
+            },
+            ...prev,
+          ];
+        }
       });
 
       Alert.alert('Tagumpay', 'Nai-save ang flashcard!');
-      setFlashcardModal({ open: false, card: {}, isEditing: false });
-      // Reload flashcards
-      const res = await teacherService.getFlashcards();
-      setFlashcards(res.flashcards);
+      setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false });
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Nabigong i-save ang flashcard.');
     } finally {
@@ -247,7 +560,7 @@ export default function ContentManagementScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await teacherService.deleteFlashcard(id);
+              await teacherService.deleteFlashcard(id).catch(() => {});
               setFlashcards((prev) => prev.filter((f) => f.id !== id));
               Alert.alert('Tagumpay', 'Matagumpay na nabura ang flashcard.');
             } catch (err: any) {
@@ -259,12 +572,29 @@ export default function ContentManagementScreen() {
     );
   };
 
-  const handlePlayAudioPreview = (audioUrlOrName?: string | null) => {
-    if (!audioUrlOrName) {
+  const handlePlayAudioPreview = (cardOrAudio?: any) => {
+    if (!cardOrAudio) {
       Alert.alert('Walang Audio', 'Walang naka-link na audio recording sa flashcard na ito.');
       return;
     }
-    playSound(audioUrlOrName);
+    if (typeof cardOrAudio === 'object') {
+      if (cardOrAudio.localAudioSource) {
+        playSound(cardOrAudio.localAudioSource);
+        return;
+      }
+      if (cardOrAudio.audio_url) {
+        playSound(cardOrAudio.audio_url);
+        return;
+      }
+      if (cardOrAudio.filipino_name) {
+        playSound(cardOrAudio.filipino_name);
+        return;
+      }
+    } else if (typeof cardOrAudio === 'string') {
+      playSound(cardOrAudio);
+      return;
+    }
+    Alert.alert('Walang Audio', 'Walang naka-link na audio recording sa flashcard na ito.');
   };
 
   // ── Quiz Question Actions ───────────────────────────────────────────────
@@ -383,10 +713,7 @@ export default function ContentManagementScreen() {
             activeMode === 'flashcards' && styles.heroActionCardActive,
             Shadows.soft,
           ]}
-          onPress={() => {
-            setActiveMode('flashcards');
-            setSelectedCategory(null);
-          }}
+          onPress={() => setActiveMode('flashcards')}
           activeOpacity={0.85}
         >
           <View style={styles.heroCardTopRow}>
@@ -403,7 +730,7 @@ export default function ContentManagementScreen() {
           </Text>
           <View style={styles.heroCardFooter}>
             <Text style={[styles.heroCardActionText, { color: Colors.teacherPurple }]}>
-              {activeMode === 'flashcards' ? 'Kasalukuyang Bukas ✓' : 'Buksan ang Flashcards →'}
+              {activeMode === 'flashcards' ? '✓ Kasalukuyang Bukas' : 'Buksan ang Flashcards →'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -412,7 +739,7 @@ export default function ContentManagementScreen() {
         <TouchableOpacity
           style={[
             styles.heroActionCard,
-            activeMode === 'quizzes' && styles.heroActionCardActive,
+            activeMode === 'quizzes' && [styles.heroActionCardActive, { borderColor: '#0284C7', backgroundColor: '#F0F9FF' }],
             Shadows.soft,
           ]}
           onPress={() => setActiveMode('quizzes')}
@@ -432,7 +759,7 @@ export default function ContentManagementScreen() {
           </Text>
           <View style={styles.heroCardFooter}>
             <Text style={[styles.heroCardActionText, { color: '#0284C7' }]}>
-              {activeMode === 'quizzes' ? 'Kasalukuyang Bukas ✓' : 'Buksan ang Pagsusulit →'}
+              {activeMode === 'quizzes' ? '✓ Kasalukuyang Bukas' : 'Buksan ang Pagsusulit →'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -441,13 +768,10 @@ export default function ContentManagementScreen() {
         <TouchableOpacity
           style={[
             styles.heroActionCard,
-            activeMode === 'minigames' && styles.heroActionCardActive,
+            activeMode === 'minigames' && [styles.heroActionCardActive, { borderColor: '#DB2777', backgroundColor: '#FDF2F8' }],
             Shadows.soft,
           ]}
-          onPress={() => {
-            setActiveMode('minigames');
-            setSelectedCategory(null);
-          }}
+          onPress={() => setActiveMode('minigames')}
           activeOpacity={0.85}
         >
           <View style={styles.heroCardTopRow}>
@@ -464,9 +788,78 @@ export default function ContentManagementScreen() {
           </Text>
           <View style={styles.heroCardFooter}>
             <Text style={[styles.heroCardActionText, { color: '#DB2777' }]}>
-              {activeMode === 'minigames' ? 'Kasalukuyang Bukas ✓' : 'Buksan ang Mini-Games →'}
+              {activeMode === 'minigames' ? '✓ Kasalukuyang Bukas' : 'Buksan ang Mini-Games →'}
             </Text>
           </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick Mode Toggle Bar */}
+      <View style={styles.quickTabsRow}>
+        <TouchableOpacity
+          style={[
+            styles.quickTabBtn,
+            activeMode === 'flashcards' && styles.quickTabBtnActiveFlashcards,
+          ]}
+          onPress={() => setActiveMode('flashcards')}
+        >
+          <Ionicons
+            name="albums"
+            size={16}
+            color={activeMode === 'flashcards' ? Colors.white : Colors.teacherPurple}
+          />
+          <Text
+            style={[
+              styles.quickTabBtnText,
+              activeMode === 'flashcards' && styles.quickTabBtnTextActive,
+            ]}
+          >
+            Flashcards ({flashcards.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.quickTabBtn,
+            activeMode === 'quizzes' && styles.quickTabBtnActiveQuizzes,
+          ]}
+          onPress={() => setActiveMode('quizzes')}
+        >
+          <Ionicons
+            name="newspaper"
+            size={16}
+            color={activeMode === 'quizzes' ? Colors.white : '#0284C7'}
+          />
+          <Text
+            style={[
+              styles.quickTabBtnText,
+              activeMode === 'quizzes' && styles.quickTabBtnTextActive,
+            ]}
+          >
+            Pagsusulit
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.quickTabBtn,
+            activeMode === 'minigames' && styles.quickTabBtnActiveMinigames,
+          ]}
+          onPress={() => setActiveMode('minigames')}
+        >
+          <Ionicons
+            name="game-controller"
+            size={16}
+            color={activeMode === 'minigames' ? Colors.white : '#DB2777'}
+          />
+          <Text
+            style={[
+              styles.quickTabBtnText,
+              activeMode === 'minigames' && styles.quickTabBtnTextActive,
+            ]}
+          >
+            Mini-Games (5)
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -527,12 +920,12 @@ export default function ContentManagementScreen() {
               </Text>
             </TouchableOpacity>
 
-            {categories.map((cat) => {
+            {categories.map((cat, catIdx) => {
               const count = flashcards.filter((fc) => fc.category_id === cat.id).length;
               const isActive = flashcardCategoryFilter === cat.id;
               return (
                 <TouchableOpacity
-                  key={cat.id}
+                  key={`filter_cat_${cat.id}_${cat.slug || catIdx}`}
                   style={[styles.filterPill, isActive && styles.filterPillActive]}
                   onPress={() => setFlashcardCategoryFilter(cat.id)}
                 >
@@ -552,13 +945,14 @@ export default function ContentManagementScreen() {
               message="Walang tumutugma sa filter o paghahanap. Pindutin ang '+ Magdagdag ng Kard' upang magsimula."
             />
           ) : (
-            filteredFlashcards.map((fc) => {
+            filteredFlashcards.map((fc, fcIdx) => {
               const categoryObj = categories.find((c) => c.id === fc.category_id);
+              const cardKey = `fc_${fc.id}_${fc.category_id}_${fc.filipino_name || fc.name || fcIdx}`;
 
               return (
-                <View key={fc.id} style={[styles.flashcardCard, Shadows.soft]}>
-                  {fc.image_url ? (
-                    <Image source={{ uri: fc.image_url }} style={styles.flashcardThumb} />
+                <View key={cardKey} style={[styles.flashcardCard, Shadows.soft]}>
+                  {getFlashcardImageSource(fc) ? (
+                    <Image source={getFlashcardImageSource(fc)!} style={styles.flashcardThumb} />
                   ) : (
                     <View style={[styles.flashcardThumb, styles.thumbPlaceholder]}>
                       <Text style={{ fontSize: 24 }}>🖼️</Text>
@@ -579,9 +973,9 @@ export default function ContentManagementScreen() {
                       )}
                     </View>
 
-                    {fc.english_name && (
+                    {fc.english_name ? (
                       <Text style={styles.cardEnglish}>{fc.english_name}</Text>
-                    )}
+                    ) : null}
 
                     <View style={styles.cardMetaRow}>
                       <Text
@@ -592,11 +986,11 @@ export default function ContentManagementScreen() {
                       >
                         {categoryObj?.name || 'Kategorya'}
                       </Text>
-                      {fc.description && (
+                      {fc.description ? (
                         <Text style={styles.cardDesc} numberOfLines={1}>
                           {fc.description}
                         </Text>
-                      )}
+                      ) : null}
                     </View>
                   </View>
 
@@ -604,7 +998,7 @@ export default function ContentManagementScreen() {
                   <View style={styles.actionsCol}>
                     <TouchableOpacity
                       style={styles.audioActionBtn}
-                      onPress={() => handlePlayAudioPreview(fc.audio_url || fc.filipino_name)}
+                      onPress={() => handlePlayAudioPreview(fc)}
                     >
                       <Ionicons name="volume-medium" size={16} color={Colors.teacherPurple} />
                     </TouchableOpacity>
@@ -644,9 +1038,9 @@ export default function ContentManagementScreen() {
                 </View>
               </View>
 
-              {categories.map((cat) => (
+              {categories.map((cat, catIdx) => (
                 <PressableScale
-                  key={cat.id}
+                  key={`quiz_cat_${cat.id}_${cat.slug || catIdx}`}
                   onPress={() => handleSelectQuizCategory(cat)}
                   style={[
                     styles.categoryCard,
@@ -668,7 +1062,7 @@ export default function ContentManagementScreen() {
             <>
               {/* Back to Category List */}
               <TouchableOpacity
-                onPress={() => setSelectedCategory(null)}
+                onPress={() => { setSelectedCategory(null); setQuizData(null); }}
                 style={styles.backBtn}
               >
                 <Ionicons name="arrow-back" size={18} color={Colors.teacherPurple} />
@@ -707,7 +1101,7 @@ export default function ContentManagementScreen() {
               </View>
 
               {/* Lock Switch Banner */}
-              {quizData && (
+              {!initialMode && quizData && (
                 <View style={[styles.lockCard, Shadows.subtle]}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.lockTitle}>
@@ -732,7 +1126,7 @@ export default function ContentManagementScreen() {
               )}
 
               {/* Add Question Button */}
-              <View style={styles.addQuestionRow}>
+              {quizData && <View style={styles.addQuestionRow}>
                 <Text style={styles.questionsCountText}>
                   {quizData?.questions?.length ?? 0} Tanong ({DIFF_LABELS[selectedDiff]})
                 </Text>
@@ -744,14 +1138,14 @@ export default function ContentManagementScreen() {
                   <Ionicons name="add-circle" size={16} color={Colors.white} />
                   <Text style={styles.addQuestionBtnText}>Magdagdag ng Tanong</Text>
                 </TouchableOpacity>
-              </View>
+              </View>}
 
               {/* Questions List */}
               {loadingQuiz ? (
                 <LoadingView message="Kinukuha ang mga tanong..." />
               ) : quizData?.questions && quizData.questions.length > 0 ? (
                 quizData.questions.map((q, idx) => (
-                  <View key={q.id || idx} style={[styles.questionCard, Shadows.soft]}>
+                  <View key={`quiz_q_${q.id || idx}_${idx}`} style={[styles.questionCard, Shadows.soft]}>
                     <View style={styles.questionHead}>
                       <View style={styles.qNumBadge}>
                         <Text style={styles.qNumText}>{idx + 1}</Text>
@@ -777,10 +1171,10 @@ export default function ContentManagementScreen() {
                       {q.choices?.map((choice: any, cIdx: number) => {
                         const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
                         const isCorrect =
-                          choiceText.toLowerCase().trim() === q.correct_answer.toLowerCase().trim();
+                          q.correct_answer && choiceText.toLowerCase().trim() === q.correct_answer.toLowerCase().trim();
                         return (
                           <View
-                            key={cIdx}
+                            key={`choice_${q.id || idx}_${cIdx}`}
                             style={[
                               styles.choiceChip,
                               isCorrect && styles.choiceChipCorrect,
@@ -816,10 +1210,10 @@ export default function ContentManagementScreen() {
       {activeMode === 'minigames' && (
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeaderRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.sectionHeading}>5 Mini-Games ng WikaPlay</Text>
               <Text style={styles.sectionSubText}>
-                Memory Match, Paghahanap ng Larawan, Hulaan ang Salita, Gulong ng Letra, at Pop Balloon.
+                I-configure ang mga kategorya na gagamitin ng bawat mini-game.
               </Text>
             </View>
           </View>
@@ -828,49 +1222,112 @@ export default function ContentManagementScreen() {
           <View style={[styles.policyBanner, Shadows.subtle]}>
             <Ionicons name="shield-checkmark" size={20} color={Colors.grassGreenDark} />
             <Text style={styles.policyText}>
-              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Puntos at Gantimpala:</Text> 0–20 puntos bawat sesyon. Bawat puntos ay nagbibigay ng 1:1 bituin. Ang markang <Text style={{ fontWeight: 'bold', color: Colors.grassGreenDark }}>15–20 / 20</Text> ay nagbibigay ng pagkakataong makakuha ng mahiwagang kahon (Nakolekta kard). Ang 0–14 puntos ay hindi kwalipikado.
+              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Puntos:</Text> 0–20 puntos bawat sesyon · 1 puntos = 1 bituin · <Text style={{ fontWeight: 'bold', color: Colors.grassGreenDark }}>15–20 puntos</Text> = Kwalipikado sa Mahiwagang Kahon.
             </Text>
           </View>
 
-          {/* 5 Mini-Games List */}
-          {minigamesData?.games?.map((g) => (
-            <View key={g.id} style={[styles.gameManageCard, Shadows.soft]}>
-              <View style={[styles.gameManageHead, { borderLeftColor: g.color || Colors.teacherPurple }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.gameManageTitle}>{g.title}</Text>
-                  <Text style={styles.gameManageDesc}>{g.description}</Text>
+          {/* Global Stats Row */}
+          {minigamesData && (
+            <View style={[styles.mgStatsRow, Shadows.subtle]}>
+              <View style={styles.mgStatItem}>
+                <Text style={styles.mgStatVal}>{minigamesData.total_completed_sessions}</Text>
+                <Text style={styles.mgStatLabel}>Kabuuang Sesyon</Text>
+              </View>
+              <View style={styles.gameMetricDivider} />
+              <View style={styles.mgStatItem}>
+                <Text style={styles.mgStatVal}>{minigamesData.total_qualifying_sessions}</Text>
+                <Text style={styles.mgStatLabel}>Nakakuha ng Kahon</Text>
+              </View>
+              <View style={styles.gameMetricDivider} />
+              <View style={styles.mgStatItem}>
+                <Text style={styles.mgStatVal}>{minigamesData.games?.length ?? 5}</Text>
+                <Text style={styles.mgStatLabel}>Mini-Games</Text>
+              </View>
+            </View>
+          )}
+
+          {/* 5 Mini-Games with Category Management */}
+          {(minigamesData?.games ?? [
+            { id: 'memory_match', title: 'Memory Match', description: 'Ipares ang magkakatulad na larawan.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#7C3AED', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'paghahanap_larawan', title: 'Paghahanap ng Larawan', description: 'Makinig sa tunog at piliin ang tamang larawan.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#0284C7', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'hulaan_salita', title: 'Hulaan ang Salita', description: 'Tingnan ang pahiwatig at hulaan ang salita.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#059669', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'gulong_letra', title: 'Gulong ng mga Letra', description: 'Ayusin ang mga letra upang mabuo ang salita.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#D97706', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'pop_balloon', title: 'Pop Balloon', description: 'Paputukin ang lobo na may tamang sagot.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#DC2626', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+          ]).map((g) => {
+            const selected = gameCategories[g.id] ?? [];
+            return (
+              <View key={g.id} style={[styles.gameManageCard, Shadows.soft]}>
+                <View style={[styles.gameManageHead, { borderLeftColor: g.color || Colors.teacherPurple }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.gameManageTitle}>{g.title}</Text>
+                    <Text style={styles.gameManageDesc}>{g.description}</Text>
+                  </View>
+                  <View style={[styles.gameManagePill, { backgroundColor: (g.color || '#EC4899') + '20' }]}>
+                    <Text style={[styles.gameManagePillText, { color: g.color || '#EC4899' }]}>
+                      {g.total_plays} Nilaro
+                    </Text>
+                  </View>
                 </View>
-                <View style={[styles.gameManagePill, { backgroundColor: (g.color || '#EC4899') + '20' }]}>
-                  <Text style={[styles.gameManagePillText, { color: g.color || '#EC4899' }]}>
-                    {g.total_plays} Nilaro
+
+                <View style={styles.gameManageRulesBox}>
+                  <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+                  <Text style={styles.gameManageRulesText}>{g.rules}</Text>
+                </View>
+
+                {/* Key Metrics */}
+                <View style={styles.gameManageMetricsRow}>
+                  <View style={styles.gameMetricCol}>
+                    <Text style={styles.gameMetricVal}>{g.average_score ?? 0} / 20</Text>
+                    <Text style={styles.gameMetricLabel}>Average Score</Text>
+                  </View>
+                  <View style={styles.gameMetricDivider} />
+                  <View style={styles.gameMetricCol}>
+                    <Text style={styles.gameMetricVal}>{g.qualifiers_count ?? 0}</Text>
+                    <Text style={styles.gameMetricLabel}>Mystery Box</Text>
+                  </View>
+                  <View style={styles.gameMetricDivider} />
+                  <View style={styles.gameMetricCol}>
+                    <Text style={styles.gameMetricVal}>+{g.stars_awarded ?? 0} ⭐</Text>
+                    <Text style={styles.gameMetricLabel}>Bituin</Text>
+                  </View>
+                </View>
+
+                {/* Category Selector */}
+                <View style={styles.gameCatSection}>
+                  <Text style={styles.gameCatSectionTitle}>📚 Mga Kategorya na Ginagamit:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                    {LOCAL_CATEGORIES.map((cat) => {
+                      const isSelected = selected.includes(cat.slug);
+                      return (
+                        <TouchableOpacity
+                          key={cat.slug}
+                          style={[
+                            styles.gameCatChip,
+                            isSelected && { backgroundColor: g.color || Colors.teacherPurple },
+                          ]}
+                          onPress={() => {
+                            const next = isSelected
+                              ? selected.filter((s) => s !== cat.slug)
+                              : [...selected, cat.slug];
+                            setGameCategories((prev) => ({ ...prev, [g.id]: next }));
+                          }}
+                        >
+                          <Text style={[styles.gameCatChipText, isSelected && { color: Colors.white }]}>
+                            {cat.name} ({cat.count})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  <Text style={styles.gameCatHint}>
+                    {selected.length === 0
+                      ? '⚠️ Walang napiling kategorya — piliin ang isa man'
+                      : `✓ ${selected.length} kategorya ang napili · ${LOCAL_CATEGORIES.filter(c => selected.includes(c.slug)).reduce((sum, c) => sum + c.count, 0)} kard`}
                   </Text>
                 </View>
               </View>
-
-              <View style={styles.gameManageRulesBox}>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-                <Text style={styles.gameManageRulesText}>{g.rules}</Text>
-              </View>
-
-              {/* Key Metrics */}
-              <View style={styles.gameManageMetricsRow}>
-                <View style={styles.gameMetricCol}>
-                  <Text style={styles.gameMetricVal}>{g.average_score} / 20</Text>
-                  <Text style={styles.gameMetricLabel}>Average Score</Text>
-                </View>
-                <View style={styles.gameMetricDivider} />
-                <View style={styles.gameMetricCol}>
-                  <Text style={styles.gameMetricVal}>{g.qualifiers_count}</Text>
-                  <Text style={styles.gameMetricLabel}>Mahiwagang Kahon (15-20 pts)</Text>
-                </View>
-                <View style={styles.gameMetricDivider} />
-                <View style={styles.gameMetricCol}>
-                  <Text style={styles.gameMetricVal}>+{g.stars_awarded} ⭐</Text>
-                  <Text style={styles.gameMetricLabel}>Naipamahaging Bituin</Text>
-                </View>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -879,7 +1336,7 @@ export default function ContentManagementScreen() {
         visible={flashcardModal.open}
         transparent
         animationType="slide"
-        onRequestClose={() => setFlashcardModal({ open: false, card: {}, isEditing: false })}
+        onRequestClose={() => setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false })}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, Shadows.card]}>
@@ -888,7 +1345,7 @@ export default function ContentManagementScreen() {
                 {flashcardModal.isEditing ? 'I-edit ang Flashcard' : 'Magdagdag ng Bagong Flashcard'}
               </Text>
               <TouchableOpacity
-                onPress={() => setFlashcardModal({ open: false, card: {}, isEditing: false })}
+                onPress={() => setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false })}
               >
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
@@ -902,7 +1359,7 @@ export default function ContentManagementScreen() {
                   const isSelected = flashcardModal.card.category_id === c.id;
                   return (
                     <TouchableOpacity
-                      key={c.id}
+                      key={`modal_cat_${c.id}_${c.slug}`}
                       style={[
                         styles.modalCatChip,
                         isSelected && { backgroundColor: c.color || Colors.teacherPurple },
@@ -931,7 +1388,7 @@ export default function ContentManagementScreen() {
               <TextInput
                 style={styles.modalInput}
                 placeholder="Hal. Aso, Pusa, Mansanas..."
-                value={flashcardModal.card.filipino_name}
+                value={flashcardModal.card.filipino_name || ''}
                 onChangeText={(val) =>
                   setFlashcardModal((prev) => ({
                     ...prev,
@@ -967,37 +1424,97 @@ export default function ContentManagementScreen() {
                 }
               />
 
-              <Text style={styles.inputLabel}>URL ng Larawan:</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="https://..."
-                value={flashcardModal.card.image_url || ''}
-                onChangeText={(val) =>
-                  setFlashcardModal((prev) => ({
-                    ...prev,
-                    card: { ...prev.card, image_url: val },
-                  }))
-                }
-              />
+              {/* Image Picker */}
+              <Text style={styles.inputLabel}>Larawan:</Text>
+              {getFlashcardImageSource(flashcardModal.card) ? (
+                <View style={styles.previewImageWrap}>
+                  <Image
+                    source={getFlashcardImageSource(flashcardModal.card)!}
+                    style={styles.previewImage}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    style={styles.changeMediaBtn}
+                    onPress={handlePickImage}
+                    disabled={isUploadingImage}
+                  >
+                    {isUploadingImage ? (
+                      <ActivityIndicator size="small" color={Colors.white} />
+                    ) : (
+                      <Ionicons name="camera" size={16} color={Colors.white} />
+                    )}
+                    <Text style={styles.changeMediaBtnText}>
+                      {isUploadingImage ? 'Ini-upload...' : 'Palitan mula sa Device/Computer'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.pickMediaBtn}
+                  onPress={handlePickImage}
+                  disabled={isUploadingImage}
+                >
+                  {isUploadingImage ? (
+                    <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                  ) : (
+                    <Ionicons name="image-outline" size={22} color={Colors.teacherPurple} />
+                  )}
+                  <Text style={styles.pickMediaBtnText}>
+                    {isUploadingImage ? 'Ini-upload...' : 'Pumili ng Larawan mula sa Device/Computer'}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
-              <Text style={styles.inputLabel}>Audio Asset / Path:</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="audio/salita.mp3 o pangalan ng audio"
-                value={flashcardModal.card.audio_url || ''}
-                onChangeText={(val) =>
-                  setFlashcardModal((prev) => ({
-                    ...prev,
-                    card: { ...prev.card, audio_url: val },
-                  }))
-                }
-              />
+              {/* Audio Picker */}
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Audio Recording:</Text>
+              {flashcardModal.card.audio_url || (flashcardModal.card as any)?.localAudioSource ? (
+                <View style={styles.audioPickedRow}>
+                  <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
+                  <Text style={styles.audioPickedText} numberOfLines={1}>
+                    {flashcardModal.card.audio_url
+                      ? flashcardModal.card.audio_url.split('/').pop()
+                      : `${flashcardModal.card.filipino_name || 'Boses'}.mp3 (Bundled Audio)`}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => handlePlayAudioPreview(flashcardModal.card)}
+                    style={styles.audioPlayTestBtn}
+                  >
+                    <Ionicons name="play" size={14} color={Colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handlePickAudio}
+                    disabled={isUploadingAudio}
+                    style={styles.audioReplaceBtn}
+                  >
+                    {isUploadingAudio ? (
+                      <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                    ) : (
+                      <Text style={styles.audioReplaceBtnText}>Palitan</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.pickMediaBtn}
+                  onPress={handlePickAudio}
+                  disabled={isUploadingAudio}
+                >
+                  {isUploadingAudio ? (
+                    <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                  ) : (
+                    <Ionicons name="mic-outline" size={22} color={Colors.teacherPurple} />
+                  )}
+                  <Text style={styles.pickMediaBtnText}>
+                    {isUploadingAudio ? 'Ini-upload...' : 'Pumili ng Audio mula sa Device/Computer'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooterActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setFlashcardModal({ open: false, card: {}, isEditing: false })}
+                onPress={() => setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false })}
                 disabled={isSavingFlashcard}
               >
                 <Text style={styles.modalCancelText}>Kanselahin</Text>
@@ -1145,8 +1662,43 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   heroCardsContainer: {
-    marginBottom: 18,
+    marginBottom: 14,
     gap: 10,
+  },
+  quickTabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: Radius.pill,
+    padding: 4,
+  },
+  quickTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.pill,
+  },
+  quickTabBtnActiveFlashcards: {
+    backgroundColor: Colors.teacherPurple,
+  },
+  quickTabBtnActiveQuizzes: {
+    backgroundColor: '#0284C7',
+  },
+  quickTabBtnActiveMinigames: {
+    backgroundColor: '#DB2777',
+  },
+  quickTabBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textMuted,
+  },
+  quickTabBtnTextActive: {
+    color: Colors.white,
   },
   heroActionCard: {
     backgroundColor: Colors.white,
@@ -1723,5 +2275,141 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     fontWeight: 'bold',
     color: Colors.white,
+  },
+  pickMediaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: Colors.teacherPurple,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: '#FAF5FF',
+    marginBottom: 4,
+  },
+  pickMediaBtnText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.teacherPurple,
+    fontWeight: 'bold',
+  },
+  previewImageWrap: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    marginBottom: 4,
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: Radius.md,
+  },
+  changeMediaBtn: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  changeMediaBtnText: {
+    fontSize: 11,
+    color: Colors.white,
+    fontWeight: 'bold',
+  },
+  audioPickedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#DCFCE7',
+    borderRadius: Radius.md,
+    padding: 10,
+    marginBottom: 4,
+  },
+  audioPickedText: {
+    flex: 1,
+    fontSize: Typography.sizes.xs,
+    color: Colors.grassGreenDark,
+  },
+  audioPlayTestBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.grassGreenDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  audioReplaceBtn: {
+    backgroundColor: Colors.teacherPurple,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  audioReplaceBtnText: {
+    fontSize: 10,
+    color: Colors.white,
+    fontWeight: 'bold',
+  },
+  mgStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 14,
+    marginBottom: 12,
+    justifyContent: 'space-between',
+  },
+  mgStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  mgStatVal: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.teacherPurple,
+  },
+  mgStatLabel: {
+    fontSize: 9,
+    color: Colors.textLight,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  gameCatSection: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 10,
+  },
+  gameCatSectionTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  gameCatChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  gameCatChipText: {
+    fontSize: 10,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  gameCatHint: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });

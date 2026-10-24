@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
+import { useEffect } from 'react';
 import {
   Image,
   Modal,
@@ -18,6 +19,7 @@ import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { QuizDifficulty } from '../../../types';
+import { categoryService } from '../../../services/api';
 
 export default function CategoryDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -25,8 +27,21 @@ export default function CategoryDetailScreen() {
 
   const [quizModalVisible, setQuizModalVisible] = useState(false);
   const [gamesModalVisible, setGamesModalVisible] = useState(false);
+  const [quizLocks, setQuizLocks] = useState<Record<string, boolean>>({});
 
   usePresence(`Tinitingnan ang ${category.name}`, 'category_detail');
+
+  useEffect(() => {
+    let mounted = true;
+    categoryService.getAll().then((cats) => {
+      const current = cats.find((item) => item.slug === slug) as any;
+      const availabilities = current?.quiz_availabilities || current?.category?.quiz_availabilities;
+      if (mounted && availabilities) {
+        setQuizLocks(Object.fromEntries(Object.entries(availabilities).map(([key, item]: [string, any]) => [key, item.is_locked])));
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [slug]);
 
   const blurActiveElement = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement) {
@@ -108,6 +123,11 @@ export default function CategoryDetailScreen() {
 
   const handleStartQuiz = (difficulty: QuizDifficulty) => {
     blurActiveElement();
+    if (quizLocks[difficulty]) {
+      setQuizModalVisible(false);
+      router.push({ pathname: '/(student)/quiz-locked' as any, params: { category: category.name, difficulty } } as any);
+      return;
+    }
     setQuizModalVisible(false);
     if (difficulty === 'madali') {
       router.push(`/(student)/quiz/${category.slug}/madali` as any);
@@ -244,16 +264,16 @@ export default function CategoryDetailScreen() {
               <PressableScale
                 key={d.key}
                 onPress={() => handleStartQuiz(d.key)}
-                style={[styles.diffItem, { borderLeftColor: d.color }]}
+                style={[styles.diffItem, { borderLeftColor: d.color }, quizLocks[d.key] && { opacity: 0.6 }]}
               >
                 <View style={styles.diffItemTextContainer}>
                   <Text style={styles.diffItemTitle}>
                     {d.title} <Text style={styles.diffItemEnglish}>({d.english})</Text>
                   </Text>
-                  <Text style={styles.diffItemDesc}>{d.desc}</Text>
+                  <Text style={styles.diffItemDesc}>{quizLocks[d.key] ? 'Naka-lock ng guro' : d.desc}</Text>
                 </View>
-                <View style={[styles.diffBadge, { backgroundColor: d.color }]}>
-                  <Text style={styles.diffBadgeText}>{d.stars}</Text>
+                <View style={[styles.diffBadge, { backgroundColor: quizLocks[d.key] ? '#94A3B8' : d.color }]}>
+                  <Ionicons name={quizLocks[d.key] ? 'lock-closed' : 'play'} size={16} color={Colors.white} />
                 </View>
               </PressableScale>
             ))}

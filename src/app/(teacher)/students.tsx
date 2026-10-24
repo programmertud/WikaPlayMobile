@@ -272,7 +272,7 @@ export default function StudentsMonitoringScreen() {
                   >
                     <Text style={styles.avatarText}>{student.name.charAt(0).toUpperCase()}</Text>
                   </LinearGradient>
-                  {student.is_online && <View style={styles.avatarOnlinePip} />}
+                  {student.is_online ? <View style={styles.avatarOnlinePip} /> : null}
                 </View>
 
                 {/* Details */}

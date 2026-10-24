@@ -91,7 +91,7 @@ export default function StudentDashboardScreen() {
     transform: [{ scale: starScale.value }],
   }));
 
-  const continueCategory = categories[0];
+
 
   if (loading && !refreshing) {
     return <LoadingView message="Kinukuha ang mga aralin sa WikaPlay..." />;
@@ -156,7 +156,7 @@ export default function StudentDashboardScreen() {
 
       {/* Hero Banner: Daily Goal & Motivation */}
       <PressableScale
-        onPress={() => router.push(`/(student)/category/${continueCategory.slug}` as any)}
+        onPress={() => router.push(`/(student)/category/${categories[0]?.slug ?? 'mga-hayop'}` as any)}
         style={[styles.heroCard, Shadows.card]}
       >
         <LinearGradient
@@ -185,44 +185,7 @@ export default function StudentDashboardScreen() {
         <Text style={styles.heroEmoji}>🌟</Text>
       </PressableScale>
 
-      {/* Continue Learning "Magpatuloy" Section */}
-      <View style={styles.continueSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Magpatuloy sa Pag-aaral 🚀</Text>
-          <Text style={styles.sectionSubtitle}>Huling binuksang aralin</Text>
-        </View>
 
-        <PressableScale
-          onPress={() => router.push(`/(student)/category/${continueCategory.slug}` as any)}
-          style={[styles.continueCard, Shadows.card]}
-        >
-          <LinearGradient
-            colors={Gradients.skyLight}
-            style={styles.continueIconCircle}
-          >
-            <Text style={styles.continueEmoji}>{continueCategory.icon}</Text>
-          </LinearGradient>
-
-          <View style={styles.continueInfo}>
-            <Text style={styles.continueCatName}>{continueCategory.name}</Text>
-            <Text style={styles.continueStats}>
-              {continueCategory.flashcards_count} Salita • Handa para sa pagsasanay
-            </Text>
-            <View style={styles.continueProgressTrack}>
-              <LinearGradient
-                colors={Gradients.grass}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.continueProgressBar, { width: '45%' }]}
-              />
-            </View>
-          </View>
-
-          <View style={styles.playArrow}>
-            <Ionicons name="play" size={18} color={Colors.white} />
-          </View>
-        </PressableScale>
-      </View>
 
       {/* Categories Grid Header */}
       <View style={styles.sectionHeader}>
@@ -237,7 +200,6 @@ export default function StudentDashboardScreen() {
             key={category.id}
             index={index}
             category={category}
-            progress={index === 0 ? 0.45 : undefined}
             onPress={() => router.push(`/(student)/category/${category.slug}` as any)}
           />
         ))}

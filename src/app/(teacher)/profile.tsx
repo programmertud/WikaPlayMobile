@@ -74,7 +74,7 @@ export default function TeacherProfileScreen() {
           <Ionicons name="school" size={14} color={Colors.teacherPurple} />
           <Text style={styles.roleLabel}>Guro (Teacher Portal)</Text>
         </View>
-        {user?.email && <Text style={styles.emailLabel}>{user.email}</Text>}
+        {user?.email ? <Text style={styles.emailLabel}>{user.email}</Text> : null}
       </View>
 
       {/* Info Card */}

@@ -30,6 +30,8 @@ import { PressableScale } from '../components/PressableScale';
 import { GradientBackground } from '../components/GradientBackground';
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient } from '../services/api';
+import { bgm } from '../services/audio/bgm-service';
+import { playFeedbackSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 export default function LoginScreen() {
@@ -76,6 +78,8 @@ export default function LoginScreen() {
   }));
 
   const handleLogin = async (overrideName?: string, overrideEmail?: string, overridePass?: string) => {
+    if (loading) return; // Prevent duplicate submissions
+
     setErrorMessage(null);
     setLoading(true);
 
@@ -88,8 +92,16 @@ export default function LoginScreen() {
           return;
         }
 
-        const loggedUser = await studentLogin(nameToUse);
-        router.replace('/');
+        await studentLogin(nameToUse);
+
+        // Tasteful celebration: success haptics & cheerful audio feedback
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        if (!bgm.getMuted()) {
+          playFeedbackSound('magaling').catch(() => {});
+        }
+
+        // Navigate to dedicated animated loading screen before opening student dashboard
+        router.replace('/loading');
       } else {
         const loginEmail = (overrideEmail || email).trim();
         const loginPass = overridePass || password;
@@ -104,7 +116,7 @@ export default function LoginScreen() {
         if (loggedUser.role === 'teacher' || loggedUser.role === 'admin') {
           router.replace('/(teacher)');
         } else {
-          router.replace('/');
+          router.replace('/loading');
         }
       }
     } catch (err: any) {
@@ -228,12 +240,12 @@ export default function LoginScreen() {
               </Text>
             )}
 
-            {errorMessage && (
+            {errorMessage ? (
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle" size={18} color={Colors.error} style={{ marginRight: 6 }} />
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
-            )}
+            ) : null}
 
             {role === 'student' ? (
               <InputField

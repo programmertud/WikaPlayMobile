@@ -220,11 +220,11 @@ export function MysteryBoxModal({
                       {RARITY_LABELS[collectible?.rarity || 'common']}
                     </Text>
                   </View>
-                  {collectible?.is_duplicate && (
+                  {collectible?.is_duplicate ? (
                     <View style={styles.duplicatePill}>
                       <Text style={styles.duplicateText}>Kolektado Na</Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
 
                 <Text style={styles.cardHeaderTitle}>

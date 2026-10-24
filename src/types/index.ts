@@ -40,7 +40,7 @@ export interface Flashcard {
   filipino_name: string;
   english_name?: string | null;
   description?: string | null;
-  image_url: string;
+  image_url?: string | null;
   audio_url?: string | null;
   is_published: boolean;
   sort_order: number;

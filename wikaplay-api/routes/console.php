@@ -17,7 +17,7 @@ Artisan::command('wikaplay:reset-rewards', function () {
 
 Artisan::command('wikaplay:check-collectibles', function () {
     // Delete any old non-standard slugs (not starting with category prefix)
-    $validPrefixes = ['hayop-', 'prutas-', 'gulay-', 'kulay-', 'hugis-', 'bilang-', 'katawan-', 'pagbati-'];
+    $validPrefixes = ['hayop-', 'prutas-', 'gulay-', 'kulay-', 'hugis-', 'bilang-', 'numero-', 'katawan-', 'pagbati-'];
     $deleted = \App\Models\Collectible::where(function ($q) use ($validPrefixes) {
         foreach ($validPrefixes as $prefix) {
             $q->where('slug', 'not like', $prefix . '%');

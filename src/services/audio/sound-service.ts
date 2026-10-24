@@ -465,14 +465,14 @@ export async function playVocabularyItem(
   item: { id?: string; filipino: string; audioUri?: string | null; audio?: any },
   onFinished?: () => void
 ) {
-  // 1. Direct audio asset attached to item (e.g. require('../../assets/audio/PRUTAS/Abukado.mp3'))
-  if (item.audio) {
-    return playSound(item.audio, onFinished);
-  }
-
-  // 2. Direct audioUri (URL or remote)
+  // 1. Direct audioUri (custom recording or upload by teacher)
   if (item.audioUri) {
     return playSound(item.audioUri, onFinished);
+  }
+
+  // 2. Direct audio asset attached to item (e.g. require('../../assets/audio/...'))
+  if (item.audio) {
+    return playSound(item.audio, onFinished);
   }
 
   // 3. Try item ID lookup in LOCAL_AUDIO_ASSETS

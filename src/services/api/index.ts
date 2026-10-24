@@ -103,7 +103,12 @@ export const categoryService = {
       is_locked: boolean;
       pass_score: number;
       questions: QuizQuestion[];
-    }>(`categories/${slug}/quizzes/${difficulty}`);
+    }>(`categories/${slug}/quizzes/${difficulty}`).catch((error: any) => {
+      if (error?.status === 403 || error?.response?.status === 403) {
+        return { is_locked: true, category: { name: slug, id: 0, color: '' }, difficulty, pass_score: 3, questions: [] };
+      }
+      throw error;
+    });
   },
 };
 

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
@@ -23,7 +23,10 @@ import { PressableScale } from '../../../components/PressableScale';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
+import { categoryService } from '../../../services/api';
+import { storage } from '../../../utils/storage';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import type { VocabularyItem } from '../../../types';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = Math.min(width - 48, 340);
@@ -32,8 +35,120 @@ export default function FlashcardsViewerScreen() {
   useBgmDuck();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const category = getCategoryBySlug(slug);
-  const items = category.items;
+  const [items, setItems] = useState<VocabularyItem[]>(category.items);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategoryFlashcards = async () => {
+      if (!slug) return;
+
+      // Step 1: Apply locally cached overrides immediately for perceived performance
+      try {
+        const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
+        if (cachedRaw && isMounted) {
+          const cachedMap: Record<string, { imageUri?: string; audioUri?: string }> = JSON.parse(cachedRaw);
+          setItems((prev) =>
+            prev.map((item) => {
+              const norm = item.filipino.toLowerCase().trim();
+              const cached = cachedMap[norm];
+              if (cached) {
+                return {
+                  ...item,
+                  // Only override if cache has a real (non-blob) URL
+                  imageUri: (cached.imageUri && !cached.imageUri.startsWith('blob:')) ? cached.imageUri : item.imageUri,
+                  audioUri: cached.audioUri || item.audioUri,
+                };
+              }
+              return item;
+            })
+          );
+        }
+      } catch {}
+
+      // Step 2: Always fetch from the live backend API — teacher updates must appear immediately
+      try {
+        const res = await categoryService.getFlashcards(slug);
+        if (res?.flashcards && isMounted) {
+          const overridesMap: Record<string, { imageUri?: string; audioUri?: string }> = {};
+
+          setItems((prev) => {
+            const updated = prev.map((item) => {
+              const norm = item.filipino.toLowerCase().trim();
+              const match = res.flashcards.find(
+                (f) =>
+                  f.filipino_name?.toLowerCase().trim() === norm ||
+                  f.name?.toLowerCase().trim() === norm
+              );
+
+              if (match) {
+                const isUnsplash = typeof match.image_url === 'string' && match.image_url.includes('images.unsplash.com');
+                const isBlobUrl = typeof match.image_url === 'string' && match.image_url.startsWith('blob:');
+                // Accept any valid non-placeholder, non-blob server URL
+                const validImage = match.image_url && !isUnsplash && !isBlobUrl
+                  ? match.image_url
+                  : undefined;
+                const validAudio = match.audio_url && !match.audio_url.startsWith('blob:')
+                  ? match.audio_url
+                  : undefined;
+
+                // Always update overrides map so we can cache the latest state
+                overridesMap[norm] = {
+                  imageUri: validImage,
+                  audioUri: validAudio || item.audioUri,
+                };
+
+                return {
+                  ...item,
+                  // Teacher image takes priority over bundled local image
+                  imageUri: validImage ?? item.imageUri,
+                  audioUri: validAudio || item.audioUri,
+                };
+              }
+              return item;
+            });
+
+            // Append any extra teacher-added flashcards not in the local curriculum
+            res.flashcards.forEach((f) => {
+              const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
+              const exists = updated.some((it) => it.filipino.toLowerCase().trim() === fNorm);
+              if (!exists && f.filipino_name) {
+                const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
+                const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
+                const customItem: VocabularyItem = {
+                  id: `fc_${f.id}`,
+                  categoryId: category.id,
+                  filipino: f.filipino_name,
+                  english: f.english_name || '',
+                  imageUri: f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined,
+                  audioUri: f.audio_url || undefined,
+                  emoji: '⭐',
+                };
+                updated.push(customItem);
+                overridesMap[fNorm] = {
+                  imageUri: customItem.imageUri,
+                  audioUri: customItem.audioUri,
+                };
+              }
+            });
+
+            // Persist the latest overrides to local cache for next session
+            storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap)).catch(() => {});
+            return updated;
+          });
+        }
+      } catch {
+        // Safe offline fallback — cached local data stays
+      }
+    };
+
+    loadCategoryFlashcards();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [slug]);
 
   const currentItem = items[currentIndex] || items[0];
   const isFirst = currentIndex === 0;

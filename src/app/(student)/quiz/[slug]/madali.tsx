@@ -83,11 +83,14 @@ const CATEGORY_SLUG_TO_ID: Record<string, number> = {
   'mga-hayop': 1,
   'mga-prutas': 2,
   'mga-gulay': 3,
+  'mga-numero': 4,
   'mga-bilang': 4,
   'mga-hugis': 5,
   'mga-kulay': 6,
   'bahagi-ng-katawan': 7,
+  'mga-bahagi-ng-katawan': 7,
   'mga-pagbati': 8,
+  'mga-pagbati-at-parirala': 8,
 };
 
 // ---------------------------------------------------------------------------
@@ -569,7 +572,7 @@ export default function MadaliQuizScreen() {
           </View>
 
           {/* Large clear picture of the correct answer for Picture-ID questions */}
-          {currentQuestion?.type === 'picture-id' && currentQuestion?.correctVocabId && (
+          {currentQuestion?.type === 'picture-id' && !!currentQuestion?.correctVocabId ? (
             <View style={styles.picturePromptContainer}>
               {findVocabItem(currentQuestion.correctVocabId) ? (
                 <ItemVisual
@@ -578,7 +581,7 @@ export default function MadaliQuizScreen() {
                 />
               ) : null}
             </View>
-          )}
+          ) : null}
 
           {/* Waiting indicator */}
           {!isEnabled && !isLocked && (

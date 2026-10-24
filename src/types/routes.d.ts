@@ -16,6 +16,9 @@ declare module 'expo-router' {
     '/(teacher)/index': undefined;
     '/(teacher)/students': undefined;
     '/(teacher)/content': undefined;
+    '/(teacher)/manage-flashcards': undefined;
+    '/(teacher)/manage-quiz': undefined;
+    '/(teacher)/manage-minigames': undefined;
     '/(teacher)/profile': undefined;
     '/(student)': undefined;
     '/(student)/index': undefined;
@@ -32,6 +35,7 @@ declare module 'expo-router' {
     '/(student)/category/[slug]': { slug: string };
     '/(student)/flashcards/[slug]': { slug: string };
     '/(student)/quiz/[slug]/[difficulty]': { slug: string; difficulty: string };
+    '/(student)/quiz-locked': { category?: string; difficulty?: string };
     '/login': undefined;
     '/register': undefined;
   }

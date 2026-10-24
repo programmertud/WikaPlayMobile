@@ -153,35 +153,35 @@ export const LEARNING_CATEGORIES: LearningCategory[] = [
     ],
   },
   {
-    id: 'cat_bilang',
-    slug: 'mga-bilang',
-    name: 'Mga Bilang',
+    id: 'cat_numero',
+    slug: 'mga-numero',
+    name: 'Mga Numero',
     englishName: 'Numbers',
     color: '#FACC15',
     icon: '🔢',
     logoImage: require('../../assets/images/numero.png'),
     description: 'Matutong magbilang mula isa hanggang dalawampu.',
     items: [
-      { id: 'bilang_1',  categoryId: 'cat_bilang', filipino: 'isa',          english: 'one',       quantity: 1,  emoji: '1️⃣',     image: require('../../assets/images/Numero/Isa.jpg'),          audio: require('../../assets/audio/NUMERO/Isa.mp3') },
-      { id: 'bilang_2',  categoryId: 'cat_bilang', filipino: 'dalawa',       english: 'two',       quantity: 2,  emoji: '2️⃣',     image: require('../../assets/images/Numero/Dalawa.jpg'),       audio: require('../../assets/audio/NUMERO/Dalawa.mp3') },
-      { id: 'bilang_3',  categoryId: 'cat_bilang', filipino: 'tatlo',        english: 'three',     quantity: 3,  emoji: '3️⃣',     image: require('../../assets/images/Numero/Tatlo.jpg'),        audio: require('../../assets/audio/NUMERO/Tatlo.mp3') },
-      { id: 'bilang_4',  categoryId: 'cat_bilang', filipino: 'apat',         english: 'four',      quantity: 4,  emoji: '4️⃣',     image: require('../../assets/images/Numero/Apat.jpg'),         audio: require('../../assets/audio/NUMERO/Apat.mp3') },
-      { id: 'bilang_5',  categoryId: 'cat_bilang', filipino: 'lima',         english: 'five',      quantity: 5,  emoji: '5️⃣',     image: require('../../assets/images/Numero/Lima.jpg'),         audio: require('../../assets/audio/NUMERO/Lima.mp3') },
-      { id: 'bilang_6',  categoryId: 'cat_bilang', filipino: 'anim',         english: 'six',       quantity: 6,  emoji: '6️⃣',     image: require('../../assets/images/Numero/Anim.jpg'),         audio: require('../../assets/audio/NUMERO/Anim.mp3') },
-      { id: 'bilang_7',  categoryId: 'cat_bilang', filipino: 'pito',         english: 'seven',     quantity: 7,  emoji: '7️⃣',     image: require('../../assets/images/Numero/Pito.jpg'),         audio: require('../../assets/audio/NUMERO/Pito.mp3') },
-      { id: 'bilang_8',  categoryId: 'cat_bilang', filipino: 'walo',         english: 'eight',     quantity: 8,  emoji: '8️⃣',     image: require('../../assets/images/Numero/Walo.jpg'),         audio: require('../../assets/audio/NUMERO/Walo.mp3') },
-      { id: 'bilang_9',  categoryId: 'cat_bilang', filipino: 'siyam',        english: 'nine',      quantity: 9,  emoji: '9️⃣',     image: require('../../assets/images/Numero/Siyam.jpg'),        audio: require('../../assets/audio/NUMERO/Siyam.mp3') },
-      { id: 'bilang_10', categoryId: 'cat_bilang', filipino: 'sampu',        english: 'ten',       quantity: 10, emoji: '🔟',     image: require('../../assets/images/Numero/Sampu.jpg'),        audio: require('../../assets/audio/NUMERO/Sampu.mp3') },
-      { id: 'bilang_11', categoryId: 'cat_bilang', filipino: 'labing-isa',   english: 'eleven',    quantity: 11, emoji: '1️⃣1️⃣', image: require('../../assets/images/Numero/Labing-Isa.jpg'),   audio: require('../../assets/audio/NUMERO/Labing-isa.mp3') },
-      { id: 'bilang_12', categoryId: 'cat_bilang', filipino: 'labindalawa',  english: 'twelve',    quantity: 12, emoji: '1️⃣2️⃣', image: require('../../assets/images/Numero/Labing-Dalawa.jpg'),audio: require('../../assets/audio/NUMERO/Labing-dalawa.mp3') },
-      { id: 'bilang_13', categoryId: 'cat_bilang', filipino: 'labintatlo',   english: 'thirteen',  quantity: 13, emoji: '1️⃣3️⃣', image: require('../../assets/images/Numero/Labing-Tatlo.jpg'), audio: require('../../assets/audio/NUMERO/Labing-tatlo.mp3') },
-      { id: 'bilang_14', categoryId: 'cat_bilang', filipino: 'labing-apat',  english: 'fourteen',  quantity: 14, emoji: '1️⃣4️⃣', image: require('../../assets/images/Numero/Labing-Apat.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-apat.mp3') },
-      { id: 'bilang_15', categoryId: 'cat_bilang', filipino: 'labinlima',    english: 'fifteen',   quantity: 15, emoji: '1️⃣5️⃣', image: require('../../assets/images/Numero/Labing-Lima.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-lima.mp3') },
-      { id: 'bilang_16', categoryId: 'cat_bilang', filipino: 'labing-anim',  english: 'sixteen',   quantity: 16, emoji: '1️⃣6️⃣', image: require('../../assets/images/Numero/Labing-Anim.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-anim.mp3') },
-      { id: 'bilang_17', categoryId: 'cat_bilang', filipino: 'labimpito',    english: 'seventeen', quantity: 17, emoji: '1️⃣7️⃣', image: require('../../assets/images/Numero/Labing-Pito.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-pito.mp3') },
-      { id: 'bilang_18', categoryId: 'cat_bilang', filipino: 'labingwalo',   english: 'eighteen',  quantity: 18, emoji: '1️⃣8️⃣', image: require('../../assets/images/Numero/Labing-Walo.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-walo.mp3') },
-      { id: 'bilang_19', categoryId: 'cat_bilang', filipino: 'labinsiyam',   english: 'nineteen',  quantity: 19, emoji: '1️⃣9️⃣', image: require('../../assets/images/Numero/Labing-Siyam.jpg'), audio: require('../../assets/audio/NUMERO/Labing-siyam.mp3') },
-      { id: 'bilang_20', categoryId: 'cat_bilang', filipino: 'dalawampu',    english: 'twenty',    quantity: 20, emoji: '2️⃣0️⃣', image: require('../../assets/images/Numero/Dalawampu.jpg'),    audio: require('../../assets/audio/NUMERO/Dalawampu.mp3') },
+      { id: 'bilang_1',  categoryId: 'cat_numero', filipino: 'isa',          english: 'one',       quantity: 1,  emoji: '1️⃣',     image: require('../../assets/images/Numero/Isa.jpg'),          audio: require('../../assets/audio/NUMERO/Isa.mp3') },
+      { id: 'bilang_2',  categoryId: 'cat_numero', filipino: 'dalawa',       english: 'two',       quantity: 2,  emoji: '2️⃣',     image: require('../../assets/images/Numero/Dalawa.jpg'),       audio: require('../../assets/audio/NUMERO/Dalawa.mp3') },
+      { id: 'bilang_3',  categoryId: 'cat_numero', filipino: 'tatlo',        english: 'three',     quantity: 3,  emoji: '3️⃣',     image: require('../../assets/images/Numero/Tatlo.jpg'),        audio: require('../../assets/audio/NUMERO/Tatlo.mp3') },
+      { id: 'bilang_4',  categoryId: 'cat_numero', filipino: 'apat',         english: 'four',      quantity: 4,  emoji: '4️⃣',     image: require('../../assets/images/Numero/Apat.jpg'),         audio: require('../../assets/audio/NUMERO/Apat.mp3') },
+      { id: 'bilang_5',  categoryId: 'cat_numero', filipino: 'lima',         english: 'five',      quantity: 5,  emoji: '5️⃣',     image: require('../../assets/images/Numero/Lima.jpg'),         audio: require('../../assets/audio/NUMERO/Lima.mp3') },
+      { id: 'bilang_6',  categoryId: 'cat_numero', filipino: 'anim',         english: 'six',       quantity: 6,  emoji: '6️⃣',     image: require('../../assets/images/Numero/Anim.jpg'),         audio: require('../../assets/audio/NUMERO/Anim.mp3') },
+      { id: 'bilang_7',  categoryId: 'cat_numero', filipino: 'pito',         english: 'seven',     quantity: 7,  emoji: '7️⃣',     image: require('../../assets/images/Numero/Pito.jpg'),         audio: require('../../assets/audio/NUMERO/Pito.mp3') },
+      { id: 'bilang_8',  categoryId: 'cat_numero', filipino: 'walo',         english: 'eight',     quantity: 8,  emoji: '8️⃣',     image: require('../../assets/images/Numero/Walo.jpg'),         audio: require('../../assets/audio/NUMERO/Walo.mp3') },
+      { id: 'bilang_9',  categoryId: 'cat_numero', filipino: 'siyam',        english: 'nine',      quantity: 9,  emoji: '9️⃣',     image: require('../../assets/images/Numero/Siyam.jpg'),        audio: require('../../assets/audio/NUMERO/Siyam.mp3') },
+      { id: 'bilang_10', categoryId: 'cat_numero', filipino: 'sampu',        english: 'ten',       quantity: 10, emoji: '🔟',     image: require('../../assets/images/Numero/Sampu.jpg'),        audio: require('../../assets/audio/NUMERO/Sampu.mp3') },
+      { id: 'bilang_11', categoryId: 'cat_numero', filipino: 'labing-isa',   english: 'eleven',    quantity: 11, emoji: '1️⃣1️⃣', image: require('../../assets/images/Numero/Labing-Isa.jpg'),   audio: require('../../assets/audio/NUMERO/Labing-isa.mp3') },
+      { id: 'bilang_12', categoryId: 'cat_numero', filipino: 'labindalawa',  english: 'twelve',    quantity: 12, emoji: '1️⃣2️⃣', image: require('../../assets/images/Numero/Labing-Dalawa.jpg'),audio: require('../../assets/audio/NUMERO/Labing-dalawa.mp3') },
+      { id: 'bilang_13', categoryId: 'cat_numero', filipino: 'labintatlo',   english: 'thirteen',  quantity: 13, emoji: '1️⃣3️⃣', image: require('../../assets/images/Numero/Labing-Tatlo.jpg'), audio: require('../../assets/audio/NUMERO/Labing-tatlo.mp3') },
+      { id: 'bilang_14', categoryId: 'cat_numero', filipino: 'labing-apat',  english: 'fourteen',  quantity: 14, emoji: '1️⃣4️⃣', image: require('../../assets/images/Numero/Labing-Apat.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-apat.mp3') },
+      { id: 'bilang_15', categoryId: 'cat_numero', filipino: 'labinlima',    english: 'fifteen',   quantity: 15, emoji: '1️⃣5️⃣', image: require('../../assets/images/Numero/Labing-Lima.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-lima.mp3') },
+      { id: 'bilang_16', categoryId: 'cat_numero', filipino: 'labing-anim',  english: 'sixteen',   quantity: 16, emoji: '1️⃣6️⃣', image: require('../../assets/images/Numero/Labing-Anim.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-anim.mp3') },
+      { id: 'bilang_17', categoryId: 'cat_numero', filipino: 'labimpito',    english: 'seventeen', quantity: 17, emoji: '1️⃣7️⃣', image: require('../../assets/images/Numero/Labing-Pito.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-pito.mp3') },
+      { id: 'bilang_18', categoryId: 'cat_numero', filipino: 'labingwalo',   english: 'eighteen',  quantity: 18, emoji: '1️⃣8️⃣', image: require('../../assets/images/Numero/Labing-Walo.jpg'),  audio: require('../../assets/audio/NUMERO/Labing-walo.mp3') },
+      { id: 'bilang_19', categoryId: 'cat_numero', filipino: 'labinsiyam',   english: 'nineteen',  quantity: 19, emoji: '1️⃣9️⃣', image: require('../../assets/images/Numero/Labing-Siyam.jpg'), audio: require('../../assets/audio/NUMERO/Labing-siyam.mp3') },
+      { id: 'bilang_20', categoryId: 'cat_numero', filipino: 'dalawampu',    english: 'twenty',    quantity: 20, emoji: '2️⃣0️⃣', image: require('../../assets/images/Numero/Dalawampu.jpg'),    audio: require('../../assets/audio/NUMERO/Dalawampu.mp3') },
     ],
   },
   {
@@ -276,4 +276,30 @@ export function getRandomVocabularyChoices(
   const shuffled = [...others].sort(() => 0.5 - Math.random()).slice(0, count - 1);
   const choices = [correctItem, ...shuffled].sort(() => 0.5 - Math.random());
   return choices;
+}
+
+export function overrideVocabularyItem(filipinoOrId: string, updates: Partial<VocabularyItem>) {
+  if (!filipinoOrId) return;
+  const norm = filipinoOrId.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
+  for (const cat of LEARNING_CATEGORIES) {
+    for (const item of cat.items) {
+      const itemNorm = item.filipino.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
+      if (item.id === filipinoOrId || itemNorm === norm) {
+        if (updates.imageUri !== undefined) {
+          // Disallow temporary blob: URLs which expire on navigation/refresh
+          if (!updates.imageUri.startsWith('blob:')) {
+            item.imageUri = updates.imageUri;
+          }
+        }
+        if (updates.audioUri !== undefined) {
+          if (!updates.audioUri.startsWith('blob:')) {
+            item.audioUri = updates.audioUri;
+          }
+        }
+        if (updates.filipino) item.filipino = updates.filipino;
+        if (updates.english) item.english = updates.english;
+        return item;
+      }
+    }
+  }
 }

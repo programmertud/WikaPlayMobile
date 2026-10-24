@@ -43,6 +43,7 @@ export default function StudentLayout() {
       <Stack.Screen name="flashcards/[slug]" options={{ headerShown: false }} />
       <Stack.Screen name="quiz/[slug]/madali" options={{ headerShown: false }} />
       <Stack.Screen name="quiz/[slug]/[difficulty]" options={{ headerShown: false }} />
+      <Stack.Screen name="quiz-locked" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="games/[slug]" options={{ headerShown: false }} />
     </Stack>
   );

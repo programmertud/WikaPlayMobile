@@ -11,8 +11,15 @@ interface ItemVisualProps {
 }
 
 export const ItemVisual: React.FC<ItemVisualProps> = ({ item, size = 180, style }) => {
-  // 1. If explicit imageUri is provided
-  if (item.imageUri) {
+  const [imageError, setImageError] = React.useState(false);
+
+  // Reset error state when the image URI changes (e.g., when navigating between flashcards)
+  React.useEffect(() => {
+    setImageError(false);
+  }, [item.imageUri]);
+
+  // 1. If explicit imageUri is provided and hasn't errored
+  if (item.imageUri && !imageError) {
     return (
       <View style={[styles.container, { width: size, height: size }, style]}>
         <Image
@@ -20,6 +27,7 @@ export const ItemVisual: React.FC<ItemVisualProps> = ({ item, size = 180, style 
           style={styles.image}
           contentFit="contain"
           transition={200}
+          onError={() => setImageError(true)}
         />
       </View>
     );

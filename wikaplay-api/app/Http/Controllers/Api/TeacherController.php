@@ -705,29 +705,40 @@ class TeacherController extends Controller
         $this->authorizeTeacher($request);
 
         $validated = $request->validate([
-            'id' => 'nullable|exists:flashcards,id',
+            'id' => 'nullable|integer',
             'category_id' => 'required|exists:categories,id',
             'filipino_name' => 'required|string|max:191',
             'english_name' => 'nullable|string|max:191',
             'description' => 'nullable|string',
-            'image_url' => 'required|string',
+            'image_url' => 'nullable|string',
             'audio_url' => 'nullable|string',
             'is_published' => 'nullable|boolean',
         ]);
 
-        $flashcard = Flashcard::updateOrCreate(
-            ['id' => $validated['id'] ?? null],
-            [
-                'category_id' => $validated['category_id'],
-                'name' => $validated['filipino_name'],
-                'filipino_name' => $validated['filipino_name'],
-                'english_name' => $validated['english_name'] ?? null,
-                'description' => $validated['description'] ?? null,
-                'image_url' => $validated['image_url'],
-                'audio_url' => $validated['audio_url'] ?? null,
-                'is_published' => $validated['is_published'] ?? true,
-            ]
-        );
+        $flashcard = null;
+        if (!empty($validated['id'])) {
+            $flashcard = Flashcard::find($validated['id']);
+        }
+        if (!$flashcard) {
+            $flashcard = Flashcard::where('category_id', $validated['category_id'])
+                ->where(function ($q) use ($validated) {
+                    $q->where('filipino_name', $validated['filipino_name'])
+                      ->orWhere('name', $validated['filipino_name']);
+                })->first();
+        }
+        if (!$flashcard) {
+            $flashcard = new Flashcard();
+        }
+
+        $flashcard->category_id = $validated['category_id'];
+        $flashcard->name = $validated['filipino_name'];
+        $flashcard->filipino_name = $validated['filipino_name'];
+        $flashcard->english_name = $validated['english_name'] ?? null;
+        $flashcard->description = $validated['description'] ?? null;
+        $flashcard->image_url = $validated['image_url'];
+        $flashcard->audio_url = $validated['audio_url'] ?? null;
+        $flashcard->is_published = $validated['is_published'] ?? true;
+        $flashcard->save();
 
         return response()->json([
             'message' => 'Nai-save ang flashcard!',
@@ -862,45 +873,79 @@ class TeacherController extends Controller
     }
 
     /**
-     * Upload recorded audio file from mobile device.
+     * Upload recorded audio file from mobile device or web browser.
      */
     public function uploadAudio(Request $request)
     {
         $this->authorizeTeacher($request);
 
-        $request->validate([
-            'audio' => 'required|file|mimes:mp3,m4a,wav,aac,ogg,webm,3gp|max:10240', // 10MB max
-        ]);
+        if ($request->hasFile('audio')) {
+            $request->validate([
+                'audio' => 'required|file|max:20480', // 20MB max
+            ]);
 
-        $path = $request->file('audio')->store('audio', 'public');
-        $url = asset('storage/' . $path);
+            $path = $request->file('audio')->store('audio', 'public');
+            $storageUrl = config('app.url') . '/storage/' . $path;
+
+            return response()->json([
+                'message' => 'Matagumpay na nai-upload ang audio!',
+                'path' => $path,
+                'url' => $storageUrl,
+            ]);
+        }
 
         return response()->json([
-            'message' => 'Matagumpay na nai-upload ang audio!',
-            'path' => $path,
-            'url' => $url,
-        ]);
+            'message' => 'Walang natanggap na audio file.',
+            'errors' => ['audio' => ['Kailangang mag-upload ng wastong audio file.']],
+        ], 422);
     }
 
     /**
-     * Upload image file from mobile device.
+     * Upload image file from mobile device or web browser.
      */
     public function uploadImage(Request $request)
     {
         $this->authorizeTeacher($request);
 
-        $request->validate([
-            'image' => 'required|file|image|max:5120', // 5MB max
-        ]);
+        if ($request->hasFile('image')) {
+            $request->validate([
+                'image' => 'required|file|max:15360', // 15MB max
+            ]);
 
-        $path = $request->file('image')->store('images', 'public');
-        $url = asset('storage/' . $path);
+            $path = $request->file('image')->store('images', 'public');
+            // Build an absolute URL that works from both localhost web and physical mobile devices
+            $storageUrl = config('app.url') . '/storage/' . $path;
+
+            return response()->json([
+                'message' => 'Matagumpay na nai-upload ang larawan!',
+                'path' => $path,
+                'url' => $storageUrl,
+            ]);
+        }
+
+        // Support base64 image data payload if sent directly
+        if ($request->filled('image_base64')) {
+            $base64Data = $request->input('image_base64');
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+                $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
+                $type = strtolower($type[1]);
+                $base64Data = base64_decode($base64Data);
+                $filename = 'images/' . uniqid() . '.' . $type;
+                \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $base64Data);
+                $url = asset('storage/' . $filename);
+
+                return response()->json([
+                    'message' => 'Matagumpay na nai-upload ang larawan!',
+                    'path' => $filename,
+                    'url' => $url,
+                ]);
+            }
+        }
 
         return response()->json([
-            'message' => 'Matagumpay na nai-upload ang larawan!',
-            'path' => $path,
-            'url' => $url,
-        ]);
+            'message' => 'Walang natanggap na file ng larawan.',
+            'errors' => ['image' => ['Kailangang mag-upload ng wastong larawan (JPEG, PNG, WebP).']],
+        ], 422);
     }
 
     /**

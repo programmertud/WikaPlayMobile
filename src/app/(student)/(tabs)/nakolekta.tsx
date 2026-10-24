@@ -159,7 +159,7 @@ function CollectibleDetailModal({ item, onClose }: { item: Collectible; onClose:
               </TouchableOpacity>
             </View>
             <Text style={modalStyles.title}>{displayName}</Text>
-            {item.category && <Text style={modalStyles.categoryLabel}>Kategorya: {item.category}</Text>}
+            {item.category ? <Text style={modalStyles.categoryLabel}>Kategorya: {item.category}</Text> : null}
           </LinearGradient>
 
           <View style={modalStyles.body}>
@@ -176,14 +176,14 @@ function CollectibleDetailModal({ item, onClose }: { item: Collectible; onClose:
 
             <Text style={modalStyles.description}>{getCollectibleDescription(item)}</Text>
 
-            {item.unlocked_at && (
+            {item.unlocked_at ? (
               <View style={modalStyles.dateRow}>
                 <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
                 <Text style={modalStyles.dateText}>
                   Nakolekta: {new Date(item.unlocked_at).toLocaleDateString('fil-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </Text>
               </View>
-            )}
+            ) : null}
 
             <TouchableOpacity style={[modalStyles.audioBtn, playing && modalStyles.audioBtnActive]} onPress={handlePlayAudio} activeOpacity={0.8}>
               <Ionicons name={playing ? 'volume-high' : 'volume-medium-outline'} size={22} color={playing ? Colors.white : Colors.skyBlueDark} />
@@ -215,7 +215,7 @@ function UnlockedCard({ item, onPress }: { item: Collectible; onPress: () => voi
         )}
         <View style={styles.unlockedBadge}><Ionicons name="checkmark-circle" size={18} color="#22C55E" /></View>
       </View>
-      {item.category && <Text style={styles.cardCategory} numberOfLines={1}>{catEmoji(item.category)} {item.category}</Text>}
+      {item.category ? <Text style={styles.cardCategory} numberOfLines={1}>{catEmoji(item.category)} {item.category}</Text> : null}
       <Text style={styles.cardName} numberOfLines={1}>{item.filipino_name || item.name}</Text>
       <View style={[styles.rarityPill, { backgroundColor: rarityColor }]}>
         <Text style={styles.rarityPillText}>{RARITY_LABELS[item.rarity]}</Text>
@@ -230,7 +230,7 @@ function LockedCard({ item }: { item: Collectible }) {
   return (
     <View style={[styles.card, styles.lockedCard, Shadows.subtle]}>
       <View style={styles.lockedImageBox}><Ionicons name="lock-closed" size={36} color="#94A3B8" /></View>
-      {item.category && <Text style={styles.lockedCategory} numberOfLines={1}>{catEmoji(item.category)} {item.category}</Text>}
+      {item.category ? <Text style={styles.lockedCategory} numberOfLines={1}>{catEmoji(item.category)} {item.category}</Text> : null}
       <Text style={styles.lockedName}>???</Text>
       <View style={[styles.rarityPill, { backgroundColor: '#CBD5E1' }]}>
         <Text style={styles.rarityPillText}>{RARITY_LABELS[item.rarity]}</Text>
