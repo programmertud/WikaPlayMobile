@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
+import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { useAuth } from '../../hooks/use-auth';
 import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
@@ -122,6 +123,7 @@ export default function TeacherDashboardScreen() {
   const onlineStudents = students.filter((s) => s.is_online);
 
   return (
+    <AnimatedBackground>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[
@@ -656,6 +658,7 @@ export default function TeacherDashboardScreen() {
         </>
       )}
     </ScrollView>
+    </AnimatedBackground>
   );
 }
 
@@ -691,7 +694,7 @@ function MetricCard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teacherPurpleBg,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: 16,

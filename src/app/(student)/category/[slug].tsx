@@ -17,9 +17,11 @@ import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
+import { stopCurrentSound } from '../../../services/audio/sound-service';
 import { QuizDifficulty } from '../../../types';
 import { categoryService } from '../../../services/api';
+import { Colors, Gradients, Radius, Shadows, Typography } from '../../../constants/theme';
 
 export default function CategoryDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -121,6 +123,12 @@ export default function CategoryDetailScreen() {
     },
   ];
 
+  useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
+
   const handleStartQuiz = (difficulty: QuizDifficulty) => {
     blurActiveElement();
     if (quizLocks[difficulty]) {
@@ -151,7 +159,7 @@ export default function CategoryDetailScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={category.name}
         bgColor={category.color}
@@ -330,14 +338,13 @@ export default function CategoryDetailScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
   },
   content: {
     padding: 16,

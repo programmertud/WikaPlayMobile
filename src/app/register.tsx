@@ -20,38 +20,66 @@ import { playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 export default function RegisterScreen() {
-  const { studentRegister } = useAuth();
+  const { studentRegister, register } = useAuth();
+  const [role, setRole] = useState<'student' | 'teacher'>('student');
+
+  // Student fields
   const [name, setName] = useState('');
-  const [section, setSection] = useState('Kinder - Masayahin');
+  const [enrollmentCode, setEnrollmentCode] = useState('');
+
+  // Teacher fields
+  const [teacherName, setTeacherName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [sectionName, setSectionName] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleRegister = async () => {
-    const trimmedName = name.replace(/\s+/g, ' ').trim();
-    if (!trimmedName) {
-      setErrorMessage('Pakilagay ang buong pangalan ng mag-aaral.');
-      return;
-    }
-
-    if (trimmedName.length < 2) {
-      setErrorMessage('Masyadong maikli ang pangalan.');
-      return;
-    }
-
-    if (trimmedName.length > 80) {
-      setErrorMessage('Masyadong mahaba ang pangalan.');
-      return;
-    }
-
     if (loading) return;
-
     setErrorMessage(null);
     setLoading(true);
 
     try {
-      await studentRegister(trimmedName, section.trim() || undefined);
-      playWelcomeSound().catch(() => {});
-      router.replace('/loading');
+      if (role === 'student') {
+        const trimmedName = name.replace(/\s+/g, ' ').trim();
+        if (!trimmedName || trimmedName.length < 2) {
+          setErrorMessage('Pakilagay ang buong pangalan ng mag-aaral (hindi bababa sa 2 titik).');
+          return;
+        }
+        const code = enrollmentCode.trim().toUpperCase() || undefined;
+        await studentRegister(trimmedName, code);
+        playWelcomeSound().catch(() => {});
+        router.replace('/loading');
+      } else {
+        const trimmedName = teacherName.replace(/\s+/g, ' ').trim();
+        const trimmedEmail = email.trim().toLowerCase();
+        if (!trimmedName) {
+          setErrorMessage('Pakilagay ang iyong buong pangalan.');
+          return;
+        }
+        if (!trimmedEmail || !trimmedEmail.includes('@')) {
+          setErrorMessage('Pakilagay ang isang valid na email address.');
+          return;
+        }
+        if (!password || password.length < 6) {
+          setErrorMessage('Ang password ay dapat hindi bababa sa 6 na character.');
+          return;
+        }
+        const user = await register(
+          trimmedName,
+          trimmedEmail,
+          password,
+          'teacher',
+          sectionName.trim() || undefined
+        );
+        if (user.role === 'teacher' || user.role === 'admin') {
+          router.replace('/(teacher)');
+        } else {
+          router.replace('/loading');
+        }
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Nabigong magrehistro. Pakisubukang muli.');
     } finally {
@@ -60,7 +88,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <GradientBackground variant="sky">
+    <GradientBackground variant={role === 'teacher' ? 'teacher' : 'sky'}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
@@ -70,23 +98,20 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Top Bar with Back to Login Button */}
+          {/* Top Bar */}
           <View style={styles.topBar}>
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.replace('/login');
-                }
+                if (router.canGoBack()) router.back();
+                else router.replace('/login');
               }}
               style={[styles.backBtn, Shadows.subtle]}
               accessibilityRole="button"
               accessibilityLabel="Bumalik sa Login"
             >
-              <Ionicons name="arrow-back" size={20} color={Colors.skyBlueDark} />
-              <Text style={styles.backBtnText}>Bumalik sa Login</Text>
+              <Ionicons name="arrow-back" size={20} color={role === 'teacher' ? Colors.teacherPurple : Colors.skyBlueDark} />
+              <Text style={[styles.backBtnText, { color: role === 'teacher' ? Colors.teacherPurple : Colors.skyBlueDark }]}>Bumalik sa Login</Text>
             </TouchableOpacity>
           </View>
 
@@ -94,14 +119,44 @@ export default function RegisterScreen() {
           <View style={styles.header}>
             <View style={[styles.logoBadge, Shadows.card]}>
               <LinearGradient
-                colors={Gradients.sky}
+                colors={role === 'teacher' ? Gradients.teacher : Gradients.sky}
                 style={styles.logoGradient}
               >
-                <Ionicons name="sparkles" size={32} color={Colors.white} />
+                <Ionicons name={role === 'teacher' ? 'school' : 'sparkles'} size={32} color={Colors.white} />
               </LinearGradient>
             </View>
-            <Text style={styles.title}>Sumali sa WikaPlay! 🎒</Text>
-            <Text style={styles.subtitle}>Ipasok ang pangalan para makapagsimula</Text>
+            <Text style={styles.title}>
+              {role === 'student' ? 'Sumali sa WikaPlay! 🎒' : 'Magparehistro Bilang Guro 👩‍🏫'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {role === 'student'
+                ? 'Ipasok ang pangalan para makapagsimula'
+                : 'Gumawa ng teacher account at pangasiwaan ang iyong seksiyon'}
+            </Text>
+          </View>
+
+          {/* Role Toggle */}
+          <View style={[styles.roleToggle, Shadows.subtle]}>
+            <TouchableOpacity
+              style={[styles.roleTab, role === 'student' && styles.roleTabActive]}
+              onPress={() => { setRole('student'); setErrorMessage(null); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="happy" size={16} color={role === 'student' ? Colors.skyBlueDark : Colors.textMuted} />
+              <Text style={[styles.roleTabText, role === 'student' && { color: Colors.skyBlueDark }]}>
+                Mag-aaral
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roleTab, role === 'teacher' && styles.roleTabActive]}
+              onPress={() => { setRole('teacher'); setErrorMessage(null); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="school" size={16} color={role === 'teacher' ? Colors.teacherPurple : Colors.textMuted} />
+              <Text style={[styles.roleTabText, role === 'teacher' && { color: Colors.teacherPurple }]}>
+                Guro
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Form Card */}
@@ -113,31 +168,87 @@ export default function RegisterScreen() {
               </View>
             ) : null}
 
-            <InputField
-              label="Buong Pangalan ng Mag-aaral"
-              icon="person-outline"
-              placeholder="Halimbawa: Juan Dela Cruz"
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
+            {role === 'student' ? (
+              <>
+                <InputField
+                  label="Buong Pangalan ng Mag-aaral"
+                  icon="person-outline"
+                  placeholder="Halimbawa: Juan Dela Cruz"
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
 
-            <InputField
-              label="Seksiyon / Klase (Opsyonal)"
-              icon="school-outline"
-              placeholder="Halimbawa: Kinder - Masayahin"
-              value={section}
-              onChangeText={setSection}
-            />
+                <InputField
+                  label="Enrollment Code ng Seksyon (Opsyonal)"
+                  icon="key-outline"
+                  placeholder="Makuha sa iyong guro — hal. KX7F2M9QPR"
+                  value={enrollmentCode}
+                  onChangeText={setEnrollmentCode}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                  onSubmitEditing={handleRegister}
+                />
 
-            <Text style={styles.securityNote}>
-              💡 Paunawa: Walang kailangang password. Gamitin lamang ang buong pangalan para mag-login sa susunod.
-            </Text>
+                <Text style={styles.securityNote}>
+                  💡 Walang kailangang password — gamitin ang buong pangalan para mag-login.{'\n'}
+                  🔑 Ang enrollment code ay makukuha sa iyong guro para masali sa tamang klase.
+                </Text>
+              </>
+            ) : (
+              <>
+                <InputField
+                  label="Buong Pangalan ng Guro"
+                  icon="person-outline"
+                  placeholder="Halimbawa: Gng. Santos"
+                  value={teacherName}
+                  onChangeText={setTeacherName}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+
+                <InputField
+                  label="Email Address"
+                  icon="mail-outline"
+                  placeholder="Halimbawa: teacher@school.ph"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                />
+
+                <InputField
+                  label="Password"
+                  icon="lock-closed-outline"
+                  placeholder="Hindi bababa sa 6 na character"
+                  value={password}
+                  onChangeText={setPassword}
+                  isPassword
+                  returnKeyType="next"
+                />
+
+                <InputField
+                  label="Pangalan ng Iyong Seksiyon (Opsyonal)"
+                  icon="school-outline"
+                  placeholder="Halimbawa: Kinder - Masayahin"
+                  value={sectionName}
+                  onChangeText={setSectionName}
+                  returnKeyType="done"
+                  onSubmitEditing={handleRegister}
+                />
+
+                <Text style={styles.securityNote}>
+                  🏫 Kapag nagparehistro ka, awtomatiko kang magiging teacher ng seksyong ito.{'\n'}
+                  📋 Makikita ng mga mag-aaral ang iyong enrollment code para makapasok sa iyong klase.
+                </Text>
+              </>
+            )}
 
             <PrimaryButton
-              title={loading ? 'Nirerehistro...' : 'Magrehistro at Maglaro 🚀'}
-              variant="primary"
+              title={loading ? 'Nirerehistro...' : (role === 'student' ? 'Magrehistro at Maglaro 🚀' : 'Gumawa ng Teacher Account')}
+              variant={role === 'teacher' ? 'teacher' : 'primary'}
               size="lg"
               loading={loading}
               icon="arrow-forward"
@@ -150,7 +261,9 @@ export default function RegisterScreen() {
               <Text style={styles.footerText}>May account ka na? </Text>
               <Link href="/login" asChild>
                 <TouchableOpacity>
-                  <Text style={styles.loginLink}>Pumasok dito</Text>
+                  <Text style={[styles.loginLink, { color: role === 'teacher' ? Colors.teacherPurple : Colors.skyBlueDark }]}>
+                    Pumasok dito
+                  </Text>
                 </TouchableOpacity>
               </Link>
             </View>
@@ -162,9 +275,7 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 44,
@@ -192,11 +303,10 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontSize: Typography.sizes.sm,
     fontWeight: Typography.weights.bold,
-    color: Colors.skyBlueDark,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   logoBadge: {
     width: 64,
@@ -211,15 +321,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: Typography.sizes.xxl,
+    fontSize: Typography.sizes.xl,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
     color: Colors.text,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: Typography.sizes.xs,
     color: Colors.textLight,
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  roleToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: Radius.pill,
+    padding: 4,
+    marginBottom: 16,
+    width: '100%',
+    maxWidth: 300,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  roleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: Radius.pill,
+  },
+  roleTabActive: {
+    backgroundColor: Colors.white,
+    ...Shadows.subtle,
+  },
+  roleTabText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textMuted,
   },
   card: {
     width: '100%',
@@ -246,6 +388,17 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.medium,
     flex: 1,
   },
+  securityNote: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    backgroundColor: '#F0F9FF',
+    padding: 10,
+    borderRadius: Radius.md,
+    lineHeight: 17,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -259,17 +412,5 @@ const styles = StyleSheet.create({
   loginLink: {
     fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.heavy,
-    color: Colors.skyBlueDark,
-  },
-  securityNote: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    backgroundColor: '#F0F9FF',
-    padding: 10,
-    borderRadius: Radius.md,
-    lineHeight: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
   },
 });

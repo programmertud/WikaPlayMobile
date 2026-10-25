@@ -98,6 +98,7 @@ Object.entries(ALL_MADALI_AUDIO).forEach(([key, asset]) => {
 
 let isAudioModeConfigured = false;
 let currentActivePlayer: any = null;
+let currentActiveCleanup: (() => void) | null = null;
 
 export async function setupAudioSession() {
   if (isAudioModeConfigured) return;
@@ -329,7 +330,12 @@ export async function playSound(
     if (currentActivePlayer === player) {
       currentActivePlayer = null;
     }
+    if (currentActiveCleanup === cleanup) {
+      currentActiveCleanup = null;
+    }
   };
+
+  currentActiveCleanup = cleanup;
 
   try {
     const resolvedSource = resolveAudioSource(source);
@@ -483,6 +489,13 @@ export async function playSound(
 }
 
 export function stopCurrentSound() {
+  if (currentActiveCleanup) {
+    const fn = currentActiveCleanup;
+    currentActiveCleanup = null;
+    try {
+      fn();
+    } catch {}
+  }
   if (currentActivePlayer) {
     try {
       currentActivePlayer.pause();
@@ -494,6 +507,12 @@ export function stopCurrentSound() {
     } catch {}
     currentActivePlayer = null;
   }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+  }
+  bgm.restore();
 }
 
 export async function playLocalSound(soundName: string, onFinished?: () => void) {

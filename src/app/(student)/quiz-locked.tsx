@@ -4,17 +4,23 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Shadows, Typography } from '../../theme';
 
+import { AnimatedBackground } from '../../components/AnimatedBackground';
+
 export default function QuizLockedScreen() {
   const { category, difficulty } = useLocalSearchParams<{ category: string; difficulty: string }>();
   const level = difficulty === 'madali' ? 'Madali' : difficulty === 'mahirap' ? 'Mahirap' : 'Katamtaman';
-  return <View style={styles.overlay}>
-    <View style={[styles.card, Shadows.card]}>
-      <View style={styles.icon}><Ionicons name="lock-closed" size={30} color="#A855F7" /></View>
-      <Text style={styles.title}>Naka-lock ang pagsusulit</Text>
-      <Text style={styles.message}>{category} · {level} ay kasalukuyang naka-lock ng guro. Subukan muli sa ibang pagkakataon.</Text>
-      <TouchableOpacity style={styles.button} onPress={() => router.back()}><Text style={styles.buttonText}>Bumalik</Text></TouchableOpacity>
-    </View>
-  </View>;
+  return (
+    <AnimatedBackground>
+      <View style={styles.overlay}>
+        <View style={[styles.card, Shadows.card]}>
+          <View style={styles.icon}><Ionicons name="lock-closed" size={30} color="#A855F7" /></View>
+          <Text style={styles.title}>Naka-lock ang pagsusulit</Text>
+          <Text style={styles.message}>{category} · {level} ay kasalukuyang naka-lock ng guro. Subukan muli sa ibang pagkakataon.</Text>
+          <TouchableOpacity style={styles.button} onPress={() => router.back()}><Text style={styles.buttonText}>Bumalik</Text></TouchableOpacity>
+        </View>
+      </View>
+    </AnimatedBackground>
+  );
 }
 
 const styles = StyleSheet.create({

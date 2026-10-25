@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Section;
 use App\Models\StudentPresence;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -103,34 +105,55 @@ class AuthController extends Controller
      */
     public function register(Request $request)
     {
-        // If student registration with Full Name Only
+        // If student registration with Full Name Only (no email/password)
         if ($request->filled('name') && (!$request->filled('email') || !$request->filled('password'))) {
             return $this->studentRegister($request);
         }
 
-        // Full Teacher / Admin registration
+        // Full Teacher registration with email + password + section_name
         $validated = $request->validate([
-            'name' => 'required|string|max:191',
-            'email' => 'required|email|max:191|unique:users,email',
-            'password' => 'required|string|min:6',
-            'role' => 'nullable|in:student,teacher',
-            'section' => 'nullable|string|max:100',
+            'name'         => 'required|string|max:191',
+            'email'        => 'required|email|max:191|unique:users,email',
+            'password'     => 'required|string|min:6',
+            'role'         => 'nullable|in:student,teacher',
+            'section_name' => 'nullable|string|max:150', // desired section to manage
+        ], [
+            'email.unique' => 'Ang email na ito ay ginamit na. Pakisubukan ng ibang email.',
         ]);
 
         $role = $validated['role'] ?? 'teacher';
+        $rawName = trim(preg_replace('/\s+/', ' ', $validated['name']));
 
-        $user = User::create([
-            'name' => trim(preg_replace('/\s+/', ' ', $validated['name'])),
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'role' => $role,
-            'avatar' => 'https://api.dicebear.com/7.x/bottts/png?seed=' . urlencode($validated['name']) . '&backgroundColor=38bdf8',
-            'section' => $validated['section'] ?? ($role === 'student' ? 'Kinder - Masayahin' : 'Kaguruan'),
-            'status' => 'active',
-            'stars_balance' => 0,
-        ]);
+        return DB::transaction(function () use ($validated, $role, $rawName) {
+            $user = User::create([
+                'name'     => $rawName,
+                'email'    => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'role'     => $role,
+                'avatar'   => 'https://api.dicebear.com/7.x/bottts/png?seed=' . urlencode($rawName) . '&backgroundColor=38bdf8',
+                'section'  => $validated['section_name'] ?? 'Kaguruan',
+                'status'   => 'active',
+                'stars_balance' => 0,
+            ]);
 
-        return $this->issueSession($user, 'Matagumpay na nakarehistro!', 201);
+            // If a section name was provided, create or retrieve that section
+            // and assign this teacher as its owner
+            if (!empty($validated['section_name']) && $role === 'teacher') {
+                $section = Section::firstOrCreate(
+                    ['name' => $validated['section_name'], 'school_year' => '2026-2027'],
+                    ['status' => 'active', 'teacher_id' => $user->id]
+                );
+
+                // If section already existed without a teacher, claim it
+                if (is_null($section->teacher_id)) {
+                    $section->update(['teacher_id' => $user->id, 'status' => 'active']);
+                }
+
+                $user->update(['section_id' => $section->id]);
+            }
+
+            return $this->issueSession($user, 'Matagumpay na nakarehistro bilang guro!', 201);
+        });
     }
 
     /**
@@ -140,18 +163,18 @@ class AuthController extends Controller
     public function studentRegister(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|min:2|max:100',
-            'section' => 'nullable|string|max:100',
+            'name'            => 'required|string|min:2|max:100',
+            'enrollment_code' => 'nullable|string|max:150', // accepts section enrollment code OR section name
         ], [
             'name.required' => 'Pakilagay ang iyong buong pangalan para makapagrehistro.',
-            'name.min' => 'Masyadong maikli ang pangalan.',
-            'name.max' => 'Masyadong mahaba ang pangalan.',
+            'name.min'      => 'Masyadong maikli ang pangalan.',
+            'name.max'      => 'Masyadong mahaba ang pangalan.',
         ]);
 
-        $rawName = trim(preg_replace('/\s+/', ' ', $validated['name']));
+        $rawName    = trim(preg_replace('/\s+/', ' ', $validated['name']));
         $normalized = User::normalizeName($rawName);
 
-        // Check for duplicate registered student
+        // Reject duplicate names
         $existing = User::where('role', 'student')
             ->where('normalized_name', $normalized)
             ->first();
@@ -162,12 +185,41 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // Resolve section by enrollment code or section name (if provided)
+        $section     = null;
+        $sectionId   = null;
+        $sectionName = 'Kinder - Walang Seksyon';
+
+        if (!empty($validated['enrollment_code'])) {
+            $rawCode = trim($validated['enrollment_code']);
+            $upperCode = strtoupper($rawCode);
+            $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $rawCode));
+
+            $section = Section::where('status', 'active')
+                ->where(function ($q) use ($upperCode, $cleanName, $rawCode) {
+                    $q->where('enrollment_code', $upperCode)
+                      ->orWhereRaw('LOWER(name) = ?', [strtolower($rawCode)])
+                      ->orWhereRaw("LOWER(REPLACE(REPLACE(name, ' ', ''), '-', '')) = ?", [$cleanName]);
+                })
+                ->first();
+
+            if (!$section) {
+                return response()->json([
+                    'message' => "Hindi mahanap ang seksyon na \"{$rawCode}\". Pakisiguro ang tamang Section Name o Enrollment Code mula sa iyong guro.",
+                ], 422);
+            }
+
+            $sectionId   = $section->id;
+            $sectionName = $section->name;
+        }
+
         $student = User::create([
-            'name' => $rawName,
-            'role' => 'student',
-            'avatar' => 'https://api.dicebear.com/7.x/bottts/png?seed=' . urlencode($rawName) . '&backgroundColor=38bdf8',
-            'section' => $validated['section'] ?? 'Kinder - Masayahin',
-            'status' => 'active',
+            'name'       => $rawName,
+            'role'       => 'student',
+            'avatar'     => 'https://api.dicebear.com/7.x/bottts/png?seed=' . urlencode($rawName) . '&backgroundColor=38bdf8',
+            'section'    => $sectionName,
+            'section_id' => $sectionId,
+            'status'     => 'active',
             'stars_balance' => 0,
         ]);
 
@@ -196,17 +248,18 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => $message,
-            'token' => $token,
-            'user' => [
-                'id' => $user->id,
+            'token'   => $token,
+            'user'    => [
+                'id'              => $user->id,
                 'student_id_code' => $user->student_id_code,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'avatar' => $user->avatar,
-                'section' => $user->section,
-                'status' => $user->status,
-                'stars_balance' => $user->stars_balance,
+                'name'            => $user->name,
+                'email'           => $user->email,
+                'role'            => $user->role,
+                'avatar'          => $user->avatar,
+                'section'         => $user->section,
+                'section_id'      => $user->section_id,
+                'status'          => $user->status,
+                'stars_balance'   => $user->stars_balance,
             ],
         ], $status);
     }

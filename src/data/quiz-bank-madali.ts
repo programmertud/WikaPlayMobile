@@ -518,17 +518,17 @@ const bilangQuestions: MadaliQuestion[] = [
     ['Dalawa', 'Isa', 'Tatlo', 'Apat'], 1),
 
   mc('bilang-02', 'cat_bilang', 'mga-bilang',
-    'Ano ang Tagalog ng "Two"?',
-    'What is the Tagalog word for "Two"?',
-    ['Isa', 'Tatlo', 'Dalawa', 'Apat'], 2),
+    'Ano ang English ng "Dalawa"?',
+    'What is the English word for "Dalawa"?',
+    ['One', 'Two', 'Three', 'Four'], 1),
 
   mc('bilang-03', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Tatlo"?',
-    'What is the English word for "Tatlo"?',
-    ['One', 'Two', 'Four', 'Three'], 3),
+    'Ano ang Tagalog ng "Three"?',
+    'What is the Tagalog word for "Three"?',
+    ['Isa', 'Dalawa', 'Tatlo', 'Apat'], 2),
 
   mc('bilang-04', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Apat"?',
+    'Ano ang English ng "Apat"?',
     'What is the English word for "Apat"?',
     ['Three', 'Four', 'Five', 'Six'], 1),
 
@@ -538,7 +538,7 @@ const bilangQuestions: MadaliQuestion[] = [
     ['Anim', 'Apat', 'Lima', 'Pito'], 2),
 
   mc('bilang-06', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Anim"?',
+    'Ano ang English ng "Anim"?',
     'What is the English word for "Anim"?',
     ['Five', 'Six', 'Seven', 'Eight'], 1),
 
@@ -548,7 +548,7 @@ const bilangQuestions: MadaliQuestion[] = [
     ['Walo', 'Siyam', 'Pito', 'Anim'], 2),
 
   mc('bilang-08', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Walo"?',
+    'Ano ang English ng "Walo"?',
     'What is the English word for "Walo"?',
     ['Six', 'Seven', 'Eight', 'Nine'], 2),
 
@@ -558,69 +558,69 @@ const bilangQuestions: MadaliQuestion[] = [
     ['Walo', 'Siyam', 'Sampu', 'Pito'], 1),
 
   mc('bilang-10', 'cat_bilang', 'mga-bilang',
-    'Ano ang Ingles ng "Sampu"?',
+    'Ano ang English ng "Sampu"?',
     'What is the English word for "Sampu"?',
     ['Eight', 'Nine', 'Seven', 'Ten'], 3),
 
   pic('bilang-11', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_1', 'bilang_2', 'bilang_3', 'bilang_4'], 0,
-    ['Isa (1)', 'Dalawa (2)', 'Tatlo (3)', 'Apat (4)']),
+    ['Isa', 'Dalawa', 'Tatlo', 'Apat']),
 
   pic('bilang-12', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_2', 'bilang_1', 'bilang_3', 'bilang_4'], 0,
-    ['Dalawa (2)', 'Isa (1)', 'Tatlo (3)', 'Apat (4)']),
+    ['Dalawa', 'Isa', 'Tatlo', 'Apat']),
 
   pic('bilang-13', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_5', 'bilang_4', 'bilang_6', 'bilang_7'], 0,
-    ['Lima (5)', 'Apat (4)', 'Anim (6)', 'Pito (7)']),
+    ['Lima', 'Apat', 'Anim', 'Pito']),
 
   pic('bilang-14', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_3', 'bilang_2', 'bilang_4', 'bilang_5'], 0,
-    ['Tatlo (3)', 'Dalawa (2)', 'Apat (4)', 'Lima (5)']),
+    ['Tatlo', 'Dalawa', 'Apat', 'Lima']),
 
   pic('bilang-15', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_10', 'bilang_8', 'bilang_9', 'bilang_7'], 0,
-    ['Sampu (10)', 'Walo (8)', 'Siyam (9)', 'Pito (7)']),
+    ['Sampu', 'Walo', 'Siyam', 'Pito']),
 
   pic('bilang-16', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_6', 'bilang_5', 'bilang_7', 'bilang_8'], 0,
-    ['Anim (6)', 'Lima (5)', 'Pito (7)', 'Walo (8)']),
+    ['Anim', 'Lima', 'Pito', 'Walo']),
 
   pic('bilang-17', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_8', 'bilang_7', 'bilang_9', 'bilang_10'], 0,
-    ['Walo (8)', 'Pito (7)', 'Siyam (9)', 'Sampu (10)']),
+    ['Walo', 'Pito', 'Siyam', 'Sampu']),
 
   pic('bilang-18', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_15', 'bilang_14', 'bilang_16', 'bilang_13'], 0,
-    ['Labinlima (15)', 'Labing-apat (14)', 'Labing-anim (16)', 'Labintatlo (13)']),
+    ['Labinlima', 'Labing-apat', 'Labing-anim', 'Labintatlo']),
 
   pic('bilang-19', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_20', 'bilang_19', 'bilang_18', 'bilang_17'], 0,
-    ['Dalawampu (20)', 'Labinsiyam (19)', 'Labingwalo (18)', 'Labimpito (17)']),
+    ['Dalawampu', 'Labinsiyam', 'Labingwalo', 'Labimpito']),
 
   pic('bilang-20', 'cat_bilang', 'mga-bilang',
-    'Anong bilang ang nasa larawan?',
+    'Anong numero ang nasa litrato?',
     'What number is shown in the picture?',
     ['bilang_11', 'bilang_12', 'bilang_13', 'bilang_14'], 0,
-    ['Labing-isa (11)', 'Labindalawa (12)', 'Labintatlo (13)', 'Labing-apat (14)']),
+    ['Labing-isa', 'Labindalawa', 'Labintatlo', 'Labing-apat']),
 ];
 
 // ---------------------------------------------------------------------------

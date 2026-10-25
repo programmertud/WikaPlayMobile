@@ -43,6 +43,13 @@ class WikaPlaySeeder extends Seeder
             ]
         );
 
+        $section = \App\Models\Section::firstOrCreate(
+            ['name' => 'Kinder - Masayahin', 'school_year' => '2026-2027'],
+            ['status' => 'active', 'teacher_id' => $teacher->id, 'enrollment_code' => 'MASAYA26']
+        );
+        $teacher->update(['section_id' => $section->id]);
+        $student->update(['section_id' => $section->id]);
+
         // Initial presence for student
         StudentPresence::firstOrCreate(
             ['user_id' => $student->id],

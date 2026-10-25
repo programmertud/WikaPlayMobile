@@ -10,8 +10,8 @@ interface AuthContextType {
   isStudent: boolean;
   login: (email: string, password: string, role?: string) => Promise<User>;
   studentLogin: (name: string) => Promise<User>;
-  register: (name: string, email: string, password: string, role?: 'student' | 'teacher', section?: string) => Promise<User>;
-  studentRegister: (name: string, section?: string) => Promise<User>;
+  register: (name: string, email: string, password: string, role?: 'student' | 'teacher', section_name?: string) => Promise<User>;
+  studentRegister: (name: string, enrollment_code?: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateUserStars: (newBalance: number) => void;
@@ -59,11 +59,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     role?: 'student' | 'teacher',
-    section?: string
+    section_name?: string
   ): Promise<User> => {
     setIsLoading(true);
     try {
-      const res = await authService.register({ name, email, password, role, section });
+      const res = await authService.register({ name, email, password, role, section_name });
       setUser(res.user);
       return res.user;
     } finally {
@@ -82,10 +82,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const studentRegister = async (name: string, section?: string): Promise<User> => {
+  const studentRegister = async (name: string, enrollment_code?: string): Promise<User> => {
     setIsLoading(true);
     try {
-      const res = await authService.studentRegister({ name, section });
+      const res = await authService.studentRegister({ name, enrollment_code });
       setUser(res.user);
       return res.user;
     } finally {

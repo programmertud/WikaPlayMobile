@@ -39,6 +39,7 @@ class TeacherController extends Controller
     public function students(Request $request)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
 
         // Mark stale presences as offline (> 3 minutes)
         StudentPresence::where('is_online', true)
@@ -48,7 +49,22 @@ class TeacherController extends Controller
                 'current_activity' => 'Hindi aktibo',
             ]);
 
-        $studentIds = User::where('role', 'student')->pluck('id');
+        // Scope to students in the teacher's managed sections ONLY
+        $sectionIds = \App\Models\Section::where('teacher_id', $teacher->id)->pluck('id');
+
+        // If teacher has no sections yet, return empty list
+        if ($sectionIds->isEmpty()) {
+            return response()->json([
+                'students'       => [],
+                'total_students' => 0,
+                'online_count'   => 0,
+                'sections'       => [],
+            ]);
+        }
+
+        $studentIds = User::where('role', 'student')
+            ->whereIn('section_id', $sectionIds)
+            ->pluck('id');
 
         $lifetimeStarsMap = StarTransaction::whereIn('user_id', $studentIds)
             ->where('amount', '>', 0)
@@ -69,6 +85,7 @@ class TeacherController extends Controller
             ->pluck('count', 'user_id');
 
         $students = User::where('role', 'student')
+            ->whereIn('section_id', $sectionIds)
             ->with('presence')
             ->withCount([
                 'quizSessions as quizzes_passed' => fn($q) => $q->where('passed', true),
@@ -84,32 +101,46 @@ class TeacherController extends Controller
                 $badges = (int) ($badgesMap[$s->id] ?? 0);
 
                 return [
-                    'id' => $s->id,
-                    'name' => $s->name,
-                    'email' => $s->email,
-                    'student_id_code' => $s->student_id_code,
-                    'avatar' => $s->avatar,
-                    'section' => $s->section,
-                    'status' => $s->status ?? 'active',
-                    'stars_balance' => (int) $s->stars_balance,
-                    'lifetime_stars' => $lifetime,
-                    'stars_spent' => $spent,
-                    'quizzes_passed' => (int) $s->quizzes_passed,
-                    'games_played' => (int) $s->games_played,
-                    'collectibles_count' => (int) $s->collectibles_count,
-                    'badges_count' => $badges,
-                    'is_online' => $isOnline,
-                    'current_activity' => $presence ? $presence->current_activity : 'Offline',
-                    'current_screen' => $presence ? $presence->current_screen : null,
+                    'id'                   => $s->id,
+                    'name'                 => $s->name,
+                    'email'                => $s->email,
+                    'student_id_code'      => $s->student_id_code,
+                    'avatar'               => $s->avatar,
+                    'section'              => $s->section,
+                    'section_id'           => $s->section_id,
+                    'status'               => $s->status ?? 'active',
+                    'stars_balance'        => (int) $s->stars_balance,
+                    'lifetime_stars'       => $lifetime,
+                    'stars_spent'          => $spent,
+                    'quizzes_passed'       => (int) $s->quizzes_passed,
+                    'games_played'         => (int) $s->games_played,
+                    'collectibles_count'   => (int) $s->collectibles_count,
+                    'badges_count'         => $badges,
+                    'is_online'            => $isOnline,
+                    'current_activity'     => $presence ? $presence->current_activity : 'Offline',
+                    'current_screen'       => $presence ? $presence->current_screen : null,
                     'current_game_or_quiz' => $presence ? $presence->current_game_or_quiz : null,
-                    'last_active_at' => $presence && $presence->last_active_at ? $presence->last_active_at->diffForHumans() : 'Kamakailan',
+                    'last_active_at'       => $presence && $presence->last_active_at ? $presence->last_active_at->diffForHumans() : 'Kamakailan',
                 ];
             });
 
+        // Return section info alongside students
+        $sections = \App\Models\Section::where('teacher_id', $teacher->id)
+            ->withCount(['students'])
+            ->get()
+            ->map(fn($s) => [
+                'id'              => $s->id,
+                'name'            => $s->name,
+                'status'          => $s->status,
+                'enrollment_code' => $s->enrollment_code,
+                'students_count'  => $s->students_count,
+            ]);
+
         return response()->json([
-            'students' => $students,
+            'students'       => $students,
             'total_students' => $students->count(),
-            'online_count' => $students->where('is_online', true)->count(),
+            'online_count'   => $students->where('is_online', true)->count(),
+            'sections'       => $sections,
         ]);
     }
 
@@ -119,8 +150,13 @@ class TeacherController extends Controller
     public function studentHistory(Request $request, $id)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
 
-        $student = User::where('role', 'student')->findOrFail($id);
+        // Ensure teacher can only view students in their own sections
+        $sectionIds = \App\Models\Section::where('teacher_id', $teacher->id)->pluck('id');
+        $student = User::where('role', 'student')
+            ->when($sectionIds->isNotEmpty(), fn($q) => $q->whereIn('section_id', $sectionIds))
+            ->findOrFail($id);
 
         $lifetimeStars = (int) StarTransaction::where('user_id', $student->id)
             ->where('amount', '>', 0)
@@ -218,6 +254,17 @@ class TeacherController extends Controller
         ]);
 
         $student = User::where('role', 'student')->findOrFail($id);
+
+        // Verify the teacher owns the section this student belongs to
+        $teacher = $request->user();
+        if ($student->section_id) {
+            $ownsSection = \App\Models\Section::where('id', $student->section_id)
+                ->where('teacher_id', $teacher->id)
+                ->exists();
+            if (!$ownsSection && !$teacher->isAdmin()) {
+                abort(403, 'Hindi ka awtorisadong ayusin ang bituin ng mag-aaral na ito.');
+            }
+        }
 
         return DB::transaction(function () use ($request, $student, $validated) {
             $currentBalance = (int) $student->stars_balance;

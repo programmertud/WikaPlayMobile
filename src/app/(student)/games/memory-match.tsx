@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
@@ -34,7 +35,7 @@ import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
-import { useBgmDuck } from '../../../services/audio/sound-service';
+import { stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible, VocabularyItem } from '../../../types';
 
@@ -121,6 +122,12 @@ export default function MemoryMatch() {
 
   const { triggerFeedback, resetStreaks } = useAnswerFeedback();
   usePresence(`Memory Match L${level} (${category.name})`, 'minigame_memory_match');
+
+  useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
 
   // ── Preview countdown ────────────────────────────────────────────────
   const startPreview = useCallback((lvl: number, vocab: VocabularyItem[]) => {
@@ -301,7 +308,7 @@ export default function MemoryMatch() {
   const CARD_SIZE = cardSizeForPairs(numPairs);
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`Memory Match — ${category.name}`}
         bgColor={category.color}
@@ -429,14 +436,13 @@ export default function MemoryMatch() {
           setGameOver(true);
         }}
       />
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
   },
   content: {
     padding: 16,

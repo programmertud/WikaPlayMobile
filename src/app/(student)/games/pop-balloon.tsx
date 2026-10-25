@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 import { USE_NATIVE_DRIVER } from '@/utils/platform';
 
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
@@ -30,7 +31,7 @@ import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
-import { playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
+import { playVocabularyItem, stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible, VocabularyItem } from '../../../types';
 
@@ -208,8 +209,20 @@ export default function PopBalloon() {
   usePresence(`Pop Balloon (${category.name})`, 'minigame_pop_balloon');
 
   useEffect(() => {
-    if (target && !gameOver) playVocabularyItem(target);
-  }, [currentIdx, gameOver]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (target && !gameOver) {
+      stopCurrentSound();
+      playVocabularyItem(target);
+    }
+    return () => {
+      stopCurrentSound();
+    };
+  }, [currentIdx, gameOver]);
 
   const handlePop = async (balloon: BalloonItem) => {
     if (locked || balloon.popped) return;
@@ -283,6 +296,7 @@ export default function PopBalloon() {
   };
 
   const handleExitGame = () => {
+    stopCurrentSound();
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -291,21 +305,13 @@ export default function PopBalloon() {
   };
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`Pop Balloon — ${category.name}`}
         bgColor={category.color}
         logoImage={require('../../../../assets/images/minigames/cover-pop-balloon.jpg')}
         showBack={true}
         onBack={handleExitGame}
-      />
-
-      {/* Sky gradient background */}
-      <LinearGradient
-        colors={['#E0F2FE', '#BAE6FD', '#E0F2FE']}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
       />
 
       <View style={styles.content}>
@@ -388,14 +394,13 @@ export default function PopBalloon() {
           setGameOver(true);
         }}
       />
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0F2FE',
   },
   content: {
     flex: 1,

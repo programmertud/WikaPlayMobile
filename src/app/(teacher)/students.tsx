@@ -18,6 +18,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { PressableScale } from '../../components/PressableScale';
+import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { StudentMonitoringItem } from '../../types';
@@ -25,6 +26,7 @@ import type { StudentMonitoringItem } from '../../types';
 export default function StudentsMonitoringScreen() {
   const insets = useSafeAreaInsets();
   const [students, setStudents] = useState<StudentMonitoringItem[]>([]);
+  const [sections, setSections] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'online' | 'active' | 'disabled'>('all');
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,9 @@ export default function StudentsMonitoringScreen() {
       setError(null);
       const res = await teacherService.getStudents();
       setStudents(res.students);
+      if (res.sections) {
+        setSections(res.sections);
+      }
     } catch (err: any) {
       setError(err?.message || 'Nabigong kunin ang listahan ng estudyante.');
     } finally {
@@ -172,12 +177,13 @@ export default function StudentsMonitoringScreen() {
   if (error && students.length === 0) return <ErrorView message={error} onRetry={loadStudents} />;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { paddingTop: Math.max(insets.top, 16) + 10 },
-      ]}
+    <AnimatedBackground>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Math.max(insets.top, 16) + 10 },
+        ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -202,6 +208,29 @@ export default function StudentsMonitoringScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Managed Sections Banner */}
+      {sections.length > 0 && (
+        <View style={styles.sectionBannerContainer}>
+          {sections.map((sec) => (
+            <View key={sec.id} style={[styles.sectionBannerCard, Shadows.subtle]}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="school" size={16} color={Colors.teacherPurple} />
+                  <Text style={styles.sectionBannerName}>{sec.name}</Text>
+                </View>
+                <Text style={styles.sectionBannerSub}>
+                  {sec.students_count || 0} mag-aaral ang kasalukuyang naka-enroll
+                </Text>
+              </View>
+              <View style={styles.codeBadge}>
+                <Text style={styles.codeBadgeLabel}>CODE</Text>
+                <Text style={styles.codeBadgeText} selectable>{sec.enrollment_code}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Search Bar */}
       <View style={[styles.searchBox, Shadows.subtle]}>
@@ -632,11 +661,12 @@ export default function StudentsMonitoringScreen() {
         </View>
       </Modal>
     </ScrollView>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.teacherPurpleBg },
+  container: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 48 },
   headerRow: {
     flexDirection: 'row',
@@ -1146,5 +1176,53 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.body,
     fontWeight: Typography.weights.bold,
     color: Colors.white,
+  },
+  sectionBannerContainer: {
+    marginBottom: 14,
+    gap: 8,
+  },
+  sectionBannerCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(124, 58, 237, 0.15)',
+  },
+  sectionBannerName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.bold,
+    fontWeight: Typography.weights.heavy,
+    color: Colors.text,
+  },
+  sectionBannerSub: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.body,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  codeBadge: {
+    backgroundColor: '#F3E8FF',
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  codeBadgeLabel: {
+    fontSize: 9,
+    fontFamily: Typography.family.bold,
+    fontWeight: Typography.weights.heavy,
+    color: Colors.teacherPurple,
+    letterSpacing: 0.5,
+  },
+  codeBadgeText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.bold,
+    fontWeight: Typography.weights.heavy,
+    color: Colors.teacherPurple,
+    marginTop: 1,
   },
 });

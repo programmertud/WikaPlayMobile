@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\MinigameController;
 use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\RewardController;
+use App\Http\Controllers\Api\SectionController;
 use App\Http\Controllers\Api\StudentProfileController;
 use App\Http\Controllers\Api\TeacherController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/student-login', [AuthController::class, 'studentLogin']);
     Route::post('/student-register', [AuthController::class, 'studentRegister']);
 });
+
+// Public Sections — for student enrollment code entry
+Route::get('/sections', [SectionController::class, 'publicIndex']);
 
 // Public / Cached Content (Accessible to students without requiring heavy auth token, or with token)
 Route::prefix('categories')->group(function () {
@@ -90,5 +94,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/export-csv', [TeacherController::class, 'exportReportsCsv']);
         Route::post('/upload-audio', [TeacherController::class, 'uploadAudio']);
         Route::post('/upload-image', [TeacherController::class, 'uploadImage']);
+
+        // Section Management — teachers manage their own sections
+        Route::get('/sections', [SectionController::class, 'mySection']);
+        Route::post('/sections/{id}/activate', [SectionController::class, 'activate']);
+        Route::post('/sections/{id}/rotate-code', [SectionController::class, 'rotateCode']);
+        Route::post('/sections/{id}/archive', [SectionController::class, 'archive']);
     });
 });

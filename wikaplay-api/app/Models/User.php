@@ -20,6 +20,7 @@ class User extends Authenticatable
         'role',
         'avatar',
         'section',
+        'section_id',
         'status',
         'stars_balance',
     ];
@@ -61,6 +62,11 @@ class User extends Authenticatable
         return $this->role === 'teacher' || $this->role === 'admin';
     }
 
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
     public function isStudent(): bool
     {
         return $this->role === 'student';
@@ -96,6 +102,18 @@ class User extends Authenticatable
     public function presence()
     {
         return $this->hasOne(StudentPresence::class);
+    }
+
+    /** Section this student is enrolled in */
+    public function enrolledSection()
+    {
+        return $this->belongsTo(Section::class, 'section_id');
+    }
+
+    /** Sections this teacher manages */
+    public function managedSections()
+    {
+        return $this->hasMany(Section::class, 'teacher_id');
     }
 
     public function studentBadges()

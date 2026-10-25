@@ -25,6 +25,7 @@ import * as Haptics from '@/utils/haptics';
 import { LoadingView } from '../../../components/LoadingView';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { PressableScale } from '../../../components/PressableScale';
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import {
@@ -114,6 +115,7 @@ export default function GantimpalaScreen() {
   const recentRewards = data?.recent_rewards ?? [];
 
   return (
+    <AnimatedBackground>
     <View style={styles.outerContainer}>
       <ScrollView
         style={styles.container}
@@ -480,13 +482,14 @@ export default function GantimpalaScreen() {
         </View>
       </Modal>
     </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,

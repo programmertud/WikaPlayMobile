@@ -32,7 +32,7 @@ export const authService = {
     return data;
   },
 
-  studentRegister: async (payload: { name: string; section?: string }) => {
+  studentRegister: async (payload: { name: string; enrollment_code?: string }) => {
     const data = await ApiClient.post<{ message: string; token: string; user: User }>(
       'auth/student-register',
       payload
@@ -46,7 +46,7 @@ export const authService = {
     email: string;
     password: string;
     role?: 'student' | 'teacher';
-    section?: string;
+    section_name?: string; // Name of the section this teacher will manage
   }) => {
     const data = await ApiClient.post<{ message: string; token: string; user: User }>(
       'auth/register',
@@ -367,6 +367,7 @@ export const teacherService = {
       students: StudentMonitoringItem[];
       total_students: number;
       online_count: number;
+      sections?: any[];
     }>('teacher/students');
   },
 
@@ -526,5 +527,39 @@ export const teacherService = {
   exportReportsCsv: async (type: 'quizzes' | 'minigames' | 'stars' | 'students' = 'quizzes') => {
     return ApiClient.get<{ csv: string; filename: string; total_records: number }>(`teacher/reports/export-csv?type=${type}`);
   },
+
+  getMySections: async () => {
+    return ApiClient.get<{
+      sections: {
+        id: number;
+        name: string;
+        school_year: string;
+        status: string;
+        enrollment_code: string;
+        students_count: number;
+      }[];
+    }>('teacher/sections');
+  },
+
+  activateSection: async (id: number) => {
+    return ApiClient.post<{ message: string; section: any }>(`teacher/sections/${id}/activate`);
+  },
+
+  rotateEnrollmentCode: async (id: number) => {
+    return ApiClient.post<{ message: string; enrollment_code: string }>(`teacher/sections/${id}/rotate-code`);
+  },
+
+  archiveSection: async (id: number) => {
+    return ApiClient.post<{ message: string }>(`teacher/sections/${id}/archive`);
+  },
 };
 
+// Section service — public + teacher management
+export const sectionService = {
+  /** Public listing of active sections (used by student registration) */
+  getPublicSections: async () => {
+    return ApiClient.get<{
+      sections: { id: number; name: string; school_year: string; teacher: string | null }[];
+    }>('sections');
+  },
+};

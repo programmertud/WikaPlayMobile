@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 import { USE_NATIVE_DRIVER } from '@/utils/platform';
 
+import { AnimatedBackground } from '../../../../components/AnimatedBackground';
 import { CelebrationOverlay } from '../../../../components/CelebrationOverlay';
 import { ItemVisual } from '../../../../components/ItemVisual';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
@@ -94,6 +95,15 @@ const CATEGORY_SLUG_TO_ID: Record<string, number> = {
   'mga-pagbati-at-parirala': 8,
 };
 
+function shuffleQuestions<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -106,13 +116,22 @@ export default function MadaliQuizScreen() {
   const category = getCategoryBySlug(slug);
   usePresence(`Nagsusulit sa ${category.name} (Madali)`, 'quiz_madali');
 
+  // Stop any voice playback immediately when unmounting / navigating away
+  useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
+
   // Stable session ID generated at quiz mount/restart
   const sessionIdRef = useRef<string>(generateSessionId('quiz_madali'));
 
   // ------------------------------------------------------------------
   // State
   // ------------------------------------------------------------------
-  const [questions] = useState<MadaliQuestion[]>(() => getMadaliQuestionsBySlug(slug));
+  const [questions, setQuestions] = useState<MadaliQuestion[]>(() =>
+    shuffleQuestions(getMadaliQuestionsBySlug(slug))
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<AnswerId | null>(null);
   const [isLocked, setIsLocked] = useState(false);
@@ -291,6 +310,7 @@ export default function MadaliQuizScreen() {
   // ------------------------------------------------------------------
   const handleRetry = () => {
     sessionIdRef.current = generateSessionId('quiz_madali');
+    setQuestions(shuffleQuestions(getMadaliQuestionsBySlug(slug)));
     setStarsAwarded(0);
     resetStreaks();
     setCurrentIndex(0);
@@ -310,7 +330,7 @@ export default function MadaliQuizScreen() {
   // ------------------------------------------------------------------
   if (questions.length === 0) {
     return (
-      <View style={styles.container}>
+      <AnimatedBackground>
         <ScreenHeader
           title="Madali — Quiz"
           bgColor={category.color}
@@ -333,7 +353,7 @@ export default function MadaliQuizScreen() {
             style={{ marginTop: 20 }}
           />
         </View>
-      </View>
+      </AnimatedBackground>
     );
   }
 
@@ -342,7 +362,7 @@ export default function MadaliQuizScreen() {
   // ------------------------------------------------------------------
   if (quizDone) {
     return (
-      <View style={styles.container}>
+      <AnimatedBackground>
         <ScreenHeader
           title="Resulta ng Pagsusulit"
           showBack={false}
@@ -469,7 +489,7 @@ export default function MadaliQuizScreen() {
           onContinue={() => setShowCelebration(false)}
           continueText="Tingnan ang Resulta"
         />
-      </View>
+      </AnimatedBackground>
     );
   }
 
@@ -486,7 +506,7 @@ export default function MadaliQuizScreen() {
   // Gameplay Screen
   // ------------------------------------------------------------------
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`${category.name} — Madali`}
         subtitle={`Tanong ${currentIndex + 1} sa ${totalQuestions}`}
@@ -611,7 +631,7 @@ export default function MadaliQuizScreen() {
           })}
         </View>
       </ScrollView>
-    </View>
+    </AnimatedBackground>
   );
 }
 
@@ -716,7 +736,6 @@ function TextChoiceButton({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
   },
   content: {
     padding: 16,

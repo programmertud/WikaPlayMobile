@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
@@ -27,6 +28,7 @@ import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
 import {
   playVocabularyItem,
+  stopCurrentSound,
   useBgmDuck,
 } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
@@ -84,9 +86,19 @@ export default function PaghahanapLarawan() {
   const choices = roundData.choices;
 
   useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
+
+  useEffect(() => {
     if (target && !gameOver) {
+      stopCurrentSound();
       playVocabularyItem(target);
     }
+    return () => {
+      stopCurrentSound();
+    };
   }, [currentIdx, gameOver, target]);
 
   usePresence(`Paghahanap ng Larawan (${category.name})`, 'minigame_paghahanap');
@@ -164,7 +176,7 @@ export default function PaghahanapLarawan() {
   };
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`Paghahanap — ${category.name}`}
         bgColor={category.color}
@@ -258,14 +270,13 @@ export default function PaghahanapLarawan() {
           setGameOver(true);
         }}
       />
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
   },
   content: {
     flex: 1,

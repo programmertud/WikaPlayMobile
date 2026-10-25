@@ -19,6 +19,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { CategoryCard } from '../../../components/CategoryCard';
 import { LoadingView } from '../../../components/LoadingView';
 import { PressableScale } from '../../../components/PressableScale';
@@ -98,6 +99,7 @@ export default function StudentDashboardScreen() {
   }
 
   return (
+    <AnimatedBackground>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[
@@ -205,13 +207,14 @@ export default function StudentDashboardScreen() {
         ))}
       </View>
     </ScrollView>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: 16,

@@ -23,6 +23,7 @@ import { LoadingView } from '../../../components/LoadingView';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { PressableScale } from '../../../components/PressableScale';
 import { UserAvatar } from '../../../components/UserAvatar';
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import {
@@ -233,6 +234,7 @@ export default function ProfileScreen() {
   const encouragement = profileData?.encouragement || 'Tuloy lang sa pag-aaral ng Filipino! 🌟';
 
   return (
+    <AnimatedBackground>
     <View style={styles.outerContainer}>
       <ScrollView
         style={styles.container}
@@ -663,6 +665,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
     </View>
+    </AnimatedBackground>
   );
 }
 
@@ -715,7 +718,7 @@ function PersonalBestChip({
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,

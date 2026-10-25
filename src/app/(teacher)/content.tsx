@@ -33,8 +33,9 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { PressableScale } from '../../components/PressableScale';
+import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { teacherService } from '../../services/api';
-import { playSound } from '../../services/audio/sound-service';
+import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { Category, Flashcard, QuizDifficulty, QuizQuestion } from '../../types';
 import { LEARNING_CATEGORIES, overrideVocabularyItem } from '../../data/categories';
@@ -285,6 +286,12 @@ export default function ContentManagementScreen({
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
 
   // Load quiz questions for a category & difficulty matching the student quiz experience
   const loadQuiz = useCallback(async (catId: number, diff: QuizDifficulty) => {
@@ -747,12 +754,13 @@ export default function ContentManagementScreen({
   });
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { paddingTop: Math.max(insets.top, 16) + 10 },
-      ]}
+    <AnimatedBackground>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Math.max(insets.top, 16) + 10 },
+        ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -1715,11 +1723,12 @@ export default function ContentManagementScreen({
         </View>
       </Modal>
     </ScrollView>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.teacherPurpleBg },
+  container: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 48 },
   topHeader: {
     flexDirection: 'row',

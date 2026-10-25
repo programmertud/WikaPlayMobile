@@ -22,6 +22,7 @@ import * as Haptics from '@/utils/haptics';
 import { LoadingView } from '../../components/LoadingView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { UserAvatar } from '../../components/UserAvatar';
+import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { useAuth } from '../../hooks/use-auth';
 import { authService, teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
@@ -189,7 +190,7 @@ export default function TeacherProfileScreen() {
   const displayName = user?.name ?? 'Guro';
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F0F9FF' }}>
+    <AnimatedBackground>
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
@@ -576,7 +577,7 @@ export default function TeacherProfileScreen() {
         </View>
       </View>
     </Modal>
-  </View>
+  </AnimatedBackground>
   );
 }
 
@@ -635,7 +636,7 @@ const rowStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.teacherPurpleBg },
+  container: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
   avatarSection: { alignItems: 'center', marginBottom: 24 },
   avatarRing: {

@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
+import { AnimatedBackground } from '../../../../components/AnimatedBackground';
 import { CelebrationOverlay } from '../../../../components/CelebrationOverlay';
 import { ErrorView } from '../../../../components/ErrorView';
 import { ItemVisual } from '../../../../components/ItemVisual';
@@ -28,7 +29,7 @@ import { useQuiz } from '../../../../hooks/use-quiz';
 import { categoryService } from '../../../../services/api';
 import { generateSessionId, submitQuizReward } from '../../../../services/rewards/star-reward-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../../theme';
-import { useBgmDuck } from '../../../../services/audio/sound-service';
+import { stopCurrentSound, useBgmDuck } from '../../../../services/audio/sound-service';
 import { ChoiceItem, QuizDifficulty, QuizQuestion, QuizResultSession, VocabularyItem } from '../../../../types';
 
 const { width } = Dimensions.get('window');
@@ -54,6 +55,13 @@ export default function QuizGameplayScreen() {
   const [resultSession, setResultSession] = useState<QuizResultSession | null>(null);
 
   usePresence(`Nagsusulit sa ${categoryName} (${difficulty})`, 'quiz_gameplay');
+
+  // Stop sound on unmount or navigate away
+  useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
 
   const diffLabel = difficulty === 'madali' ? 'Madali' : difficulty === 'katamtaman' ? 'Katamtaman' : 'Mahirap';
   const isKatamtaman = difficulty === 'katamtaman';
@@ -267,7 +275,9 @@ export default function QuizGameplayScreen() {
           });
         }
       }
-      setQuestions(fetchedQuestions);
+      // Shuffle questions to ensure variety
+      const shuffledQuestions = [...fetchedQuestions].sort(() => 0.5 - Math.random());
+      setQuestions(shuffledQuestions);
     } catch (err: any) {
       const cat = getCategoryBySlug(slug);
       if (cat && cat.items && cat.items.length > 0) {
@@ -398,13 +408,13 @@ export default function QuizGameplayScreen() {
 
   if (error || questions.length === 0) {
     return (
-      <View style={{ flex: 1 }}>
+      <AnimatedBackground>
         <ScreenHeader title={`${diffLabel} Pagsusulit`} bgColor={categoryColor} />
         <ErrorView
           message={error || 'Walang magagamit na tanong para sa antas na ito.'}
           onRetry={loadQuiz}
         />
-      </View>
+      </AnimatedBackground>
     );
   }
 
@@ -413,7 +423,7 @@ export default function QuizGameplayScreen() {
     const isPassed = resultSession.passed;
 
     return (
-      <View style={styles.container}>
+      <AnimatedBackground>
         <ScreenHeader title="Resulta ng Pagsusulit" showBack={false} bgColor={categoryColor} />
         <View style={styles.resultContainer}>
           <View style={[styles.resultCard, Shadows.card]}>
@@ -502,12 +512,12 @@ export default function QuizGameplayScreen() {
           }}
           continueText="Tapusin"
         />
-      </View>
+      </AnimatedBackground>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`${categoryName} (${diffLabel})`}
         subtitle={`Tanong ${currentIndex + 1} ng ${totalQuestions}`}
@@ -676,14 +686,13 @@ export default function QuizGameplayScreen() {
           </>
         )}
       </View>
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
   },
   content: {
     flex: 1,

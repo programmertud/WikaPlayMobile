@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Gradients, Shadows, Typography, Radius } from '@/theme';
 import { PressableScale } from './PressableScale';
 
+import { stopCurrentSound } from '../services/audio/sound-service';
+
 interface ScreenHeaderProps {
   title: string;
   showBack?: boolean;
@@ -43,6 +45,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   const insets = useSafeAreaInsets();
 
   const handleBack = () => {
+    stopCurrentSound();
     if (onBack) {
       onBack();
     } else if (router.canGoBack()) {

@@ -12,9 +12,9 @@ import MemoryMatch from './memory-match';
 import PaghahanapLarawan from './paghahanap-larawan';
 import PopBalloon from './pop-balloon';
 
-import { PrimaryButton } from '../../../components/PrimaryButton';
-import { useBgmDuck } from '../../../services/audio/sound-service';
+import { stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Typography } from '../../../theme';
+import { PrimaryButton } from '../../../components/PrimaryButton';
 
 import { hydrateCategoryOverrides } from '../../../data/categories';
 
@@ -37,6 +37,12 @@ export default function GameRouter() {
   useBgmDuck();
   const { slug, category } = useLocalSearchParams<{ slug: string; category?: string }>();
   
+  React.useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
+
   React.useEffect(() => {
     if (category) {
       hydrateCategoryOverrides(category);

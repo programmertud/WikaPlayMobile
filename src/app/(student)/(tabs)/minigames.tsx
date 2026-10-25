@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from '@/utils/haptics';
 
 import { PressableScale } from '../../../components/PressableScale';
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { usePresence } from '../../../hooks/use-presence';
 import { bgm } from '../../../services/audio/bgm-service';
 import { Colors, Shadows, Typography, Radius } from '../../../theme';
@@ -126,6 +127,7 @@ export default function MiniGamesScreen() {
   };
 
   return (
+    <AnimatedBackground>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[
@@ -222,6 +224,7 @@ export default function MiniGamesScreen() {
         })}
       </View>
     </ScrollView>
+    </AnimatedBackground>
   );
 }
 
@@ -301,7 +304,7 @@ function GameCard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: 16,

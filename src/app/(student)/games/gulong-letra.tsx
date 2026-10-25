@@ -21,6 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
@@ -32,7 +33,7 @@ import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
-import { useBgmDuck } from '../../../services/audio/sound-service';
+import { stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible, VocabularyItem } from '../../../types';
 
@@ -157,6 +158,12 @@ export default function GuLongLetra() {
   const { user, updateUserStars } = useAuth();
   const { category: categorySlug } = useLocalSearchParams<{ category?: string }>();
   const category = getCategoryBySlug(categorySlug);
+
+  React.useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
   const rawItems = getCategoryVocabulary(category.slug);
   const [items, setItems] = useState<VocabularyItem[]>(() => shuffleItems(rawItems));
 
@@ -296,7 +303,7 @@ export default function GuLongLetra() {
   const allFilled = slots.every((s) => s !== null);
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`Gulong ng Letra — ${category.name}`}
         bgColor={category.color}
@@ -411,12 +418,12 @@ export default function GuLongLetra() {
         collectible={awardedCollectible}
         onClose={() => { setShowMysteryBox(false); setGameOver(true); }}
       />
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F9FF' },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40, alignItems: 'center' },
   progressRow: { width: '100%', marginBottom: 4 },
   progressLabel: {

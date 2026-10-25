@@ -22,7 +22,8 @@ import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
 import { getCategoryBySlug } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
-import { playVocabularyItem, useBgmDuck } from '../../../services/audio/sound-service';
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
+import { playVocabularyItem, stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
 import { categoryService } from '../../../services/api';
 import { storage } from '../../../utils/storage';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
@@ -159,13 +160,24 @@ export default function FlashcardsViewerScreen() {
 
   usePresence(`Nagbabasa ng Flashcards sa ${category.name}`, 'flashcards_view');
 
+  // Stop audio immediately when leaving the flashcards screen
+  useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
+
   // Auto-pronounce word when card is opened or changed
   useEffect(() => {
     if (!currentItem) return;
+    stopCurrentSound();
     const timer = setTimeout(() => {
       playVocabularyItem(currentItem).catch(() => {});
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      stopCurrentSound();
+    };
   }, [currentIndex, currentItem]);
 
   // Animation values for card slide/flip transition
@@ -204,7 +216,7 @@ export default function FlashcardsViewerScreen() {
   }));
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={category.name.toUpperCase()}
         bgColor={category.color}
@@ -316,14 +328,13 @@ export default function FlashcardsViewerScreen() {
           </PressableScale>
         </View>
       </View>
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
   },
   content: {
     flex: 1,

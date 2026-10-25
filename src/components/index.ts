@@ -5,6 +5,7 @@ export * from './ScreenHeader';
 export * from './ProgressIndicator';
 export * from './PressableScale';
 export * from './GradientBackground';
+export * from './AnimatedBackground';
 export * from './CelebrationOverlay';
 export * from './InputField';
 export * from './EmptyState';

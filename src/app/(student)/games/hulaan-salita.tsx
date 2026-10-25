@@ -20,6 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
@@ -31,7 +32,7 @@ import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { useAnswerFeedback } from '../../../hooks/use-answer-feedback';
 import { generateSessionId, submitMinigameReward } from '../../../services/rewards/star-reward-service';
-import { useBgmDuck } from '../../../services/audio/sound-service';
+import { stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { Collectible, VocabularyItem } from '../../../types';
 
@@ -91,6 +92,12 @@ export default function HulaanSalita() {
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [correct, setCorrect] = useState(0);
+
+  React.useEffect(() => {
+    return () => {
+      stopCurrentSound();
+    };
+  }, []);
   const [gameOver, setGameOver] = useState(false);
   const [starsAwarded, setStarsAwarded] = useState(0);
   const [locked, setLocked] = useState(false);
@@ -233,7 +240,7 @@ export default function HulaanSalita() {
   const allFilled = slots.every((s) => s !== null);
 
   return (
-    <View style={styles.container}>
+    <AnimatedBackground>
       <ScreenHeader
         title={`Hulaan — ${category.name}`}
         bgColor={category.color}
@@ -358,12 +365,12 @@ export default function HulaanSalita() {
         collectible={awardedCollectible}
         onClose={() => { setShowMysteryBox(false); setGameOver(true); }}
       />
-    </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F9FF' },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40, alignItems: 'center' },
   progressRow: { width: '100%', marginBottom: 4 },
   progressLabel: {

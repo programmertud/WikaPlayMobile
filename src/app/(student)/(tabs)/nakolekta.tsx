@@ -26,6 +26,7 @@ import { ErrorView } from '../../../components/ErrorView';
 import { PressableScale } from '../../../components/PressableScale';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
+import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { collectibleService } from '../../../services/api';
@@ -292,6 +293,7 @@ export default function NakolektaScreen() {
       bgm.minimize();
       if (!loading) loadData(true);
       return () => {
+        stopCurrentSound();
         bgm.restore();
       };
     }, [loading, loadData])
@@ -340,6 +342,7 @@ export default function NakolektaScreen() {
   }
 
   return (
+    <AnimatedBackground>
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 16) + 12 }]}
@@ -444,11 +447,12 @@ export default function NakolektaScreen() {
 
       {selectedCard && <CollectibleDetailModal item={selectedCard} onClose={() => setSelectedCard(null)} />}
     </View>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F9FF' },
+  container: { flex: 1, backgroundColor: 'transparent' },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 48 },
   skeletonHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 },
   skeletonTitle: { width: 160, height: 28, borderRadius: 8, backgroundColor: '#CBD5E1' },

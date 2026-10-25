@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
+import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { Collectible } from '../../types';
@@ -152,12 +153,13 @@ export default function TeacherRewardsScreen() {
   });
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { paddingTop: Math.max(insets.top, 16) + 10 },
-      ]}
+    <AnimatedBackground>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Math.max(insets.top, 16) + 10 },
+        ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -554,11 +556,12 @@ export default function TeacherRewardsScreen() {
         </View>
       </Modal>
     </ScrollView>
+    </AnimatedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.teacherPurpleBg },
+  container: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 48 },
   headerRow: {
     flexDirection: 'row',
