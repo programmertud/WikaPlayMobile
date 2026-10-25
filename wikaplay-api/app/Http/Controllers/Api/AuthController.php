@@ -256,6 +256,8 @@ class AuthController extends Controller
                 'current_activity' => 'Naka-logout',
                 'last_active_at' => now(),
             ]);
+        }
+
         return response()->json([
             'message' => 'Matagumpay na naka-logout.',
         ]);
