@@ -317,7 +317,7 @@ function WelcomeScreen() {
 
           {/* Friendly Greeting Tagline */}
           <Text style={styles.greetingQuote}>
-              "{greetingText}"
+            &ldquo;{greetingText}&rdquo;
           </Text>
 
           {/* Feature Badge Pill */}

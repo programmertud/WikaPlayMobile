@@ -579,3 +579,13 @@ export async function playFeedbackSound(
   playSynthesizedFeedback(isCorrect, onFinished);
   return () => {};
 }
+
+/**
+ * Maligayang Pagdating audio voice recording (played when student logs in)
+ */
+export const MALIGAYANG_PAGDATING_AUDIO = require('../../../assets/audio/MGA BATIAN/maligayang pagdating.mp3');
+
+export async function playWelcomeSound(onFinished?: () => void): Promise<() => void> {
+  return playSound(MALIGAYANG_PAGDATING_AUDIO, onFinished);
+}
+

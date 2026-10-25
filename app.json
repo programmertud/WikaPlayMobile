@@ -4,20 +4,20 @@
     "slug": "wikaplay",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/wikaplayicon.png",
     "scheme": "wikaplay",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/wikaplayicon.png",
       "bundleIdentifier": "com.wikaplay.mobile"
     },
     "android": {
       "package": "com.wikaplay.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#38BDF8",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "foregroundImage": "./assets/images/wikaplayicon.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "monochromeImage": "./assets/images/wikaplayicon.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -46,6 +46,13 @@
         {
           "microphonePermission": "Payagan ang WikaPlay na gamitin ang mikropono para sa pag-record ng boses.",
           "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Payagan ang WikaPlay na pumili ng larawan mula sa gallery para sa profile picture.",
+          "cameraPermission": "Payagan ang WikaPlay na kumuha ng litrato gamit ang camera para sa profile picture."
         }
       ],
       "expo-secure-store",

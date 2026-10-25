@@ -1,22 +1,54 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from '@/utils/haptics';
 
 import { LoadingView } from '../../components/LoadingView';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { UserAvatar } from '../../components/UserAvatar';
 import { useAuth } from '../../hooks/use-auth';
 import { authService, teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 
+const TEACHER_PRESET_AVATARS = [
+  { id: 'teacher_f', emoji: '👩‍🏫', label: 'Guro (B)' },
+  { id: 'teacher_m', emoji: '👨‍🏫', label: 'Guro (L)' },
+  { id: 'books', emoji: '📚', label: 'Aklat' },
+  { id: 'grad', emoji: '🎓', label: 'Toga' },
+  { id: 'pencil', emoji: '✏️', label: 'Lapis' },
+  { id: 'star', emoji: '🌟', label: 'Bituin' },
+];
+
 export default function TeacherProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Edit Profile States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [sectionInput, setSectionInput] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     authService.getMe()
@@ -24,6 +56,117 @@ export default function TeacherProfileScreen() {
       .finally(() => setLoading(false));
   }, []);
 
+  const openEditModal = () => {
+    setNameInput(user?.name ?? '');
+    setSectionInput(user?.section ?? 'Kaguruan');
+    setSelectedAvatar(user?.avatar ?? null);
+    setShowEditModal(true);
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Pahintulot', 'Kailangan ng pahintulot upang mabuksan ang gallery ng litrato.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await processAndSetAvatar(result.assets[0]);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Nabigong pumili ng larawan.');
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Pahintulot', 'Kailangan ng pahintulot upang magamit ang camera.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await processAndSetAvatar(result.assets[0]);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Nabigong kumuha ng litrato.');
+    }
+  };
+
+  const processAndSetAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
+    setUploadingImage(true);
+    try {
+      let avatarUrl = '';
+      if (asset.base64) {
+        const mime = asset.mimeType || 'image/jpeg';
+        const base64Data = `data:${mime};base64,${asset.base64}`;
+        try {
+          const res = await authService.uploadAvatarBase64(base64Data);
+          avatarUrl = res.avatar;
+        } catch {
+          avatarUrl = base64Data;
+        }
+      } else {
+        const formData = new FormData();
+        const filename = asset.uri.split('/').pop() || 'teacher_avatar.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+        formData.append('avatar', {
+          uri: asset.uri,
+          name: filename,
+          type,
+        } as any);
+        const res = await authService.uploadAvatar(formData);
+        avatarUrl = res.avatar;
+      }
+
+      setSelectedAvatar(avatarUrl);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Paumanhin', e.message || 'Hindi nai-upload ang larawan.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    const trimmedName = nameInput.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      Alert.alert('Paalala', 'Pakilagay ang inyong buong pangalan (hindi bababa sa 2 titik).');
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await updateProfile({
+        name: trimmedName,
+        avatar: selectedAvatar || '',
+        section: sectionInput.trim() || undefined,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setShowEditModal(false);
+      Alert.alert('Tagumpay! ✨', 'Matagumpay na na-update ang profile ng guro!');
+    } catch (err: any) {
+      Alert.alert('Paumanhin', err.message || 'Hindi nai-save ang mga pagbabago.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const confirmLogout = async () => {
     setLoggingOut(true);
@@ -44,7 +187,6 @@ export default function TeacherProfileScreen() {
   if (loading) return <LoadingView message="Kinukuha ang profile..." />;
 
   const displayName = user?.name ?? 'Guro';
-  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F0F9FF' }}>
@@ -55,34 +197,52 @@ export default function TeacherProfileScreen() {
           { paddingTop: Math.max(insets.top, 16) + 12 },
         ]}
         showsVerticalScrollIndicator={false}
-    >
-      {/* Avatar with Teacher Gradient Ring */}
-      <View style={styles.avatarSection}>
-        <LinearGradient
-          colors={Gradients.teacher}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.avatarRing}
-        >
-          <View style={styles.avatarInner}>
-            <Text style={styles.avatarInitial}>{initial}</Text>
+      >
+        {/* Avatar with Teacher Gradient Ring and Edit Trigger */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity
+            style={styles.avatarTouchable}
+            activeOpacity={0.8}
+            onPress={openEditModal}
+          >
+            <UserAvatar
+              avatar={user?.avatar}
+              name={displayName}
+              size={96}
+              isTeacher
+              showRing
+              ringColors={Gradients.teacher}
+            />
+            <View style={styles.avatarEditPill}>
+              <Ionicons name="camera" size={14} color={Colors.white} />
+            </View>
+          </TouchableOpacity>
+
+          <Text style={styles.displayName}>{displayName}</Text>
+          <View style={styles.roleBadge}>
+            <Ionicons name="school" size={14} color={Colors.teacherPurple} />
+            <Text style={styles.roleLabel}>Guro (Teacher Portal)</Text>
           </View>
-        </LinearGradient>
+          {user?.email ? <Text style={styles.emailLabel}>{user.email}</Text> : null}
 
-        <Text style={styles.displayName}>{displayName}</Text>
-        <View style={styles.roleBadge}>
-          <Ionicons name="school" size={14} color={Colors.teacherPurple} />
-          <Text style={styles.roleLabel}>Guro (Teacher Portal)</Text>
+          {/* Edit Profile Button */}
+          <TouchableOpacity
+            style={[styles.editProfileBtn, Shadows.subtle]}
+            onPress={openEditModal}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="create-outline" size={15} color={Colors.teacherPurple} />
+            <Text style={styles.editProfileBtnText}>I-edit ang Profile</Text>
+          </TouchableOpacity>
         </View>
-        {user?.email ? <Text style={styles.emailLabel}>{user.email}</Text> : null}
-      </View>
 
-      {/* Info Card */}
-      <View style={[styles.infoCard, Shadows.card]}>
-        <InfoRow icon="person" label="Buong Pangalan" value={user?.name ?? '—'} />
-        <InfoRow icon="mail" label="Email Address" value={user?.email ?? '—'} />
-        <InfoRow icon="shield-checkmark" label="Tungkulin" value="Guro / Administrator" />
-      </View>
+        {/* Info Card */}
+        <View style={[styles.infoCard, Shadows.card]}>
+          <InfoRow icon="person" label="Buong Pangalan" value={user?.name ?? '—'} />
+          <InfoRow icon="mail" label="Email Address" value={user?.email ?? '—'} />
+          <InfoRow icon="business" label="Seksyon / Departamento" value={user?.section ?? 'Kaguruan'} />
+          <InfoRow icon="shield-checkmark" label="Tungkulin" value="Guro / Administrator" />
+        </View>
 
       {/* WikaPlay Info Card */}
       <View style={[styles.aboutCard, Shadows.card]}>
@@ -218,6 +378,164 @@ export default function TeacherProfileScreen() {
       />
     </ScrollView>
 
+    {/* Edit Teacher Profile Modal */}
+    <Modal
+      visible={showEditModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        if (!savingProfile) setShowEditModal(false);
+      }}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={modalStyles.overlay}
+      >
+        <View style={[styles.editCard, Shadows.card]}>
+          <View style={styles.editCardHeader}>
+            <View style={styles.editCardTitleRow}>
+              <Ionicons name="person-circle" size={26} color={Colors.teacherPurple} />
+              <Text style={styles.editCardTitle}>I-edit ang Profile ng Guro</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowEditModal(false)}
+              disabled={savingProfile}
+              style={styles.closeModalBtn}
+            >
+              <Ionicons name="close" size={20} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            {/* Avatar Preview & Actions */}
+            <View style={styles.editAvatarSection}>
+              <UserAvatar
+                avatar={selectedAvatar}
+                name={nameInput || displayName}
+                size={84}
+                isTeacher
+                showRing
+                ringColors={Gradients.teacher}
+              />
+
+              <Text style={styles.editAvatarLabel}>Palitan ang Profile Picture:</Text>
+
+              <View style={styles.photoActionsRow}>
+                <TouchableOpacity
+                  style={[styles.photoActionBtn, { backgroundColor: '#EDE9FE' }]}
+                  disabled={uploadingImage || savingProfile}
+                  onPress={handlePickImage}
+                >
+                  <Ionicons name="images" size={20} color={Colors.teacherPurple} />
+                  <Text style={[styles.photoActionText, { color: Colors.teacherPurple }]}>
+                    Gallery
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.photoActionBtn, { backgroundColor: '#F3E8FF' }]}
+                  disabled={uploadingImage || savingProfile}
+                  onPress={handleTakePhoto}
+                >
+                  <Ionicons name="camera" size={20} color={Colors.teacherPurple} />
+                  <Text style={[styles.photoActionText, { color: Colors.teacherPurple }]}>
+                    Camera
+                  </Text>
+                </TouchableOpacity>
+
+                {selectedAvatar && (
+                  <TouchableOpacity
+                    style={[styles.photoActionBtn, { backgroundColor: '#FEE2E2' }]}
+                    disabled={uploadingImage || savingProfile}
+                    onPress={() => setSelectedAvatar(null)}
+                  >
+                    <Ionicons name="refresh" size={20} color="#EF4444" />
+                    <Text style={[styles.photoActionText, { color: '#EF4444' }]}>
+                      Reset
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {uploadingImage && (
+                <View style={styles.uploadingBox}>
+                  <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                  <Text style={styles.uploadingText}>Ina-upload ang larawan...</Text>
+                </View>
+              )}
+
+              {/* Preset Teacher Avatars */}
+              <Text style={styles.presetLabel}>O pumili ng avatar badge:</Text>
+              <View style={styles.presetRow}>
+                {TEACHER_PRESET_AVATARS.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.presetChip,
+                      selectedAvatar === p.emoji && styles.presetChipActive,
+                    ]}
+                    onPress={() => setSelectedAvatar(p.emoji)}
+                  >
+                    <Text style={styles.presetEmoji}>{p.emoji}</Text>
+                    <Text style={styles.presetChipLabel}>{p.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Input Fields */}
+            <View style={styles.formSection}>
+              <Text style={styles.inputLabel}>Buong Pangalan (Full Name):</Text>
+              <TextInput
+                style={styles.textInput}
+                value={nameInput}
+                onChangeText={setNameInput}
+                placeholder="Hal. Maria Santos"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="words"
+                editable={!savingProfile}
+                maxLength={60}
+              />
+
+              <Text style={styles.inputLabel}>Seksyon / Kaguruan (Department):</Text>
+              <TextInput
+                style={styles.textInput}
+                value={sectionInput}
+                onChangeText={setSectionInput}
+                placeholder="Hal. Kinder - Mabait / Kaguruan"
+                placeholderTextColor={Colors.textMuted}
+                editable={!savingProfile}
+                maxLength={60}
+              />
+            </View>
+
+            {/* Save & Cancel Buttons */}
+            <View style={styles.editActionRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                disabled={savingProfile}
+                onPress={() => setShowEditModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Kanselahin</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, savingProfile && { opacity: 0.7 }]}
+                disabled={savingProfile || uploadingImage}
+                onPress={handleSaveProfile}
+              >
+                {savingProfile ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.saveBtnText}>I-save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+
     {/* Logout Confirmation Modal */}
     <Modal
       visible={showLogoutModal}
@@ -350,6 +668,41 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 4,
   },
+  avatarTouchable: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  avatarEditPill: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: Colors.teacherPurple,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.teacherPurpleLight,
+  },
+  editProfileBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.teacherPurple,
+  },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,6 +722,180 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  /* Edit Profile Modal Styles */
+  editCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    padding: 20,
+  },
+  editCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 14,
+  },
+  editCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editCardTitle: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  closeModalBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editAvatarSection: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  editAvatarLabel: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.textMuted,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  photoActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+    marginBottom: 8,
+  },
+  photoActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+  },
+  photoActionText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  uploadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    backgroundColor: Colors.teacherPurpleLight,
+    borderRadius: Radius.md,
+    width: '100%',
+    marginBottom: 8,
+  },
+  uploadingText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.teacherPurple,
+    fontWeight: Typography.weights.medium,
+  },
+  presetLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    width: '100%',
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  presetChipActive: {
+    backgroundColor: Colors.teacherPurpleLight,
+    borderColor: Colors.teacherPurple,
+  },
+  presetEmoji: {
+    fontSize: 16,
+  },
+  presetChipLabel: {
+    fontSize: 10,
+    fontWeight: Typography.weights.semibold,
+    color: Colors.text,
+  },
+  formSection: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  textInput: {
+    height: 46,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    paddingHorizontal: 14,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.body,
+    color: Colors.text,
+  },
+  editActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.textMuted,
+  },
+  saveBtn: {
+    flex: 1.5,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.teacherPurple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
   },
   infoCard: {
     backgroundColor: Colors.white,

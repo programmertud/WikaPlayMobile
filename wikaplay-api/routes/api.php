@@ -39,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Current User & Presence
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::match(['put', 'patch', 'post'], '/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/upload-avatar', [AuthController::class, 'uploadAvatar']);
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat']);
 
     // Student Profile & Detailed Aggregated Statistics

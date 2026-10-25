@@ -306,7 +306,7 @@ class StudentProfileController extends Controller
     public function updateAvatar(Request $request)
     {
         $validated = $request->validate([
-            'avatar' => 'required|string|max:255',
+            'avatar' => 'required|string|max:65535',
         ]);
 
         $user = $request->user();

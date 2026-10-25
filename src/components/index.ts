@@ -13,3 +13,4 @@ export * from './LoadingView';
 export * from './AudioButton';
 export * from './ItemVisual';
 export * from './MysteryBoxModal';
+export * from './UserAvatar';

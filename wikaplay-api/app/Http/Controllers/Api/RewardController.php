@@ -11,6 +11,14 @@ use Illuminate\Support\Facades\DB;
 
 class RewardController extends Controller
 {
+    public const LEGACY_SLUGS = [
+        'gintong-agila',
+        'tarsier-bohol',
+        'bituing-marikit',
+        'sampaguita-crown',
+        'jeepney-toy',
+    ];
+
     /**
      * Get all collectibles with unlock status for the student (Nakolekta).
      */
@@ -18,7 +26,7 @@ class RewardController extends Controller
     {
         $user = $request->user();
 
-        $collectibles = Collectible::all();
+        $collectibles = Collectible::whereNotIn('slug', self::LEGACY_SLUGS)->get();
         $unlockedMap = StudentCollectible::where('user_id', $user->id)
             ->get()
             ->keyBy('collectible_id');
@@ -62,7 +70,9 @@ class RewardController extends Controller
             $alreadyUnlockedIds = StudentCollectible::where('user_id', $user->id)->pluck('collectible_id');
 
             // Find a locked collectible
-            $availableToUnlock = Collectible::whereNotIn('id', $alreadyUnlockedIds)->get();
+            $availableToUnlock = Collectible::whereNotIn('id', $alreadyUnlockedIds)
+                ->whereNotIn('slug', self::LEGACY_SLUGS)
+                ->get();
 
             if ($availableToUnlock->isEmpty()) {
                 return response()->json([

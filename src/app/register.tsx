@@ -16,6 +16,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { InputField } from '../components/InputField';
 import { GradientBackground } from '../components/GradientBackground';
 import { useAuth } from '../hooks/use-auth';
+import { playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 export default function RegisterScreen() {
@@ -49,6 +50,7 @@ export default function RegisterScreen() {
 
     try {
       await studentRegister(trimmedName, section.trim() || undefined);
+      playWelcomeSound().catch(() => {});
       router.replace('/loading');
     } catch (err: any) {
       setErrorMessage(err.message || 'Nabigong magrehistro. Pakisubukang muli.');

@@ -255,11 +255,14 @@ export default function NakolektaScreen() {
 
   usePresence('Sa Nakolekta (Koleksyon)', 'nakolekta');
 
+  const LEGACY_SLUGS = ['gintong-agila', 'tarsier-bohol', 'bituing-marikit', 'sampaguita-crown', 'jeepney-toy'];
+
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setError(null);
     try {
       const res = await collectibleService.getAll();
-      setCollectibles(res.collectibles ?? []);
+      const items = (res.collectibles ?? []).filter((c: Collectible) => !LEGACY_SLUGS.includes(c.slug));
+      setCollectibles(items);
       setStarsBalance(res.stars_balance ?? 0);
     } catch (err: any) {
       if (!silent) setError(err?.message ?? 'Nabigong kunin ang mga kolektible.');

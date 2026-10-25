@@ -31,7 +31,7 @@ import { GradientBackground } from '../components/GradientBackground';
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient } from '../services/api';
 import { bgm } from '../services/audio/bgm-service';
-import { playFeedbackSound } from '../services/audio/sound-service';
+import { playFeedbackSound, playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 export default function LoginScreen() {
@@ -94,10 +94,10 @@ export default function LoginScreen() {
 
         await studentLogin(nameToUse);
 
-        // Tasteful celebration: success haptics & cheerful audio feedback
+        // Tasteful celebration: success haptics & cheerful audio welcome
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         if (!bgm.getMuted()) {
-          playFeedbackSound('magaling').catch(() => {});
+          playWelcomeSound().catch(() => {});
         }
 
         // Navigate to dedicated animated loading screen before opening student dashboard

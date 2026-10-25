@@ -15,6 +15,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateUserStars: (newBalance: number) => void;
+  updateProfile: (payload: { name?: string; avatar?: string; section?: string }) => Promise<User>;
+  updateUserAvatar: (avatar: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,7 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const res = await authService.getMe();
           setUser(res.user);
         }
-      } catch (err) {
+      } catch {
         // Token expired or network failure
         await ApiClient.setToken(null);
         setUser(null);
@@ -118,6 +120,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser((prev) => (prev ? { ...prev, stars_balance: newBalance } : null));
   };
 
+  const updateProfile = async (payload: { name?: string; avatar?: string; section?: string }): Promise<User> => {
+    const res = await authService.updateProfile(payload);
+    setUser(res.user);
+    return res.user;
+  };
+
+  const updateUserAvatar = (avatar: string) => {
+    setUser((prev) => (prev ? { ...prev, avatar } : null));
+  };
+
   // Memoize the context value so consumers only re-render when user or isLoading
   // actually change — prevents the infinite setState/update-depth loops
   const value = useMemo<AuthContextType>(
@@ -134,8 +146,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       refreshProfile,
       updateUserStars,
+      updateProfile,
+      updateUserAvatar,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, isLoading]
   );
 

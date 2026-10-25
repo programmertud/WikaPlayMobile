@@ -23,7 +23,7 @@ import * as Haptics from '@/utils/haptics';
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient, authService, studentService } from '../services/api';
 import { bgm } from '../services/audio/bgm-service';
-import { playFeedbackSound } from '../services/audio/sound-service';
+import { playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Radius, Shadows, Typography } from '../theme';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
@@ -167,52 +167,7 @@ export default function LoadingScreen() {
   // Keep track of navigation execution to avoid duplicates
   const hasNavigatedRef = useRef(false);
 
-  useEffect(() => {
-    // Logo entrance animation
-    logoOpacity.value = withTiming(1, { duration: 400 });
-    logoScale.value = withSpring(1, { damping: 12, stiffness: 220 });
-
-    // Play subtle cheerful welcome sound if unmuted
-    if (!bgm.getMuted()) {
-      playFeedbackSound('magaling').catch(() => {});
-    }
-
-    // Execute real session initialization and data loading
-    initializeStudentSession();
-
-    // Clean up on unmount
-    return () => {
-      hasNavigatedRef.current = true;
-    };
-  }, []);
-
-  // Cycle through contextual phrases smoothly while loading
-  useEffect(() => {
-    if (initFailed) return;
-
-    const interval = setInterval(() => {
-      setPhraseIndex((prev) => {
-        const next = (prev + 1) % LOADING_PHRASES.length;
-        // Smoothly advance progress bar with phrase change
-        progressAnim.value = withTiming(LOADING_PHRASES[next].progress, {
-          duration: 450,
-          easing: Easing.out(Easing.cubic),
-        });
-
-        // Text fade transition
-        textOpacity.value = withSequence(
-          withTiming(0, { duration: 150 }),
-          withTiming(1, { duration: 250 })
-        );
-
-        return next;
-      });
-    }, 900);
-
-    return () => clearInterval(interval);
-  }, [initFailed, progressAnim, textOpacity]);
-
-  const initializeStudentSession = async () => {
+  const initializeStudentSession = useCallback(async () => {
     setInitFailed(false);
     setErrorMessage(null);
     hasNavigatedRef.current = false;
@@ -284,11 +239,57 @@ export default function LoadingScreen() {
     } finally {
       setIsRetrying(false);
     }
-  };
+  }, [logout, refreshProfile]);
+
+  useEffect(() => {
+    // Logo entrance animation
+    logoOpacity.value = withTiming(1, { duration: 400 });
+    logoScale.value = withSpring(1, { damping: 12, stiffness: 220 });
+
+    // Play warm Filipino welcome greeting audio if unmuted
+    if (!bgm.getMuted()) {
+      playWelcomeSound().catch(() => {});
+    }
+
+    // Execute real session initialization and data loading
+    initializeStudentSession();
+
+    // Clean up on unmount
+    return () => {
+      hasNavigatedRef.current = true;
+    };
+  }, [initializeStudentSession]);
+
+  // Cycle through contextual phrases smoothly while loading
+  useEffect(() => {
+    if (initFailed) return;
+
+    const interval = setInterval(() => {
+      setPhraseIndex((prev) => {
+        const next = (prev + 1) % LOADING_PHRASES.length;
+        // Smoothly advance progress bar with phrase change
+        progressAnim.value = withTiming(LOADING_PHRASES[next].progress, {
+          duration: 450,
+          easing: Easing.out(Easing.cubic),
+        });
+
+        // Text fade transition
+        textOpacity.value = withSequence(
+          withTiming(0, { duration: 150 }),
+          withTiming(1, { duration: 250 })
+        );
+
+        return next;
+      });
+    }, 900);
+
+    return () => clearInterval(interval);
+  }, [initFailed]);
 
   const handleRetry = () => {
     setIsRetrying(true);
     setPhraseIndex(0);
+    // eslint-disable-next-line react-hooks/immutability
     progressAnim.value = 0.2;
     initializeStudentSession();
   };

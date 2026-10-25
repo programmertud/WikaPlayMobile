@@ -127,7 +127,7 @@ class AuthController extends Controller
             'avatar' => 'https://api.dicebear.com/7.x/bottts/png?seed=' . urlencode($validated['name']) . '&backgroundColor=38bdf8',
             'section' => $validated['section'] ?? ($role === 'student' ? 'Kinder - Masayahin' : 'Kaguruan'),
             'status' => 'active',
-            'stars_balance' => $role === 'student' ? 10 : 0,
+            'stars_balance' => 0,
         ]);
 
         return $this->issueSession($user, 'Matagumpay na nakarehistro!', 201);
@@ -168,7 +168,7 @@ class AuthController extends Controller
             'avatar' => 'https://api.dicebear.com/7.x/bottts/png?seed=' . urlencode($rawName) . '&backgroundColor=38bdf8',
             'section' => $validated['section'] ?? 'Kinder - Masayahin',
             'status' => 'active',
-            'stars_balance' => 10,
+            'stars_balance' => 0,
         ]);
 
         return $this->issueSession($student, 'Maligayang pagdating sa WikaPlay, ' . $student->name . '!', 201);
@@ -256,10 +256,149 @@ class AuthController extends Controller
                 'current_activity' => 'Naka-logout',
                 'last_active_at' => now(),
             ]);
-        }
-
         return response()->json([
             'message' => 'Matagumpay na naka-logout.',
         ]);
     }
+
+    /**
+     * Update user profile (Name, Avatar, Section).
+     * Works for both Teachers and Students.
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name' => 'nullable|string|min:2|max:100',
+            'avatar' => 'nullable|string|max:65535',
+            'section' => 'nullable|string|max:100',
+        ], [
+            'name.min' => 'Masyadong maikli ang pangalan.',
+            'name.max' => 'Masyadong mahaba ang pangalan.',
+        ]);
+
+        if ($request->filled('name')) {
+            $rawName = trim(preg_replace('/\s+/', ' ', $validated['name']));
+
+            if ($user->role === 'student') {
+                $normalized = User::normalizeName($rawName);
+                $duplicate = User::where('role', 'student')
+                    ->where('id', '!=', $user->id)
+                    ->where('normalized_name', $normalized)
+                    ->first();
+
+                if ($duplicate) {
+                    return response()->json([
+                        'message' => 'Mayroon nang mag-aaral na may katulad na pangalan. Pakilagay ang buong pangalan kasama ang apelyido.',
+                    ], 422);
+                }
+                $user->normalized_name = $normalized;
+            }
+
+            $user->name = $rawName;
+        }
+
+        if ($request->has('avatar') && !empty($request->input('avatar'))) {
+            $user->avatar = $request->input('avatar');
+        }
+
+        if ($request->filled('section')) {
+            $user->section = $request->input('section');
+        }
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'Matagumpay na na-update ang profile!',
+            'user' => [
+                'id' => $user->id,
+                'student_id_code' => $user->student_id_code,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'avatar' => $user->avatar,
+                'section' => $user->section,
+                'status' => $user->status,
+                'stars_balance' => $user->stars_balance,
+            ],
+        ]);
+    }
+
+    /**
+     * Upload Avatar image from mobile (Camera or Gallery)
+     * Supports both multipart file upload and base64 payload.
+     */
+    public function uploadAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Multipart file upload
+        if ($request->hasFile('avatar') || $request->hasFile('image')) {
+            $file = $request->file('avatar') ?? $request->file('image');
+            $request->validate([
+                'avatar' => 'nullable|file|max:15360',
+                'image' => 'nullable|file|max:15360',
+            ]);
+
+            $path = $file->store('avatars', 'public');
+            $storageUrl = config('app.url') . '/storage/' . $path;
+
+            $user->avatar = $storageUrl;
+            $user->save();
+
+            return response()->json([
+                'message' => 'Matagumpay na na-upload ang iyong profile picture!',
+                'avatar' => $storageUrl,
+                'user' => [
+                    'id' => $user->id,
+                    'student_id_code' => $user->student_id_code,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'avatar' => $user->avatar,
+                    'section' => $user->section,
+                    'status' => $user->status,
+                    'stars_balance' => $user->stars_balance,
+                ],
+            ]);
+        }
+
+        // 2. Base64 payload
+        if ($request->filled('image_base64')) {
+            $base64Data = $request->input('image_base64');
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+                $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
+                $type = strtolower($type[1]);
+                $decoded = base64_decode($base64Data);
+                $filename = 'avatars/' . uniqid() . '.' . $type;
+                \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $decoded);
+                $storageUrl = config('app.url') . '/storage/' . $filename;
+
+                $user->avatar = $storageUrl;
+                $user->save();
+
+                return response()->json([
+                    'message' => 'Matagumpay na na-upload ang iyong profile picture!',
+                    'avatar' => $storageUrl,
+                    'user' => [
+                        'id' => $user->id,
+                        'student_id_code' => $user->student_id_code,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'role' => $user->role,
+                        'avatar' => $user->avatar,
+                        'section' => $user->section,
+                        'status' => $user->status,
+                        'stars_balance' => $user->stars_balance,
+                    ],
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Walang natanggap na larawan.',
+        ], 400);
+    }
 }
+

@@ -499,7 +499,16 @@ class TeacherController extends Controller
         $category = $request->query('category');
         $search = $request->query('search');
 
-        $query = Collectible::withCount('students as claims_count');
+        $legacySlugs = [
+            'gintong-agila',
+            'tarsier-bohol',
+            'bituing-marikit',
+            'sampaguita-crown',
+            'jeepney-toy',
+        ];
+
+        $query = Collectible::whereNotIn('slug', $legacySlugs)
+            ->withCount('students as claims_count');
 
         if ($category) {
             $query->where('category', $category);

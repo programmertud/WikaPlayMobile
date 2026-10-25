@@ -1,27 +1,33 @@
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from '@/utils/haptics';
 
 import { LoadingView } from '../../../components/LoadingView';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { PressableScale } from '../../../components/PressableScale';
+import { UserAvatar } from '../../../components/UserAvatar';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import {
   studentService,
+  authService,
   StudentProfileStatsResponse,
   CategoryProgressItem,
 } from '../../../services/api';
@@ -29,18 +35,22 @@ import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 
 // Child-friendly preset avatars
 const PRESET_AVATARS = [
-  { id: 'bear', emoji: '🐻', label: 'Oso', seed: 'bear' },
-  { id: 'fox', emoji: '🦊', label: 'Sora', seed: 'fox' },
-  { id: 'lion', emoji: '🦁', label: 'Leon', seed: 'lion' },
-  { id: 'cat', emoji: '🐱', label: 'Pusa', seed: 'cat' },
-  { id: 'panda', emoji: '🐼', label: 'Panda', seed: 'panda' },
-  { id: 'rabbit', emoji: '🐰', label: 'Koneho', seed: 'rabbit' },
-  { id: 'owl', emoji: '🦉', label: 'Kuwago', seed: 'owl' },
-  { id: 'monkey', emoji: '🐵', label: 'Unggoy', seed: 'monkey' },
+  { id: 'bear', emoji: '🐻', label: 'Oso' },
+  { id: 'fox', emoji: '🦊', label: 'Sora' },
+  { id: 'lion', emoji: '🦁', label: 'Leon' },
+  { id: 'tiger', emoji: '🐯', label: 'Tigre' },
+  { id: 'cat', emoji: '🐱', label: 'Pusa' },
+  { id: 'dog', emoji: '🐶', label: 'Aso' },
+  { id: 'panda', emoji: '🐼', label: 'Panda' },
+  { id: 'rabbit', emoji: '🐰', label: 'Koneho' },
+  { id: 'frog', emoji: '🐸', label: 'Palaka' },
+  { id: 'owl', emoji: '🦉', label: 'Kuwago' },
+  { id: 'monkey', emoji: '🐵', label: 'Unggoy' },
+  { id: 'unicorn', emoji: '🦄', label: 'Unicorn' },
 ];
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [profileData, setProfileData] = useState<StudentProfileStatsResponse | null>(null);
@@ -50,6 +60,12 @@ export default function ProfileScreen() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [selectedAvatarEmoji, setSelectedAvatarEmoji] = useState('🐻');
+
+  // Name Editing State
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   usePresence('Tinitingnan ang Aking Profile', 'profile');
 
@@ -92,14 +108,121 @@ export default function ProfileScreen() {
     setShowAvatarPicker(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     try {
-      await studentService.updateAvatar(preset.emoji);
+      await updateProfile({ avatar: preset.emoji });
       loadProfile();
-    } catch {}
+    } catch (e: any) {
+      Alert.alert('Paumanhin', e.message || 'Hindi nai-save ang avatar.');
+    }
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Pahintulot', 'Kailangan ng pahintulot upang mabuksan ang gallery ng litrato.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await processAndSaveAvatar(result.assets[0]);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Nabigong pumili ng larawan.');
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Pahintulot', 'Kailangan ng pahintulot upang magamit ang camera.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await processAndSaveAvatar(result.assets[0]);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Nabigong kumuha ng litrato.');
+    }
+  };
+
+  const processAndSaveAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
+    setUploadingPhoto(true);
+    try {
+      let avatarUrl = '';
+      if (asset.base64) {
+        const mime = asset.mimeType || 'image/jpeg';
+        const base64Data = `data:${mime};base64,${asset.base64}`;
+        try {
+          const res = await authService.uploadAvatarBase64(base64Data);
+          avatarUrl = res.avatar;
+        } catch {
+          avatarUrl = base64Data;
+        }
+      } else {
+        const formData = new FormData();
+        const filename = asset.uri.split('/').pop() || 'avatar.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+        formData.append('avatar', {
+          uri: asset.uri,
+          name: filename,
+          type,
+        } as any);
+        const res = await authService.uploadAvatar(formData);
+        avatarUrl = res.avatar;
+      }
+
+      await updateProfile({ avatar: avatarUrl });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setShowAvatarPicker(false);
+      loadProfile();
+      Alert.alert('Tagumpay! 🎉', 'Matagumpay na napalitan ang iyong profile picture!');
+    } catch (e: any) {
+      Alert.alert('Paumanhin', e.message || 'Hindi nai-upload ang larawan.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed.length < 2) {
+      Alert.alert('Paalala', 'Pakilagay ang iyong buong pangalan (hindi bababa sa 2 titik).');
+      return;
+    }
+    setSavingName(true);
+    try {
+      await updateProfile({ name: trimmed });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setShowNameModal(false);
+      loadProfile();
+      Alert.alert('Tagumpay! ✨', 'Matagumpay na napalitan ang iyong pangalan!');
+    } catch (err: any) {
+      Alert.alert('Paumanhin', err.message || 'Hindi nai-save ang bagong pangalan.');
+    } finally {
+      setSavingName(false);
+    }
   };
 
   if (loading) return <LoadingView message="Kinukuha ang profile at datos..." />;
 
-  const displayName = profileData?.user?.name || user?.name || 'Estudyante';
+  const displayName = user?.name || profileData?.user?.name || 'Estudyante';
+  const currentAvatar = user?.avatar || profileData?.user?.avatar || selectedAvatarEmoji;
   const studentCode = profileData?.user?.student_id_code || user?.student_id_code || 'WP-KINDER';
   const level = profileData?.user?.level ?? 1;
   const currentBadge = profileData?.user?.current_badge || 'Bagong Mag-aaral';
@@ -127,26 +250,42 @@ export default function ProfileScreen() {
             activeOpacity={0.8}
             onPress={() => setShowAvatarPicker(true)}
           >
-            <LinearGradient
-              colors={Gradients.sky}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatarRing}
-            >
-              <View style={styles.avatarInner}>
-                <Text style={styles.avatarEmoji}>
-                  {profileData?.user?.avatar && profileData.user.avatar.length <= 4
-                    ? profileData.user.avatar
-                    : selectedAvatarEmoji}
-                </Text>
-              </View>
-            </LinearGradient>
+            <UserAvatar
+              avatar={currentAvatar}
+              name={displayName}
+              size={86}
+              showRing
+              ringColors={Gradients.sky}
+            />
             <View style={styles.avatarEditPill}>
-              <Ionicons name="camera" size={12} color={Colors.white} />
+              <Ionicons name="camera" size={13} color={Colors.white} />
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.displayName}>{displayName}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.displayName}>{displayName}</Text>
+            <TouchableOpacity
+              style={styles.editNameIconBtn}
+              onPress={() => {
+                setNameInput(displayName);
+                setShowNameModal(true);
+              }}
+              accessibilityLabel="I-edit ang pangalan"
+            >
+              <Ionicons name="pencil" size={15} color={Colors.skyBlueDark} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.editNamePill}
+            onPress={() => {
+              setNameInput(displayName);
+              setShowNameModal(true);
+            }}
+          >
+            <Ionicons name="create-outline" size={13} color={Colors.skyBlueDark} />
+            <Text style={styles.editNamePillText}>Palitan ang Pangalan</Text>
+          </TouchableOpacity>
 
           <View style={styles.badgeRow}>
             <View style={styles.roleBadge}>
@@ -355,32 +494,131 @@ export default function ProfileScreen() {
         visible={showAvatarPicker}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowAvatarPicker(false)}
+        onRequestClose={() => {
+          if (!uploadingPhoto) setShowAvatarPicker(false);
+        }}
       >
         <View style={styles.modalBackdrop}>
           <View style={[styles.pickerCard, Shadows.card]}>
-            <Text style={styles.pickerTitle}>Pumili ng Iyong Hayop Avatar 🐾</Text>
-            <Text style={styles.pickerSub}>Piliin ang paborito mong kalaro sa WikaPlay:</Text>
+            <Text style={styles.pickerTitle}>I-update ang Profile Picture 📸</Text>
+            <Text style={styles.pickerSub}>Pumili ng litrato o magandang hayop avatar:</Text>
 
-            <View style={styles.pickerGrid}>
-              {PRESET_AVATARS.map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={styles.pickerItem}
-                  onPress={() => handleSelectAvatar(p)}
-                >
-                  <Text style={styles.pickerEmoji}>{p.emoji}</Text>
-                  <Text style={styles.pickerLabel}>{p.label}</Text>
-                </TouchableOpacity>
-              ))}
+            {/* Photo Upload Actions */}
+            <View style={styles.photoActionsRow}>
+              <TouchableOpacity
+                style={[styles.photoActionBtn, { backgroundColor: '#E0F2FE' }]}
+                disabled={uploadingPhoto}
+                onPress={handlePickImage}
+              >
+                <Ionicons name="images" size={24} color={Colors.skyBlueDark} />
+                <Text style={[styles.photoActionText, { color: Colors.skyBlueDark }]}>
+                  Mula sa Gallery
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.photoActionBtn, { backgroundColor: '#EDE9FE' }]}
+                disabled={uploadingPhoto}
+                onPress={handleTakePhoto}
+              >
+                <Ionicons name="camera" size={24} color={Colors.vibrantPurple} />
+                <Text style={[styles.photoActionText, { color: Colors.vibrantPurple }]}>
+                  Kumuha ng Litrato
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {uploadingPhoto && (
+              <View style={styles.uploadingBox}>
+                <ActivityIndicator size="small" color={Colors.skyBlueDark} />
+                <Text style={styles.uploadingText}>Ina-upload ang iyong larawan...</Text>
+              </View>
+            )}
+
+            <View style={styles.pickerDividerRow}>
+              <View style={styles.pickerDividerLine} />
+              <Text style={styles.pickerDividerText}>O pumili ng hayop</Text>
+              <View style={styles.pickerDividerLine} />
+            </View>
+
+            <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.pickerGrid}>
+                {PRESET_AVATARS.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.pickerItem}
+                    disabled={uploadingPhoto}
+                    onPress={() => handleSelectAvatar(p)}
+                  >
+                    <Text style={styles.pickerEmoji}>{p.emoji}</Text>
+                    <Text style={styles.pickerLabel}>{p.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.pickerCloseBtn}
+              disabled={uploadingPhoto}
               onPress={() => setShowAvatarPicker(false)}
             >
               <Text style={styles.pickerCloseText}>Isara</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Name Modal */}
+      <Modal
+        visible={showNameModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!savingName) setShowNameModal(false);
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.editNameCard, Shadows.card]}>
+            <View style={styles.editNameIconCircle}>
+              <Ionicons name="person" size={32} color={Colors.skyBlueDark} />
+            </View>
+            <Text style={styles.editNameTitle}>Palitan ang Pangalan</Text>
+            <Text style={styles.editNameSub}>
+              Isulat ang iyong buong pangalan para makita ng iyong guro at mga kaklase:
+            </Text>
+
+            <TextInput
+              style={styles.nameTextInput}
+              value={nameInput}
+              onChangeText={setNameInput}
+              placeholder="Halimbawa: Juan Dela Cruz"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="words"
+              editable={!savingName}
+              maxLength={60}
+            />
+
+            <View style={styles.editNameBtnRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                disabled={savingName}
+                onPress={() => setShowNameModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Kanselahin</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveNameBtn, savingName && { opacity: 0.7 }]}
+                disabled={savingName}
+                onPress={handleSaveName}
+              >
+                {savingName ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.saveNameBtnText}>I-save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -533,6 +771,36 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
     color: Colors.text,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editNameIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editNamePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  editNamePillText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.skyBlueDark,
+    fontWeight: Typography.weights.bold,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -958,6 +1226,127 @@ const styles = StyleSheet.create({
   },
   confirmLogoutText: {
     fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+  },
+
+  /* Photo Actions */
+  photoActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginBottom: 12,
+  },
+  photoActionBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  photoActionText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    textAlign: 'center',
+  },
+  uploadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    backgroundColor: '#F0F9FF',
+    borderRadius: Radius.md,
+    width: '100%',
+    marginBottom: 10,
+  },
+  uploadingText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.skyBlueDark,
+    fontWeight: Typography.weights.medium,
+  },
+  pickerDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 10,
+    gap: 8,
+  },
+  pickerDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  pickerDividerText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    fontWeight: Typography.weights.medium,
+  },
+
+  /* Edit Name Modal */
+  editNameCard: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    padding: 24,
+    alignItems: 'center',
+  },
+  editNameIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  editNameTitle: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  editNameSub: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  nameTextInput: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: Radius.lg,
+    paddingHorizontal: 16,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    color: Colors.text,
+    marginBottom: 20,
+  },
+  editNameBtnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  saveNameBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.skyBlueDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveNameBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
     color: Colors.white,
   },

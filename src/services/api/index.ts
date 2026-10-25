@@ -75,6 +75,20 @@ export const authService = {
       await ApiClient.setToken(null);
     }
   },
+
+  updateProfile: async (payload: { name?: string; avatar?: string; section?: string }) => {
+    return ApiClient.put<{ message: string; user: User }>('auth/profile', payload);
+  },
+
+  uploadAvatar: async (formData: FormData) => {
+    return ApiClient.uploadFile<{ message: string; avatar: string; user: User }>('auth/upload-avatar', formData);
+  },
+
+  uploadAvatarBase64: async (base64: string) => {
+    return ApiClient.post<{ message: string; avatar: string; user: User }>('auth/upload-avatar', {
+      image_base64: base64,
+    });
+  },
 };
 
 export const categoryService = {

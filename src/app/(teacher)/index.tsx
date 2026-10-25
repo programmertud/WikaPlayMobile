@@ -370,7 +370,7 @@ export default function TeacherDashboardScreen() {
           <View style={[styles.infoBanner, Shadows.subtle]}>
             <Ionicons name="information-circle" size={20} color={Colors.teacherPurple} />
               <Text style={styles.infoBannerText}>
-              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Bituin:</Text> Walang 480-star cap ang kabuuang bituin ng mga mag-aaral. Ang 480 ay milestone lamang para sa badge na "Ultimate Learner". Patuloy na makakaipon ng bituin ang bata nang walang limitasyon.
+              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Bituin:</Text> Walang 480-star cap ang kabuuang bituin ng mga mag-aaral. Ang 480 ay milestone lamang para sa badge na &ldquo;Ultimate Learner&rdquo;. Patuloy na makakaipon ng bituin ang bata nang walang limitasyon.
             </Text>
           </View>
 
