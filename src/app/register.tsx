@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { PrimaryButton } from '../components/PrimaryButton';
 import { InputField } from '../components/InputField';
-import { GradientBackground } from '../components/GradientBackground';
+import { AnimatedBackground } from '../components/AnimatedBackground';
 import { useAuth } from '../hooks/use-auth';
 import { playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
@@ -88,7 +88,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <GradientBackground variant={role === 'teacher' ? 'teacher' : 'sky'}>
+    <AnimatedBackground overlayOpacity={0.25}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
@@ -270,7 +270,7 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </GradientBackground>
+    </AnimatedBackground>
   );
 }
 

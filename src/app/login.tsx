@@ -27,7 +27,7 @@ import * as Haptics from '@/utils/haptics';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { InputField } from '../components/InputField';
 import { PressableScale } from '../components/PressableScale';
-import { GradientBackground } from '../components/GradientBackground';
+import { AnimatedBackground } from '../components/AnimatedBackground';
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient } from '../services/api';
 import { bgm } from '../services/audio/bgm-service';
@@ -42,10 +42,6 @@ export default function LoginScreen() {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Server IP config modal
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-  const [customApiUrl, setCustomApiUrl] = useState(ApiClient.getBaseUrl());
 
   // Gentle float animation for the logo
   const floatY = useSharedValue(0);
@@ -130,14 +126,8 @@ export default function LoginScreen() {
     }
   };
 
-  const saveCustomApiUrl = async () => {
-    await ApiClient.setBaseUrl(customApiUrl);
-    setIsConfigModalOpen(false);
-    Alert.alert('Tagumpay', `Naitakda ang API URL sa: ${ApiClient.getBaseUrl()}`);
-  };
-
   return (
-    <GradientBackground variant={role === 'teacher' ? 'teacher' : 'sky'}>
+    <AnimatedBackground overlayOpacity={0.25}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}
@@ -290,58 +280,9 @@ export default function LoginScreen() {
               </Link>
             </View>
           </View>
-
-          {/* Server IP Config Footer Button */}
-          <PressableScale
-            onPress={() => setIsConfigModalOpen(true)}
-            style={styles.serverConfigBtn}
-          >
-            <Ionicons name="settings-outline" size={14} color={Colors.textLight} />
-            <Text style={styles.serverConfigText}>
-              Server URL: {ApiClient.getBaseUrl()}
-            </Text>
-          </PressableScale>
         </ScrollView>
-
-        {/* Server URL Config Modal */}
-        <Modal visible={isConfigModalOpen} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, Shadows.card]}>
-              <Text style={styles.modalTitle}>Ayusin ang Backend Server URL</Text>
-              <Text style={styles.modalSubtitle}>
-                Kung gumagamit ng pisikal na Android phone, ilagay ang IP ng computer (hal. http://192.168.1.5:8000/api).
-              </Text>
-
-              <TextInput
-                style={styles.modalInput}
-                value={customApiUrl}
-                onChangeText={setCustomApiUrl}
-                placeholder="http://192.168.1.x:8000/api"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-
-              <View style={styles.modalActions}>
-                <PrimaryButton
-                  title="Kanselahin"
-                  variant="secondary"
-                  size="md"
-                  onPress={() => setIsConfigModalOpen(false)}
-                  style={{ flex: 1 }}
-                />
-                <PrimaryButton
-                  title="I-save"
-                  variant="primary"
-                  size="md"
-                  onPress={saveCustomApiUrl}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </View>
-          </View>
-        </Modal>
       </KeyboardAvoidingView>
-    </GradientBackground>
+    </AnimatedBackground>
   );
 }
 
@@ -479,63 +420,5 @@ const styles = StyleSheet.create({
   registerLink: {
     fontSize: Typography.sizes.xs,
     fontWeight: Typography.weights.heavy,
-  },
-  serverConfigBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-  },
-  serverConfigText: {
-    fontSize: 11,
-    color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xxl,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  modalTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.family.display,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-    marginBottom: 6,
-  },
-  modalSubtitle: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textLight,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  modalInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: Typography.sizes.sm,
-    color: Colors.text,
-    marginBottom: 20,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
   },
 });
