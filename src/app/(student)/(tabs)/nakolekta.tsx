@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
+import { USE_NATIVE_DRIVER } from '@/utils/platform';
 
 import { EmptyState } from '../../../components/EmptyState';
 import { ErrorView } from '../../../components/ErrorView';
@@ -86,8 +87,8 @@ function ShimmerCard() {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 700, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
     );
     loop.start();

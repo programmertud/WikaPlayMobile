@@ -68,6 +68,26 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Top Bar with Back to Login Button */}
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/login');
+                }
+              }}
+              style={[styles.backBtn, Shadows.subtle]}
+              accessibilityRole="button"
+              accessibilityLabel="Bumalik sa Login"
+            >
+              <Ionicons name="arrow-back" size={20} color={Colors.skyBlueDark} />
+              <Text style={styles.backBtnText}>Bumalik sa Login</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Header */}
           <View style={styles.header}>
             <View style={[styles.logoBadge, Shadows.card]}>
@@ -145,9 +165,32 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 54,
+    paddingTop: 44,
     paddingBottom: 40,
     alignItems: 'center',
+  },
+  topBar: {
+    width: '100%',
+    maxWidth: 420,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  backBtnText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: Colors.skyBlueDark,
   },
   header: {
     alignItems: 'center',

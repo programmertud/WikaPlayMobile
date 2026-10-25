@@ -26,6 +26,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
+import { USE_NATIVE_DRIVER } from '@/utils/platform';
 
 import { CelebrationOverlay } from '../../../../components/CelebrationOverlay';
 import { ItemVisual } from '../../../../components/ItemVisual';
@@ -178,11 +179,11 @@ export default function MadaliQuizScreen() {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 350,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
         tension: 60,
         friction: 9,
       }),
@@ -232,11 +233,11 @@ export default function MadaliQuizScreen() {
         } else {
           // Shake animation for wrong answer
           Animated.sequence([
-            Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 6, duration: 60, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -6, duration: 60, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: USE_NATIVE_DRIVER }),
+            Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: USE_NATIVE_DRIVER }),
+            Animated.timing(shakeAnim, { toValue: 6, duration: 60, useNativeDriver: USE_NATIVE_DRIVER }),
+            Animated.timing(shakeAnim, { toValue: -6, duration: 60, useNativeDriver: USE_NATIVE_DRIVER }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: USE_NATIVE_DRIVER }),
           ]).start();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         }

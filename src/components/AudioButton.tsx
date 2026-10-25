@@ -11,7 +11,7 @@ import { Colors, Shadows } from '../theme';
 import { PressableScale } from './PressableScale';
 
 interface AudioButtonProps {
-  audioUrl?: string | null;
+  audioUrl?: string | number | null;
   label?: string;
   size?: number;
   style?: ViewStyle;
@@ -36,7 +36,8 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
     setIsPlaying(true);
     onPlayStart?.();
 
-    await playSound(audioUrl || 'tama.mp3', () => {
+    // Pass the source directly — playSound handles both strings and bundled assets (numbers)
+    await playSound(audioUrl ?? 'tama.mp3', () => {
       setIsPlaying(false);
       onPlayEnd?.();
     });

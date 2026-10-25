@@ -1,6 +1,9 @@
 # Ignore Laravel backend from Expo mobile build archive
 wikaplay-api/
 
+# Backup audio files (renamed to resolve Android duplicate resource names)
+**/*_bak.m4a
+
 # Dependencies
 node_modules/
 

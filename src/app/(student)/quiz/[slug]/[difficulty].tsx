@@ -74,9 +74,93 @@ export default function QuizGameplayScreen() {
       setCategoryColor(res.category.color || Colors.skyBlue);
       let fetchedQuestions = res.questions || [];
       const targetCount = (difficulty === 'katamtaman' || difficulty === 'mahirap') ? 20 : 10;
+
+      // Enrich API-fetched questions and choices with local VocabularyItem and flashcard mappings
+      const cat = getCategoryBySlug(slug);
+      const localItems = cat?.items || [];
+      let flashcardsList: any[] = [];
+      try {
+        const fcRes = await categoryService.getFlashcards(slug);
+        flashcardsList = fcRes?.flashcards || [];
+      } catch {}
+
+      if (localItems.length > 0 && fetchedQuestions.length > 0) {
+        fetchedQuestions = fetchedQuestions.map((q) => {
+          // Resolve targetItem
+          let target = localItems.find(
+            (it) => it.id === q.correct_answer ||
+              it.filipino.toLowerCase().trim() === (q.target_item_name || '').toLowerCase().trim()
+          );
+
+          if (!target && q.flashcard_id) {
+            const matchedFc = flashcardsList.find((f) => String(f.id) === String(q.flashcard_id));
+            if (matchedFc) {
+              const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+              target = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
+            }
+          }
+
+          if (!target && q.correct_answer) {
+            const matchedFc = flashcardsList.find((f) => String(f.id) === String(q.correct_answer));
+            if (matchedFc) {
+              const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+              target = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
+            }
+          }
+
+          if (!target && q.question_text) {
+            const qMatch = q.question_text.match(/Nasaan ang ([^?]+)\?/i);
+            if (qMatch && qMatch[1]) {
+              const word = qMatch[1].trim().toLowerCase();
+              target = localItems.find((it) => it.filipino.toLowerCase().trim() === word);
+            }
+          }
+
+          const enrichedChoices = q.choices.map((ch) => {
+            if (ch.vocabularyItem) return ch;
+
+            // 1. Try match by ch.id directly in localItems
+            let localMatch = localItems.find((it) => it.id === ch.id);
+
+            // 2. Try match by ch.id as flashcard ID
+            if (!localMatch) {
+              const matchedFc = flashcardsList.find((f) => String(f.id) === String(ch.id));
+              if (matchedFc) {
+                const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+                localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
+              }
+            }
+
+            // 3. Try match by ch.text
+            if (!localMatch && ch.text) {
+              localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === ch.text.toLowerCase().trim());
+            }
+
+            // 4. Try match by image_url filename if present
+            if (!localMatch && ch.image_url) {
+              const imgName = ch.image_url.split('/').pop()?.replace(/\.[^/.]+$/, '').toLowerCase().trim();
+              if (imgName) {
+                localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === imgName);
+              }
+            }
+
+            return localMatch ? { ...ch, vocabularyItem: localMatch } : ch;
+          });
+
+          // For Katamtaman, ensure audio plays by using target's bundled audio if available
+          const effectiveAudio = target?.audio ?? (q.audio_url || (target ? `${target.id}.mp3` : undefined));
+
+          return {
+            ...q,
+            targetItem: target ?? q.targetItem,
+            audio_url: effectiveAudio,
+            choices: enrichedChoices,
+          };
+        });
+      }
+
       if (fetchedQuestions.length < targetCount) {
-        const cat = getCategoryBySlug(slug);
-        const items = cat?.items || [];
+        const items = localItems;
         if (items.length > 0) {
           const needed = targetCount - fetchedQuestions.length;
           const additional: QuizQuestion[] = [];
@@ -101,7 +185,8 @@ export default function QuizGameplayScreen() {
               target_image_url: target.imageUri || '',
               target_item_name: target.filipino.toUpperCase(),
               targetItem: target,
-              audio_url: target.audioUri || `${target.id}.mp3`,
+              // Prefer bundled audio asset, then audioUri string, then id-based fallback
+              audio_url: target.audio ?? target.audioUri ?? `${target.id}.mp3`,
               choices: mappedChoices,
               correct_answer: correctAnswer,
               points: 1,
@@ -150,9 +235,9 @@ export default function QuizGameplayScreen() {
           fetchedQuestions = Array.from({ length: targetCount }, (_, i) => {
             const target = shuffled[i % shuffled.length];
             const choices = getRandomVocabularyChoices(cat.slug, target, 4).map((c) => {
-              // Also apply overrides to choices
-              const matchedFc = (cat?.items || []).find((item) => item.id === c.id);
-              return matchedFc ? { ...c, imageUri: matchedFc.imageUri ?? c.imageUri } : c;
+              // Apply teacher image overrides to choices while preserving bundled audio/image
+              const matchedFc = localVocab.find((item) => item.id === c.id);
+              return matchedFc ? { ...c, imageUri: matchedFc.imageUri ?? c.imageUri, audio: matchedFc.audio ?? c.audio } : c;
             });
             const mappedChoices: ChoiceItem[] = choices.map((c) => ({
               id: c.id,
@@ -171,7 +256,8 @@ export default function QuizGameplayScreen() {
               target_image_url: target.imageUri || '',
               target_item_name: target.filipino.toUpperCase(),
               targetItem: target,
-              audio_url: target.audioUri || `${target.id}.mp3`,
+              // Prefer bundled audio asset, then audioUri string, then id-based fallback
+              audio_url: target.audio ?? target.audioUri ?? `${target.id}.mp3`,
               choices: mappedChoices,
               correct_answer: correctAnswer,
               points: 1,
@@ -221,7 +307,7 @@ export default function QuizGameplayScreen() {
             target_image_url: target.imageUri || '',
             target_item_name: target.filipino.toUpperCase(),
             targetItem: target,
-            audio_url: target.audioUri || `${target.id}.mp3`,
+            audio_url: target.audio ?? target.audioUri ?? `${target.id}.mp3`,
             choices: mappedChoices,
             correct_answer: correctAnswer,
             points: 1,

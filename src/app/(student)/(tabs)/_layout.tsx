@@ -43,6 +43,18 @@ export default function StudentTabsLayout() {
           />
         ),
       }}
+      screenListeners={{
+        tabPress: () => {
+          if (Platform.OS === 'web' && typeof document !== 'undefined') {
+            (document.activeElement as HTMLElement)?.blur?.();
+          }
+        },
+        state: () => {
+          if (Platform.OS === 'web' && typeof document !== 'undefined') {
+            (document.activeElement as HTMLElement)?.blur?.();
+          }
+        },
+      }}
     >
       <Tabs.Screen
         name="index"

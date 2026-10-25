@@ -13,6 +13,8 @@ import {
   Baloo2_800ExtraBold,
 } from '@expo-google-fonts/baloo-2';
 
+import { Platform } from 'react-native';
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
@@ -28,6 +30,19 @@ export default function RootLayout() {
       bgm.init();
     }
   }, [fontsLoaded, fontError]);
+
+  // Silence web aria-hidden warning when switching screens or tabs
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleBlurFocus = () => {
+        if (document.activeElement && document.activeElement !== document.body) {
+          (document.activeElement as HTMLElement)?.blur?.();
+        }
+      };
+      window.addEventListener('popstate', handleBlurFocus);
+      return () => window.removeEventListener('popstate', handleBlurFocus);
+    }
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;

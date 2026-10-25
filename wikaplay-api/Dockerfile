@@ -16,17 +16,20 @@ RUN apt-get update && apt-get install -y \
 # Install PHP extensions for Laravel (MySQL, PostgreSQL, GD, Zip, BCMath, Opcache)
 RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd zip opcache
 
-# Enable Apache rewrite module
-RUN a2enmod rewrite
+# Enable Apache rewrite and headers modules
+RUN a2enmod rewrite headers
 
 # Configure Apache DocumentRoot to point to Laravel's /public directory
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# Configure Apache port handling for Render (Render sets the PORT environment variable)
-RUN echo "Listen 80" > /etc/apache2/ports.conf && \
-    echo "Listen \${PORT}" >> /etc/apache2/ports.conf
+# Crucial fix for Laravel routing: Enable AllowOverride All on the public document root
+RUN echo '<Directory /var/www/html/public>\n    Options -Indexes +FollowSymLinks\n    AllowOverride All\n    Require all granted\n</Directory>' > /etc/apache2/conf-available/laravel.conf \
+    && a2enconf laravel
+
+# Configure default port
+RUN echo "Listen 80" > /etc/apache2/ports.conf
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

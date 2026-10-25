@@ -1,10 +1,11 @@
 #!/bin/bash
 set -e
 
-# Configure Apache port based on Render's $PORT environment variable
+# Configure Apache port based on Render's $PORT environment variable (default: 80)
 PORT="${PORT:-80}"
-sed -i "s/<VirtualHost \*:80>/<VirtualHost \*:${PORT}>/g" /etc/apache2/sites-available/000-default.conf
 echo "Configuring Apache to listen on port ${PORT}..."
+echo "Listen ${PORT}" > /etc/apache2/ports.conf
+sed -i -E "s/<VirtualHost \*:[0-9]+>/<VirtualHost \*:${PORT}>/g" /etc/apache2/sites-available/*.conf
 
 # Fix storage permissions
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
@@ -12,7 +13,10 @@ chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Generate application key if not set
 if [ -z "$APP_KEY" ]; then
-    echo "Generating application key..."
+    if [ ! -f /var/www/html/.env ]; then
+        touch /var/www/html/.env
+    fi
+    echo "Warning: APP_KEY not provided in environment variables. Generating temporary key..."
     php artisan key:generate --force
 fi
 
@@ -24,10 +28,12 @@ if [ "$RUN_MIGRATIONS" != "false" ]; then
     echo "Running database migrations..."
     php artisan migrate --force || true
     
-    # Run seeder if curriculum flashcards are needed
+    # Run seeder if enabled
     if [ "$RUN_SEEDER" = "true" ]; then
         echo "Running WikaPlaySeeder..."
         php artisan db:seed --class=WikaPlaySeeder --force || true
+        echo "Running CollectiblesSeeder..."
+        php artisan db:seed --class=CollectiblesSeeder --force || true
     fi
 fi
 

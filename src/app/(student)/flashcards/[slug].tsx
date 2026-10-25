@@ -89,7 +89,10 @@ export default function FlashcardsViewerScreen() {
                 const validImage = match.image_url && !isUnsplash && !isBlobUrl
                   ? match.image_url
                   : undefined;
-                const validAudio = match.audio_url && !match.audio_url.startsWith('blob:')
+                // Only treat as valid audio override if it's an actual remote upload (http/storage)
+                const isRealRemoteAudio = typeof match.audio_url === 'string' &&
+                  (match.audio_url.startsWith('http://') || match.audio_url.startsWith('https://') || match.audio_url.includes('/storage/'));
+                const validAudio = typeof match.audio_url === 'string' && isRealRemoteAudio && !match.audio_url.startsWith('blob:')
                   ? match.audio_url
                   : undefined;
 
@@ -156,6 +159,15 @@ export default function FlashcardsViewerScreen() {
 
   usePresence(`Nagbabasa ng Flashcards sa ${category.name}`, 'flashcards_view');
 
+  // Auto-pronounce word when card is opened or changed
+  useEffect(() => {
+    if (!currentItem) return;
+    const timer = setTimeout(() => {
+      playVocabularyItem(currentItem).catch(() => {});
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [currentIndex, currentItem]);
+
   // Animation values for card slide/flip transition
   const cardOpacity = useSharedValue(1);
   const cardTranslateX = useSharedValue(0);
@@ -214,10 +226,10 @@ export default function FlashcardsViewerScreen() {
             {currentItem.english}
           </Text>
 
-          {/* Audio Play Button */}
-          {currentItem.audioUri ? (
+          {/* Audio Play Button — supports both URI strings and bundled require assets */}
+          {(currentItem.audioUri || currentItem.audio) ? (
             <View style={styles.audioContainer}>
-              <AudioButton audioUrl={currentItem.audioUri} size={54} />
+              <AudioButton audioUrl={currentItem.audioUri ?? currentItem.audio} size={54} />
             </View>
           ) : (
             <PressableScale

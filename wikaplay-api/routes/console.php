@@ -32,4 +32,26 @@ Artisan::command('wikaplay:check-collectibles', function () {
     }
 })->purpose('Check and cleanup collectibles count and categories');
 
+Artisan::command('wikaplay:reset-all-student-data', function () {
+    \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+
+    \App\Models\QuizAnswer::truncate();
+    \App\Models\QuizSession::truncate();
+    \App\Models\MinigameSession::truncate();
+    \App\Models\StarTransaction::truncate();
+    \App\Models\StudentCollectible::truncate();
+    \App\Models\StudentBadge::truncate();
+    \App\Models\StudentPresence::truncate();
+
+    // Delete all student users
+    $deletedStudents = \App\Models\User::where('role', 'student')->delete();
+
+    // Reset stars for any remaining users
+    \App\Models\User::query()->update(['stars_balance' => 0]);
+
+    \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
+
+    $this->info("Successfully reset all student data. Deleted {$deletedStudents} student accounts. All quiz sessions, minigame sessions, stars, and badges have been cleared to 0.");
+})->purpose('Reset all student data and accounts to zero');
+
 

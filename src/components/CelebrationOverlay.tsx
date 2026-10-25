@@ -100,6 +100,8 @@ interface CelebrationOverlayProps {
   stars?: number;
   onContinue?: () => void;
   continueText?: string;
+  onExit?: () => void;
+  exitText?: string;
 }
 
 export function CelebrationOverlay({
@@ -110,6 +112,8 @@ export function CelebrationOverlay({
   stars = 3,
   onContinue,
   continueText = 'Magpatuloy',
+  onExit,
+  exitText = 'Bumalik sa Mga Laro',
 }: CelebrationOverlayProps) {
   const cardScale = useSharedValue(0.6);
   const cardOpacity = useSharedValue(0);
@@ -178,6 +182,17 @@ export function CelebrationOverlay({
                 onPress={onContinue}
                 gradient={Gradients.grass}
                 icon="arrow-forward-circle"
+              />
+            </View>
+          ) : null}
+
+          {onExit ? (
+            <View style={[styles.btnContainer, { marginTop: 10 }]}>
+              <PrimaryButton
+                title={exitText}
+                onPress={onExit}
+                variant="outline"
+                icon="arrow-back"
               />
             </View>
           ) : null}

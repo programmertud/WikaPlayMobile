@@ -23,6 +23,21 @@ LEARNING_CATEGORIES.forEach((category) => {
       LOCAL_AUDIO_ASSETS[fil] = item.audio;
       LOCAL_AUDIO_ASSETS[`${fil}.mp3`] = item.audio;
 
+      // Map category-prefixed combinations used by backend seeder and APIs
+      // e.g. "mga-gulay_ampalaya", "gulay_ampalaya", "cat_gulay_ampalaya"
+      const catSlug = category.slug.toLowerCase().trim();
+      LOCAL_AUDIO_ASSETS[`${catSlug}_${fil}`] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${catSlug}_${fil}.mp3`] = item.audio;
+
+      const slugNoMga = catSlug.replace(/^mga[-_]/, '');
+      LOCAL_AUDIO_ASSETS[`${slugNoMga}_${fil}`] = item.audio;
+      LOCAL_AUDIO_ASSETS[`${slugNoMga}_${fil}.mp3`] = item.audio;
+
+      if (category.id) {
+        LOCAL_AUDIO_ASSETS[`${category.id}_${fil}`] = item.audio;
+        LOCAL_AUDIO_ASSETS[`${category.id}_${fil}.mp3`] = item.audio;
+      }
+
       // Handle hyphens and spaces
       const noHyphen = fil.replace(/-/g, ' ');
       LOCAL_AUDIO_ASSETS[noHyphen] = item.audio;
@@ -191,7 +206,7 @@ export function resolveAudioSource(source: string | any): any {
   // On Web, prefer direct web paths from public/audio if matching ID or key
   if (Platform.OS === 'web' && typeof source === 'string') {
     const rawTrim = source.trim();
-    const cleanKey = rawTrim.split('/').pop()?.replace(/\.mp3$/i, '').toLowerCase() || rawTrim;
+    const cleanKey = rawTrim.split('/').pop()?.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase() || rawTrim;
     if (ALL_MADALI_WEB_PATHS[rawTrim]) return ALL_MADALI_WEB_PATHS[rawTrim];
     if (ALL_MADALI_WEB_PATHS[cleanKey]) return ALL_MADALI_WEB_PATHS[cleanKey];
     if (VOICE_OVER_WEB_PATHS[cleanKey]) return VOICE_OVER_WEB_PATHS[cleanKey];
@@ -199,9 +214,9 @@ export function resolveAudioSource(source: string | any): any {
 
   if (typeof source !== 'string') return source;
 
-  // Extract base filename if it has path elements (e.g. "audio/hayop_aso.mp3" -> "hayop_aso.mp3")
+  // Extract base filename if it has path elements (e.g. "audio/mga-gulay_ampalaya.mp3" -> "mga-gulay_ampalaya.mp3")
   const filename = source.split('/').pop() || source;
-  const noExt = filename.replace(/\.mp3$/i, '').toLowerCase().trim();
+  const noExt = filename.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase().trim();
 
   if (LOCAL_AUDIO_ASSETS[filename]) {
     return LOCAL_AUDIO_ASSETS[filename];
@@ -209,19 +224,33 @@ export function resolveAudioSource(source: string | any): any {
   if (LOCAL_AUDIO_ASSETS[noExt]) {
     return LOCAL_AUDIO_ASSETS[noExt];
   }
-
-  // Strip category prefix if passed (e.g. "prutas_abukado" -> "abukado")
-  const stripped = noExt.replace(/^(hayop|prutas|gulay|kulay|hugis|bilang|katawan|pagbati)_/, '');
-  if (LOCAL_AUDIO_ASSETS[stripped]) {
-    return LOCAL_AUDIO_ASSETS[stripped];
+  if (LOCAL_AUDIO_ASSETS[`${noExt}.mp3`]) {
+    return LOCAL_AUDIO_ASSETS[`${noExt}.mp3`];
   }
-  if (LOCAL_AUDIO_ASSETS[`${stripped}.mp3`]) {
-    return LOCAL_AUDIO_ASSETS[`${stripped}.mp3`];
+
+  // Strip prefixes like "mga-gulay_", "gulay_", "mga-hayop_", etc.
+  const strippedPrefix = noExt.replace(/^(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/, '');
+  if (LOCAL_AUDIO_ASSETS[strippedPrefix]) {
+    return LOCAL_AUDIO_ASSETS[strippedPrefix];
+  }
+  if (LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`]) {
+    return LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`];
+  }
+
+  // If there's an underscore, take the suffix (e.g. "mga-gulay_ampalaya" -> "ampalaya")
+  if (noExt.includes('_')) {
+    const afterUnderscore = noExt.split('_').pop() || '';
+    if (LOCAL_AUDIO_ASSETS[afterUnderscore]) {
+      return LOCAL_AUDIO_ASSETS[afterUnderscore];
+    }
+    if (LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`]) {
+      return LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`];
+    }
   }
 
   // Check direct lookup in Madali dictionary
-  if (ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt]) {
-    return ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt];
+  if (ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix]) {
+    return ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix];
   }
 
   // If it's a valid remote or relative web URL, return it directly

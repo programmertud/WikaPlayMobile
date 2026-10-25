@@ -10,6 +10,9 @@ use App\Http\Controllers\Api\StudentProfileController;
 use App\Http\Controllers\Api\TeacherController;
 use Illuminate\Support\Facades\Route;
 
+// Health check (used to verify tunnel / server is alive)
+Route::get('/health', fn () => response()->json(['status' => 'ok', 'service' => 'WikaPlay API']));
+
 // Public Authentication
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);

@@ -5,7 +5,7 @@
  * Student pops the balloon matching the target instruction.
  * Smooth floating animation, large tap targets, 20 rounds.
  */
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -18,6 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
+import { USE_NATIVE_DRIVER } from '@/utils/platform';
 
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
@@ -94,12 +95,12 @@ function FloatingBalloon({
         Animated.timing(floatAnim, {
           toValue: -14,
           duration: 1600 + offset,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(floatAnim, {
           toValue: 0,
           duration: 1600 + offset,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ])
     );
@@ -281,12 +282,22 @@ export default function PopBalloon() {
     setRoundData(buildAnimatedRound(0, newShuffled));
   };
 
+  const handleExitGame = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(student)/(tabs)/minigames');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScreenHeader
         title={`Pop Balloon — ${category.name}`}
         bgColor={category.color}
         logoImage={require('../../../../assets/images/minigames/cover-pop-balloon.jpg')}
+        showBack={true}
+        onBack={handleExitGame}
       />
 
       {/* Sky gradient background */}
@@ -298,7 +309,7 @@ export default function PopBalloon() {
       />
 
       <View style={styles.content}>
-        {/* Progress */}
+        {/* Progress with In-game Back Button */}
         <View style={styles.progressRow}>
           <ProgressIndicator
             current={currentIdx + 1}
@@ -306,9 +317,21 @@ export default function PopBalloon() {
             gradient={Gradients.grass}
             height={10}
           />
-          <Text style={styles.progressLabel}>
-            Tanong {currentIdx + 1} sa {TOTAL_ROUNDS} • ✓ {correct}
-          </Text>
+          <View style={styles.topControlRow}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleExitGame}
+              style={[styles.exitBtn, Shadows.subtle]}
+              accessibilityRole="button"
+              accessibilityLabel="Bumalik sa Mga Laro"
+            >
+              <Ionicons name="arrow-back" size={16} color={Colors.text} />
+              <Text style={styles.exitBtnText}>Bumalik</Text>
+            </TouchableOpacity>
+            <Text style={styles.progressLabel}>
+              Tanong {currentIdx + 1} sa {TOTAL_ROUNDS} • ✓ {correct}
+            </Text>
+          </View>
         </View>
 
         {/* Instruction card */}
@@ -350,6 +373,8 @@ export default function PopBalloon() {
         stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
+        onExit={handleExitGame}
+        exitText="Bumalik sa Mga Laro"
       />
 
       <MysteryBoxModal
@@ -382,12 +407,32 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 4,
   },
+  topControlRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  exitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  exitBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
   progressLabel: {
     fontSize: Typography.sizes.xs,
     color: Colors.textLight,
     fontWeight: Typography.weights.semibold,
-    marginTop: 4,
-    textAlign: 'right',
   },
   promptCard: {
     backgroundColor: Colors.white,

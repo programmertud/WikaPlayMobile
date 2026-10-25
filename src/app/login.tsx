@@ -130,19 +130,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleQuickStudentLogin = () => {
-    setStudentName('Juan Dela Cruz');
-    handleRoleChange('student');
-    handleLogin('Juan Dela Cruz');
-  };
-
-  const handleQuickTeacherLogin = () => {
-    setEmail('teacher@wikaplay.ph');
-    setPassword('password123');
-    handleRoleChange('teacher');
-    handleLogin(undefined, 'teacher@wikaplay.ph', 'password123');
-  };
-
   const saveCustomApiUrl = async () => {
     await ApiClient.setBaseUrl(customApiUrl);
     setIsConfigModalOpen(false);
@@ -290,32 +277,6 @@ export default function LoginScreen() {
               onPress={() => handleLogin()}
               style={styles.loginBtn}
             />
-
-            {/* Quick Demo Login Helpers */}
-            <View style={styles.demoSection}>
-              <Text style={styles.demoLabel}>Mabilisang Pagsubok (One-Tap):</Text>
-              <View style={styles.demoButtonsRow}>
-                <PressableScale
-                  style={[styles.demoBtn, { borderColor: Colors.skyBlue }]}
-                  onPress={handleQuickStudentLogin}
-                >
-                  <Ionicons name="person" size={14} color={Colors.skyBlueDark} />
-                  <Text style={[styles.demoBtnText, { color: Colors.skyBlueDark }]}>
-                    Mag-aaral (Juan)
-                  </Text>
-                </PressableScale>
-
-                <PressableScale
-                  style={[styles.demoBtn, { borderColor: Colors.teacherPurple }]}
-                  onPress={handleQuickTeacherLogin}
-                >
-                  <Ionicons name="school" size={14} color={Colors.teacherPurple} />
-                  <Text style={[styles.demoBtnText, { color: Colors.teacherPurple }]}>
-                    Guro (Maria)
-                  </Text>
-                </PressableScale>
-              </View>
-            </View>
 
             {/* Registration link */}
             <View style={styles.footerRow}>
@@ -505,39 +466,6 @@ const styles = StyleSheet.create({
   loginBtn: {
     marginTop: 8,
     marginBottom: 16,
-  },
-  demoSection: {
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 16,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  demoLabel: {
-    fontSize: 11,
-    color: Colors.textLight,
-    fontWeight: Typography.weights.semibold,
-    marginBottom: 10,
-  },
-  demoButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  demoBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: Radius.pill,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-  },
-  demoBtnText: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
   },
   footerRow: {
     flexDirection: 'row',

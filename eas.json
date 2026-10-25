@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://wikaplay-api.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://character-violin-industrial-fewer.trycloudflare.com/api"
       }
     },
     "production": {
