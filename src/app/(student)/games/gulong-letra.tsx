@@ -27,6 +27,7 @@ import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
 import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { CorrectAnswerConfetti } from '../../../components/CorrectAnswerConfetti';
 import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { useAuth } from '../../../hooks/use-auth';
@@ -179,7 +180,7 @@ export default function GuLongLetra() {
   const [showMysteryBox, setShowMysteryBox] = useState(false);
   const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
 
-  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+  const { triggerFeedback, resetStreaks, confettiTrigger } = useAnswerFeedback();
 
   const TOTAL_ROUNDS = 20;
   const currentItem: VocabularyItem = items[currentIdx % items.length];
@@ -304,6 +305,7 @@ export default function GuLongLetra() {
 
   return (
     <AnimatedBackground>
+      <CorrectAnswerConfetti trigger={confettiTrigger} />
       <ScreenHeader
         title={`Gulong ng Letra — ${category.name}`}
         bgColor={category.color}
@@ -406,6 +408,8 @@ export default function GuLongLetra() {
         subtitle={`Nabuong muli ang ${correct} sa ${TOTAL_ROUNDS} mga salita!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
         stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
+        score={correct}
+        showFireworks={correct >= 15 && correct <= 20}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
       />

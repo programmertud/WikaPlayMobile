@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Gradients, Typography, Radius, Shadows } from '@/theme';
 import { PrimaryButton } from './PrimaryButton';
 
+import { FireworksOverlay } from './FireworksOverlay';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface ConfettiPieceProps {
@@ -98,6 +100,8 @@ interface CelebrationOverlayProps {
   subtitle?: string;
   scoreText?: string;
   stars?: number;
+  score?: number;
+  showFireworks?: boolean;
   onContinue?: () => void;
   continueText?: string;
   onExit?: () => void;
@@ -110,6 +114,8 @@ export function CelebrationOverlay({
   subtitle = 'Napakagaling ng iyong ipinakita!',
   scoreText,
   stars = 3,
+  score,
+  showFireworks,
   onContinue,
   continueText = 'Magpatuloy',
   onExit,
@@ -117,6 +123,8 @@ export function CelebrationOverlay({
 }: CelebrationOverlayProps) {
   const cardScale = useSharedValue(0.6);
   const cardOpacity = useSharedValue(0);
+
+  const shouldShowFireworks = showFireworks ?? (score !== undefined && score >= 15 && score <= 20);
 
   useEffect(() => {
     if (visible) {
@@ -141,6 +149,11 @@ export function CelebrationOverlay({
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <View style={styles.backdrop} />
+
+      {/* Fireworks Display when score is 15-20 or showFireworks is true */}
+      {shouldShowFireworks ? (
+        <FireworksOverlay visible={visible} score={score} />
+      ) : null}
 
       {/* Confetti Particles */}
       {Array.from({ length: 40 }).map((_, i) => (

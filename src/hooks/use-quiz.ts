@@ -22,6 +22,8 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     correctStreak,
     wrongStreak,
     isEvaluating,
+    confettiTrigger,
+    triggerConfetti,
     triggerFeedback,
   } = useAnswerFeedback();
 
@@ -187,6 +189,8 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     isAnswerLocked,
     correctStreak,
     wrongStreak,
+    confettiTrigger,
+    triggerConfetti,
     score,
     correctCount,
     wrongCount,

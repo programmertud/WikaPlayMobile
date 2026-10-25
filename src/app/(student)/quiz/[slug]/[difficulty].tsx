@@ -14,6 +14,8 @@ import * as Haptics from '@/utils/haptics';
 
 import { AnimatedBackground } from '../../../../components/AnimatedBackground';
 import { CelebrationOverlay } from '../../../../components/CelebrationOverlay';
+import { CorrectAnswerConfetti } from '../../../../components/CorrectAnswerConfetti';
+import { FireworksOverlay } from '../../../../components/FireworksOverlay';
 import { ErrorView } from '../../../../components/ErrorView';
 import { ItemVisual } from '../../../../components/ItemVisual';
 import { JumbleWordQuiz } from '../../../../components/JumbleWordQuiz';
@@ -380,6 +382,7 @@ export default function QuizGameplayScreen() {
     isPlayingAudio,
     selectedAnswer,
     isAnswerLocked,
+    confettiTrigger,
     handleSelectAnswer,
     replayAudio,
   } = useQuiz({
@@ -497,12 +500,19 @@ export default function QuizGameplayScreen() {
           </View>
         </View>
 
+        {/* Fireworks celebration for high score (15-20) */}
+        {resultSession.correct_count >= 15 && resultSession.correct_count <= 20 ? (
+          <FireworksOverlay visible={true} score={resultSession.correct_count} />
+        ) : null}
+
         {/* Confetti celebration for passing */}
         <CelebrationOverlay
           visible={isPassed}
           title="Binabati Kita!"
           subtitle={`Nakakuha ka ng ${resultSession.correct_count} tamang sagot!`}
           stars={Math.min(3, Math.max(1, resultSession.stars_awarded))}
+          score={resultSession.correct_count}
+          showFireworks={resultSession.correct_count >= 15 && resultSession.correct_count <= 20}
           onContinue={() => {
             if (router.canGoBack()) {
               router.back();
@@ -518,6 +528,7 @@ export default function QuizGameplayScreen() {
 
   return (
     <AnimatedBackground>
+      <CorrectAnswerConfetti trigger={confettiTrigger} />
       <ScreenHeader
         title={`${categoryName} (${diffLabel})`}
         subtitle={`Tanong ${currentIndex + 1} ng ${totalQuestions}`}

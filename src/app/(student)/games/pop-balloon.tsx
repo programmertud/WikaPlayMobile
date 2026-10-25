@@ -25,6 +25,7 @@ import { ItemVisual } from '../../../components/ItemVisual';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { CorrectAnswerConfetti } from '../../../components/CorrectAnswerConfetti';
 import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { useAuth } from '../../../hooks/use-auth';
@@ -189,7 +190,7 @@ export default function PopBalloon() {
   const [locked, setLocked] = useState(false);
   const [showMysteryBox, setShowMysteryBox] = useState(false);
   const [awardedCollectible, setAwardedCollectible] = useState<Collectible | null>(null);
-  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+  const { triggerFeedback, resetStreaks, confettiTrigger } = useAnswerFeedback();
 
   const TOTAL_ROUNDS = 20;
 
@@ -306,6 +307,7 @@ export default function PopBalloon() {
 
   return (
     <AnimatedBackground>
+      <CorrectAnswerConfetti trigger={confettiTrigger} />
       <ScreenHeader
         title={`Pop Balloon — ${category.name}`}
         bgColor={category.color}
@@ -377,6 +379,8 @@ export default function PopBalloon() {
         subtitle={`Napasabog mo ang ${correct} sa ${TOTAL_ROUNDS} tamang lobo sa ${category.name}!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
         stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
+        score={correct}
+        showFireworks={correct >= 15 && correct <= 20}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
         onExit={handleExitGame}

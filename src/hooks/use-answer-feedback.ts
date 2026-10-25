@@ -42,6 +42,7 @@ export function useAnswerFeedback(options?: UseAnswerFeedbackOptions) {
   const [wrongStreak, setWrongStreak] = useState<number>(0);
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [lastFeedbackSound, setLastFeedbackSound] = useState<FeedbackAudioKey | null>(null);
+  const [confettiTrigger, setConfettiTrigger] = useState<number>(0);
 
   // Synchronous refs to prevent race conditions and double evaluation
   const isEvaluatingRef = useRef<boolean>(false);
@@ -102,6 +103,7 @@ export function useAnswerFeedback(options?: UseAnswerFeedbackOptions) {
       if (isCorrect) {
         nextCorrect = correctStreakRef.current + 1;
         nextWrong = 0;
+        setConfettiTrigger((prev) => prev + 1);
       } else {
         nextWrong = wrongStreakRef.current + 1;
         nextCorrect = 0;
@@ -171,6 +173,7 @@ export function useAnswerFeedback(options?: UseAnswerFeedbackOptions) {
     setWrongStreak(0);
     setIsEvaluating(false);
     setLastFeedbackSound(null);
+    setConfettiTrigger(0);
 
     if (fallbackTimerRef.current) {
       clearTimeout(fallbackTimerRef.current);
@@ -183,11 +186,17 @@ export function useAnswerFeedback(options?: UseAnswerFeedbackOptions) {
     stopCurrentSound();
   }, []);
 
+  const triggerConfetti = useCallback(() => {
+    setConfettiTrigger((prev) => prev + 1);
+  }, []);
+
   return {
     correctStreak,
     wrongStreak,
     isEvaluating,
     lastFeedbackSound,
+    confettiTrigger,
+    triggerConfetti,
     triggerFeedback,
     resetStreaks,
   };

@@ -30,6 +30,8 @@ import { USE_NATIVE_DRIVER } from '@/utils/platform';
 
 import { AnimatedBackground } from '../../../../components/AnimatedBackground';
 import { CelebrationOverlay } from '../../../../components/CelebrationOverlay';
+import { CorrectAnswerConfetti } from '../../../../components/CorrectAnswerConfetti';
+import { FireworksOverlay } from '../../../../components/FireworksOverlay';
 import { ItemVisual } from '../../../../components/ItemVisual';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../../components/ProgressIndicator';
@@ -152,7 +154,7 @@ export default function MadaliQuizScreen() {
   const lockRef = useRef(false);   // prevent double-tap race
 
   // Centralized voice-over streak manager
-  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+  const { triggerFeedback, resetStreaks, confettiTrigger } = useAnswerFeedback();
 
   const currentQuestion = questions[currentIndex] ?? null;
   const totalQuestions = questions.length;
@@ -481,11 +483,17 @@ export default function MadaliQuizScreen() {
           </View>
         </ScrollView>
 
+        {correctCount >= 15 && correctCount <= 20 && !showCelebration ? (
+          <FireworksOverlay visible={true} score={correctCount} />
+        ) : null}
+
         <CelebrationOverlay
           visible={showCelebration}
           title="Binabati Kita!"
           subtitle={`Nakakuha ka ng ${correctCount} tamang sagot!`}
           stars={1}
+          score={correctCount}
+          showFireworks={correctCount >= 15 && correctCount <= 20}
           onContinue={() => setShowCelebration(false)}
           continueText="Tingnan ang Resulta"
         />
@@ -507,6 +515,7 @@ export default function MadaliQuizScreen() {
   // ------------------------------------------------------------------
   return (
     <AnimatedBackground>
+      <CorrectAnswerConfetti trigger={confettiTrigger} />
       <ScreenHeader
         title={`${category.name} — Madali`}
         subtitle={`Tanong ${currentIndex + 1} sa ${totalQuestions}`}

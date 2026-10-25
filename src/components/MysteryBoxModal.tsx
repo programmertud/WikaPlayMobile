@@ -27,6 +27,7 @@ import { bgm, playSound, speakWordWeb, stopCurrentSound } from '@/services/audio
 import { getCollectibleAudioSource, getCollectibleDescription, getCollectibleImageSource } from '@/utils/collectible-assets';
 import { PrimaryButton } from './PrimaryButton';
 import { PressableScale } from './PressableScale';
+import { FireworksOverlay } from './FireworksOverlay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -157,6 +158,9 @@ export function MysteryBoxModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
+        {score >= 15 && score <= 20 ? (
+          <FireworksOverlay visible={visible} score={score} />
+        ) : null}
         <View style={styles.container}>
           {!isRevealed ? (
             /* STATE 1: Mystery Box Ready to Open */

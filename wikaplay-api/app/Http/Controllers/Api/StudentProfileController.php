@@ -22,6 +22,14 @@ class StudentProfileController extends Controller
      */
     public const BADGES_CATALOG = [
         [
+            'key' => 'first_star',
+            'title' => 'First Star',
+            'filipino_title' => 'Unang Bituin',
+            'threshold' => 10,
+            'icon' => '🌱',
+            'description' => 'Makaipon ng 10 bituin - Simula ng isang bagong paglalakbay!',
+        ],
+        [
             'key' => 'star_collector',
             'title' => 'Star Collector',
             'filipino_title' => 'Kolektor ng Bituin',
@@ -38,12 +46,28 @@ class StudentProfileController extends Controller
             'description' => 'Makaipon ng 100 na kabuuang bituin.',
         ],
         [
+            'key' => 'bookworm',
+            'title' => 'Bookworm',
+            'filipino_title' => 'Mahilig Magbasa',
+            'threshold' => 150,
+            'icon' => '📚',
+            'description' => 'Patunay na masipag kang matuto — 150 bituin na!',
+        ],
+        [
             'key' => 'quiz_master',
             'title' => 'Quiz Master',
             'filipino_title' => 'Dalubhasa sa Pagsusulit',
             'threshold' => 200,
             'icon' => '🎯',
             'description' => 'Makaipon ng 200 na kabuuang bituin.',
+        ],
+        [
+            'key' => 'rising_star',
+            'title' => 'Rising Star',
+            'filipino_title' => 'Papasikat na Bituin',
+            'threshold' => 250,
+            'icon' => '🚀',
+            'description' => 'Ika-250 na bituin — patuloy kang lumalayo sa iba!',
         ],
         [
             'key' => 'learning_champion',
@@ -54,6 +78,14 @@ class StudentProfileController extends Controller
             'description' => 'Makaipon ng 300 na kabuuang bituin.',
         ],
         [
+            'key' => 'word_wizard',
+            'title' => 'Word Wizard',
+            'filipino_title' => 'Salamangkero ng Salita',
+            'threshold' => 360,
+            'icon' => '🪄',
+            'description' => '360 bituin — talagang mahusay ka sa mga salita!',
+        ],
+        [
             'key' => 'ultimate_learner',
             'title' => 'Ultimate Learner',
             'filipino_title' => 'Tunay na Henyo ng WikaPlay',
@@ -61,7 +93,56 @@ class StudentProfileController extends Controller
             'icon' => '👑',
             'description' => 'Makaipon ng 480 na kabuuang bituin (Lahat ng kategorya).',
         ],
+        [
+            'key' => 'knowledge_seeker',
+            'title' => 'Knowledge Seeker',
+            'filipino_title' => 'Tagahangad ng Kaalaman',
+            'threshold' => 600,
+            'icon' => '🔭',
+            'description' => '600 bituin — walang tigil sa paghahanap ng kaalaman!',
+        ],
+        [
+            'key' => 'legend',
+            'title' => 'Legend',
+            'filipino_title' => 'Alamat ng WikaPlay',
+            'threshold' => 750,
+            'icon' => '🦅',
+            'description' => '750 bituin — tunay kang alamat sa WikaPlay!',
+        ],
+        [
+            'key' => 'grandmaster',
+            'title' => 'Grand Master',
+            'filipino_title' => 'Pinakadakilang Henyo',
+            'threshold' => 900,
+            'icon' => '💎',
+            'description' => '900 bituin — isa sa pinaka-marunong sa lahat!',
+        ],
+        [
+            'key' => 'wika_hero',
+            'title' => 'Wika Hero',
+            'filipino_title' => 'Bayani ng Wika',
+            'threshold' => 1100,
+            'icon' => '🦸',
+            'description' => '1100 bituin — Bayani ka ng wikang Filipino!',
+        ],
+        [
+            'key' => 'galaxy_brain',
+            'title' => 'Galaxy Brain',
+            'filipino_title' => 'Galaktikong Isipan',
+            'threshold' => 1350,
+            'icon' => '🌌',
+            'description' => '1350 bituin — katalinuhan mo ay para sa buong galaksya!',
+        ],
+        [
+            'key' => 'immortal_scholar',
+            'title' => 'Immortal Scholar',
+            'filipino_title' => 'Walang Hanggang Iskolar',
+            'threshold' => 1650,
+            'icon' => '🏛️',
+            'description' => '1650 bituin — ang iyong pangalan ay titik sa kasaysayan ng WikaPlay!',
+        ],
     ];
+
 
     /**
      * Comprehensive Student Profile & Learning Statistics.

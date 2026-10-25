@@ -15,3 +15,5 @@ export * from './AudioButton';
 export * from './ItemVisual';
 export * from './MysteryBoxModal';
 export * from './UserAvatar';
+export * from './CorrectAnswerConfetti';
+export * from './FireworksOverlay';

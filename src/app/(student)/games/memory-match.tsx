@@ -28,6 +28,7 @@ import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
 import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { CorrectAnswerConfetti } from '../../../components/CorrectAnswerConfetti';
 import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
@@ -120,7 +121,7 @@ export default function MemoryMatch() {
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+  const { triggerFeedback, resetStreaks, confettiTrigger } = useAnswerFeedback();
   usePresence(`Memory Match L${level} (${category.name})`, 'minigame_memory_match');
 
   useEffect(() => {
@@ -309,6 +310,7 @@ export default function MemoryMatch() {
 
   return (
     <AnimatedBackground>
+      <CorrectAnswerConfetti trigger={confettiTrigger} />
       <ScreenHeader
         title={`Memory Match — ${category.name}`}
         bgColor={category.color}
@@ -421,6 +423,8 @@ export default function MemoryMatch() {
         subtitle={`Natapos mo ang ${levelsDone} sa ${TOTAL_LEVELS} na antas ng Memory Match!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
         stars={levelsDone >= 15 ? 3 : levelsDone >= 10 ? 2 : 1}
+        score={levelsDone}
+        showFireworks={levelsDone >= 15 && levelsDone <= 20}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
       />

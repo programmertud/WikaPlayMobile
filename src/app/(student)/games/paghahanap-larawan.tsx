@@ -20,6 +20,7 @@ import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
 import { CelebrationOverlay } from '../../../components/CelebrationOverlay';
+import { CorrectAnswerConfetti } from '../../../components/CorrectAnswerConfetti';
 import { MysteryBoxModal } from '../../../components/MysteryBoxModal';
 import { getCategoryBySlug, getCategoryVocabulary } from '../../../data/categories';
 import { useAuth } from '../../../hooks/use-auth';
@@ -79,7 +80,7 @@ export default function PaghahanapLarawan() {
   const totalRounds = 20;
 
   // Centralized voice-over streak manager
-  const { triggerFeedback, resetStreaks } = useAnswerFeedback();
+  const { triggerFeedback, resetStreaks, confettiTrigger } = useAnswerFeedback();
 
   const [roundData, setRoundData] = useState(() => buildRound(shuffleItems(rawItems), 0));
   const target = roundData.target;
@@ -177,6 +178,7 @@ export default function PaghahanapLarawan() {
 
   return (
     <AnimatedBackground>
+      <CorrectAnswerConfetti trigger={confettiTrigger} />
       <ScreenHeader
         title={`Paghahanap — ${category.name}`}
         bgColor={category.color}
@@ -255,6 +257,8 @@ export default function PaghahanapLarawan() {
         subtitle={`Nakuha mo ang ${correct} sa ${totalRounds} tamang larawan!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
         stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
+        score={correct}
+        showFireworks={correct >= 15 && correct <= 20}
         continueText="Maglaro Ulit"
         onContinue={handleRestart}
       />
