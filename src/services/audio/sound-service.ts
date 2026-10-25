@@ -299,9 +299,21 @@ export async function playSound(
   let isCancelled = false;
   let player: any = null;
   let fallbackTimer: any = null;
+  let hasRestoredBgm = false;
+
+  // Minimize BGM (@happy.mp3) sound so voice recording / sound effect is loud and clear
+  bgm.minimize();
+
+  const restoreBgmOnce = () => {
+    if (!hasRestoredBgm) {
+      hasRestoredBgm = true;
+      bgm.restore();
+    }
+  };
 
   const cleanup = () => {
     isCancelled = true;
+    restoreBgmOnce();
     if (fallbackTimer) clearTimeout(fallbackTimer);
     if (player) {
       try {
@@ -324,6 +336,7 @@ export async function playSound(
 
     // If source could not be resolved from local assets or valid URL
     if (!resolvedSource) {
+      restoreBgmOnce();
       setTimeout(() => {
         if (!isCancelled) onFinished?.();
       }, 300);
@@ -389,6 +402,7 @@ export async function playSound(
         const finish = () => {
           if (hasFinished) return;
           hasFinished = true;
+          restoreBgmOnce();
           if (fallbackTimer) clearTimeout(fallbackTimer);
           if (currentActivePlayer === audio) {
             currentActivePlayer = null;

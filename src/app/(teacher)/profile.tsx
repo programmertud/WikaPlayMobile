@@ -176,7 +176,7 @@ export default function TeacherProfileScreen() {
     finally {
       setLoggingOut(false);
       setShowLogoutModal(false);
-      router.replace('/login');
+      router.replace('/');
     }
   };
 

@@ -25,26 +25,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Restore authenticated session securely on app startup
+  // On app cold launch / fresh start, clear previous session so reopening the APK always returns to Welcome Screen
   useEffect(() => {
-    const restoreSession = async () => {
+    const initAuth = async () => {
       try {
         await ApiClient.init();
-        const token = ApiClient.getToken();
-        if (token) {
-          const res = await authService.getMe();
-          setUser(res.user);
-        }
-      } catch {
-        // Token expired or network failure
+        // Clear stored session on cold boot
         await ApiClient.setToken(null);
+        setUser(null);
+      } catch {
         setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
 
-    restoreSession();
+    initAuth();
   }, []);
 
   const login = async (email: string, password: string, role?: string): Promise<User> => {

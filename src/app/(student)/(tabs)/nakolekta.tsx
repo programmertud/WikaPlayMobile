@@ -286,10 +286,16 @@ export default function NakolektaScreen() {
     };
   }, [selectedCard]);
 
-  // Refresh when tab gains focus (after returning from minigame)
-  useFocusEffect(useCallback(() => {
-    if (!loading) loadData(true);
-  }, [loading, loadData]));
+  // Minimize @happy.mp3 sound when Nakolekta tab is opened, and refresh data
+  useFocusEffect(
+    useCallback(() => {
+      bgm.minimize();
+      if (!loading) loadData(true);
+      return () => {
+        bgm.restore();
+      };
+    }, [loading, loadData])
+  );
 
   const handleRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 

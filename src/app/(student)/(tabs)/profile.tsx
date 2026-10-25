@@ -99,7 +99,7 @@ export default function ProfileScreen() {
     } finally {
       setLoggingOut(false);
       setShowLogoutModal(false);
-      router.replace('/login');
+      router.replace('/');
     }
   };
 

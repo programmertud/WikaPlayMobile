@@ -112,14 +112,24 @@ class BackgroundMusicManager {
     }
   }
 
+  private duckCount = 0;
+
   public minimize() {
+    this.duckCount++;
     this.currentVolume = VOLUME_MINIMIZED;
     this.applyVolume();
   }
 
-  public restore() {
-    this.currentVolume = VOLUME_NORMAL;
-    this.applyVolume();
+  public restore(force = false) {
+    if (force) {
+      this.duckCount = 0;
+    } else {
+      this.duckCount = Math.max(0, this.duckCount - 1);
+    }
+    if (this.duckCount === 0) {
+      this.currentVolume = VOLUME_NORMAL;
+      this.applyVolume();
+    }
   }
 
   private muteListeners = new Set<(muted: boolean) => void>();

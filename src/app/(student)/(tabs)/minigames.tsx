@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -16,6 +16,7 @@ import * as Haptics from '@/utils/haptics';
 
 import { PressableScale } from '../../../components/PressableScale';
 import { usePresence } from '../../../hooks/use-presence';
+import { bgm } from '../../../services/audio/bgm-service';
 import { Colors, Shadows, Typography, Radius } from '../../../theme';
 import { LEARNING_CATEGORIES } from '../../../data/categories';
 
@@ -108,6 +109,16 @@ export default function MiniGamesScreen() {
   );
 
   usePresence('Pinipili ng Laro (Mini-Games)', 'minigame_select');
+
+  // Minimize @happy.mp3 sound when opening mini-games tab
+  useFocusEffect(
+    useCallback(() => {
+      bgm.minimize();
+      return () => {
+        bgm.restore();
+      };
+    }, [])
+  );
 
   const handleSelectGame = (game: GameInfo) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
