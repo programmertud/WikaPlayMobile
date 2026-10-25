@@ -34,6 +34,20 @@ class TeacherController extends Controller
     }
 
     /**
+     * Get IDs of students enrolled in this teacher's sections.
+     */
+    protected function getTeacherStudentIds(User $teacher)
+    {
+        $sectionIds = \App\Models\Section::where('teacher_id', $teacher->id)->pluck('id');
+        if ($sectionIds->isEmpty()) {
+            return collect();
+        }
+        return User::where('role', 'student')
+            ->whereIn('section_id', $sectionIds)
+            ->pluck('id');
+    }
+
+    /**
      * Real-time student monitoring list with accurate star metrics.
      */
     public function students(Request $request)
@@ -307,6 +321,8 @@ class TeacherController extends Controller
     public function dashboardStats(Request $request)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
+        $studentIds = $this->getTeacherStudentIds($teacher);
 
         // Update stale presences (> 3 minutes without heartbeat)
         StudentPresence::where('is_online', true)
@@ -316,40 +332,41 @@ class TeacherController extends Controller
                 'current_activity' => 'Hindi aktibo',
             ]);
 
-        $totalStudents = User::where('role', 'student')->count();
+        $totalStudents = $studentIds->count();
         $onlineStudents = StudentPresence::where('is_online', true)
             ->where('last_active_at', '>=', now()->subMinutes(3))
-            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->whereIn('user_id', $studentIds)
             ->count();
         $recentlyActiveStudents = StudentPresence::where('last_active_at', '>=', now()->subMinutes(15))
-            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->whereIn('user_id', $studentIds)
             ->count();
         $offlineStudents = max(0, $totalStudents - $onlineStudents);
 
-        $totalQuizAttempts = QuizSession::count();
-        $completedMinigames = MinigameSession::count();
+        $totalQuizAttempts = QuizSession::whereIn('user_id', $studentIds)->count();
+        $completedMinigames = MinigameSession::whereIn('user_id', $studentIds)->count();
         $totalSessions = $totalQuizAttempts + $completedMinigames;
-        $avgScore = round((float) (QuizSession::avg('score') ?? 0), 1);
+        $avgScore = round((float) (QuizSession::whereIn('user_id', $studentIds)->avg('score') ?? 0), 1);
 
-        // Accuracy calculation
-        $totalAnswers = QuizAnswer::count();
-        $correctAnswers = QuizAnswer::where('is_correct', true)->count();
+        // Accuracy calculation scoped to teacher's students only
+        $teacherSessionIds = QuizSession::whereIn('user_id', $studentIds)->pluck('id');
+        $totalAnswers = QuizAnswer::whereIn('quiz_session_id', $teacherSessionIds)->count();
+        $correctAnswers = QuizAnswer::whereIn('quiz_session_id', $teacherSessionIds)->where('is_correct', true)->count();
         $averageAccuracy = $totalAnswers > 0 ? round(($correctAnswers / $totalAnswers) * 100) : 0;
 
-        // Star accounting aggregates across all students
-        $totalStarsEarned = (int) StarTransaction::where('amount', '>', 0)->sum('amount');
-        $totalStarsAvailable = (int) User::where('role', 'student')->sum('stars_balance');
-        $totalStarsSpent = abs((int) StarTransaction::where('amount', '<', 0)->sum('amount'));
+        // Star accounting aggregates across teacher's students only
+        $totalStarsEarned = (int) StarTransaction::whereIn('user_id', $studentIds)->where('amount', '>', 0)->sum('amount');
+        $totalStarsAvailable = (int) User::whereIn('id', $studentIds)->sum('stars_balance');
+        $totalStarsSpent = abs((int) StarTransaction::whereIn('user_id', $studentIds)->where('amount', '<', 0)->sum('amount'));
 
-        // Badges and Collectibles
-        $totalBadgesEarned = StudentBadge::whereNotNull('claimed_at')->count();
-        $totalCollectiblesClaimed = StudentCollectible::count();
+        // Badges and Collectibles scoped to teacher's students only
+        $totalBadgesEarned = StudentBadge::whereIn('user_id', $studentIds)->whereNotNull('claimed_at')->count();
+        $totalCollectiblesClaimed = StudentCollectible::whereIn('user_id', $studentIds)->count();
 
         // Average Learning Progress (% out of 480 milestone)
         $avgLifetimeStars = $totalStudents > 0 ? ($totalStarsEarned / $totalStudents) : 0;
         $averageProgress = round(min(100, ($avgLifetimeStars / 480) * 100));
 
-        // 7-day Participation Chart Data
+        // 7-day Participation Chart Data for teacher's students only
         $participationOverTime = [];
         $starHistory = [];
         for ($i = 6; $i >= 0; $i--) {
@@ -357,8 +374,8 @@ class TeacherController extends Controller
             $dayStart = $day->copy()->startOfDay();
             $dayEnd = $day->copy()->endOfDay();
 
-            $qCount = QuizSession::whereBetween('created_at', [$dayStart, $dayEnd])->count();
-            $gCount = MinigameSession::whereBetween('created_at', [$dayStart, $dayEnd])->count();
+            $qCount = QuizSession::whereIn('user_id', $studentIds)->whereBetween('created_at', [$dayStart, $dayEnd])->count();
+            $gCount = MinigameSession::whereIn('user_id', $studentIds)->whereBetween('created_at', [$dayStart, $dayEnd])->count();
             $participationOverTime[] = [
                 'day' => $day->format('D'),
                 'date' => $day->format('M d'),
@@ -367,10 +384,12 @@ class TeacherController extends Controller
                 'total' => $qCount + $gCount,
             ];
 
-            $earnedDay = (int) StarTransaction::where('amount', '>', 0)
+            $earnedDay = (int) StarTransaction::whereIn('user_id', $studentIds)
+                ->where('amount', '>', 0)
                 ->whereBetween('created_at', [$dayStart, $dayEnd])
                 ->sum('amount');
-            $spentDay = abs((int) StarTransaction::where('amount', '<', 0)
+            $spentDay = abs((int) StarTransaction::whereIn('user_id', $studentIds)
+                ->where('amount', '<', 0)
                 ->whereBetween('created_at', [$dayStart, $dayEnd])
                 ->sum('amount'));
             $starHistory[] = [
@@ -381,49 +400,50 @@ class TeacherController extends Controller
             ];
         }
 
-        // Category Quiz Performance
-        $categoryPerformance = Category::withCount('quizSessions')
-            ->get()
-            ->map(function ($cat) {
-                $sessionIds = $cat->quizSessions()->pluck('id');
+        // Category Quiz Performance scoped to teacher's students only
+        $categoryPerformance = Category::all()
+            ->map(function ($cat) use ($teacherSessionIds) {
+                $sessionIds = $cat->quizSessions()->whereIn('id', $teacherSessionIds)->pluck('id');
                 $catTotal = QuizAnswer::whereIn('quiz_session_id', $sessionIds)->count();
                 $catCorrect = QuizAnswer::whereIn('quiz_session_id', $sessionIds)->where('is_correct', true)->count();
                 $catAccuracy = $catTotal > 0 ? round(($catCorrect / $catTotal) * 100) : 0;
-                $avgScore = round((float) ($cat->quizSessions()->avg('score') ?? 0), 1);
+                $avgScore = round((float) ($cat->quizSessions()->whereIn('id', $teacherSessionIds)->avg('score') ?? 0), 1);
                 return [
                     'id' => $cat->id,
                     'name' => $cat->name,
                     'color' => $cat->color ?: '#8B5CF6',
-                    'attempts' => (int) $cat->quiz_sessions_count,
+                    'attempts' => $sessionIds->count(),
                     'accuracy' => $catAccuracy,
                     'avg_score' => $avgScore,
                 ];
             });
 
-        // Activity Completion
+        // Activity Completion scoped to teacher's students only
         $activityCompletion = [
-            'quizzes_passed' => QuizSession::where('passed', true)->count(),
-            'quizzes_failed' => QuizSession::where('passed', false)->count(),
+            'quizzes_passed' => QuizSession::whereIn('user_id', $studentIds)->where('passed', true)->count(),
+            'quizzes_failed' => QuizSession::whereIn('user_id', $studentIds)->where('passed', false)->count(),
             'minigames_completed' => $completedMinigames,
-            'mystery_box_qualified' => MinigameSession::where('score', '>=', 15)->count(),
+            'mystery_box_qualified' => MinigameSession::whereIn('user_id', $studentIds)->where('score', '>=', 15)->count(),
         ];
 
-        // Recent live activities
+        // Recent live activities for teacher's students only
         $recentActivities = StudentPresence::where('is_online', true)
-            ->whereHas('user', fn($q) => $q->where('role', 'student'))
+            ->whereIn('user_id', $studentIds)
             ->with('user:id,name,student_id_code,avatar,section')
             ->orderByDesc('last_active_at')
             ->limit(8)
             ->get();
 
-        // Recent quiz sessions
-        $recentQuizResults = QuizSession::with(['user:id,name,student_id_code', 'category:id,name,color'])
+        // Recent quiz sessions for teacher's students only
+        $recentQuizResults = QuizSession::whereIn('user_id', $studentIds)
+            ->with(['user:id,name,student_id_code', 'category:id,name,color'])
             ->orderByDesc('created_at')
             ->limit(10)
             ->get();
 
-        // Recent mini-game sessions
-        $recentMinigameResults = MinigameSession::with('user:id,name,student_id_code')
+        // Recent mini-game sessions for teacher's students only
+        $recentMinigameResults = MinigameSession::whereIn('user_id', $studentIds)
+            ->with('user:id,name,student_id_code')
             ->orderByDesc('created_at')
             ->limit(10)
             ->get();
@@ -469,6 +489,8 @@ class TeacherController extends Controller
     public function getMinigamesOverview(Request $request)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
+        $studentIds = $this->getTeacherStudentIds($teacher);
 
         $gamesCatalog = [
             [
@@ -508,8 +530,8 @@ class TeacherController extends Controller
             ],
         ];
 
-        $stats = collect($gamesCatalog)->map(function ($game) {
-            $sessions = MinigameSession::where('game_type', $game['id']);
+        $stats = collect($gamesCatalog)->map(function ($game) use ($studentIds) {
+            $sessions = MinigameSession::where('game_type', $game['id'])->whereIn('user_id', $studentIds);
             $totalPlays = $sessions->count();
             $avgScore = round((float) ($sessions->avg('score') ?? 0), 1);
             $qualifiers = $sessions->where('score', '>=', 15)->count();
@@ -523,7 +545,8 @@ class TeacherController extends Controller
             ]);
         });
 
-        $recentSessions = MinigameSession::with('user:id,name,student_id_code,avatar')
+        $recentSessions = MinigameSession::whereIn('user_id', $studentIds)
+            ->with('user:id,name,student_id_code,avatar')
             ->orderByDesc('created_at')
             ->limit(20)
             ->get();
@@ -531,8 +554,8 @@ class TeacherController extends Controller
         return response()->json([
             'games' => $stats,
             'recent_sessions' => $recentSessions,
-            'total_completed_sessions' => MinigameSession::count(),
-            'total_qualifying_sessions' => MinigameSession::where('score', '>=', 15)->count(),
+            'total_completed_sessions' => MinigameSession::whereIn('user_id', $studentIds)->count(),
+            'total_qualifying_sessions' => MinigameSession::whereIn('user_id', $studentIds)->where('score', '>=', 15)->count(),
         ]);
     }
 
@@ -626,10 +649,12 @@ class TeacherController extends Controller
     public function getRewardAudit(Request $request)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
+        $studentIds = $this->getTeacherStudentIds($teacher);
 
-        $totalEarned = (int) StarTransaction::where('amount', '>', 0)->sum('amount');
-        $totalSpendable = (int) User::where('role', 'student')->sum('stars_balance');
-        $totalSpent = abs((int) StarTransaction::where('amount', '<', 0)->sum('amount'));
+        $totalEarned = (int) StarTransaction::whereIn('user_id', $studentIds)->where('amount', '>', 0)->sum('amount');
+        $totalSpendable = (int) User::whereIn('id', $studentIds)->sum('stars_balance');
+        $totalSpent = abs((int) StarTransaction::whereIn('user_id', $studentIds)->where('amount', '<', 0)->sum('amount'));
 
         // Badges milestone breakdown
         $milestones = [
@@ -640,14 +665,16 @@ class TeacherController extends Controller
             ['key' => 'ultimate_learner', 'title' => 'Ultimate Learner', 'threshold' => 480],
         ];
 
-        $badgeStats = collect($milestones)->map(function ($m) {
-            $claimedCount = StudentBadge::where('badge_key', $m['key'])
+        $badgeStats = collect($milestones)->map(function ($m) use ($studentIds) {
+            $claimedCount = StudentBadge::whereIn('user_id', $studentIds)
+                ->where('badge_key', $m['key'])
                 ->whereNotNull('claimed_at')
                 ->count();
             return array_merge($m, ['claimed_count' => $claimedCount]);
         });
 
-        $recentTransactions = StarTransaction::with('user:id,name,student_id_code')
+        $recentTransactions = StarTransaction::whereIn('user_id', $studentIds)
+            ->with('user:id,name,student_id_code')
             ->orderByDesc('created_at')
             ->limit(30)
             ->get();
@@ -1066,11 +1093,14 @@ class TeacherController extends Controller
     public function exportReportsCsv(Request $request)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
+        $studentIds = $this->getTeacherStudentIds($teacher);
 
         $type = $request->query('type', 'quizzes');
 
         if ($type === 'minigames') {
-            $sessions = MinigameSession::with('user:id,name,student_id_code,section')
+            $sessions = MinigameSession::whereIn('user_id', $studentIds)
+                ->with('user:id,name,student_id_code,section')
                 ->orderByDesc('created_at')
                 ->get();
             $filename = 'wikaplay_minigames_report_' . date('Y-m-d') . '.csv';
@@ -1090,7 +1120,8 @@ class TeacherController extends Controller
                 $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
             }
         } elseif ($type === 'stars') {
-            $txs = StarTransaction::with('user:id,name,student_id_code')
+            $txs = StarTransaction::whereIn('user_id', $studentIds)
+                ->with('user:id,name,student_id_code')
                 ->orderByDesc('created_at')
                 ->get();
             $filename = 'wikaplay_stars_ledger_' . date('Y-m-d') . '.csv';
@@ -1111,7 +1142,7 @@ class TeacherController extends Controller
                 $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
             }
         } elseif ($type === 'students') {
-            $students = User::where('role', 'student')->get();
+            $students = User::where('role', 'student')->whereIn('id', $studentIds)->get();
             $filename = 'wikaplay_students_roster_' . date('Y-m-d') . '.csv';
             $csvHeader = ['Student ID', 'Name', 'Email', 'Section', 'Stars Balance', 'Status', 'Registered At'];
             $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
@@ -1130,7 +1161,8 @@ class TeacherController extends Controller
             }
         } else {
             // Default: quizzes
-            $sessions = QuizSession::with(['user:id,name,student_id_code,section', 'category:id,name'])
+            $sessions = QuizSession::whereIn('user_id', $studentIds)
+                ->with(['user:id,name,student_id_code,section', 'category:id,name'])
                 ->orderByDesc('created_at')
                 ->get();
 
