@@ -250,6 +250,24 @@ export async function getCachedUser(studentId: number): Promise<CachedUser | nul
 }
 
 /**
+ * Update the star balance of a cached user in SQLite.
+ * Ensures that stars earned offline are immediately visible and preserved.
+ */
+export async function updateCachedUserStars(
+  studentId: number,
+  newBalance: number
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE cached_user
+     SET stars_balance_last_known = ?,
+         cached_at = datetime('now')
+     WHERE student_id = ?`,
+    [newBalance, studentId]
+  );
+}
+
+/**
  * Get the most recently cached user (for offline cold boot restoration).
  */
 export async function getLatestCachedUser(): Promise<CachedUser | null> {

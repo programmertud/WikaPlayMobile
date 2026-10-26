@@ -107,6 +107,18 @@ class WebSQLiteShim {
       return { lastInsertRowId: 0, changes: 1 };
     }
 
+    if (cleanSql.startsWith('UPDATE CACHED_USER')) {
+      const newStars = params[0];
+      const studentId = params[1];
+      const u = data.cached_users.find((user) => user.student_id === studentId);
+      if (u) {
+        u.stars_balance_last_known = newStars;
+        u.cached_at = new Date().toISOString();
+      }
+      saveStorage(data);
+      return { lastInsertRowId: 0, changes: 1 };
+    }
+
     if (cleanSql.startsWith('DELETE FROM CACHED_USER')) {
       if (params.length > 0) {
         data.cached_users = data.cached_users.filter((u) => u.student_id !== params[0]);

@@ -276,6 +276,12 @@ export default function NakolektaScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (user?.stars_balance !== undefined) {
+      setStarsBalance(user.stars_balance);
+    }
+  }, [user?.stars_balance]);
+
   // When a card is opened in nakolekta, minimize @happy.mp3 sound
   useEffect(() => {
     if (selectedCard) {

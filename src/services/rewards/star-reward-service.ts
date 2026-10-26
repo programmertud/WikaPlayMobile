@@ -22,6 +22,7 @@ import {
   savePendingSession,
   markSessionSynced,
   getLatestCachedUser,
+  updateCachedUserStars,
 } from '../offline/offline-session-store';
 
 // In-flight locking map to prevent duplicate network calls on rapid taps or re-renders
@@ -170,21 +171,30 @@ export async function submitMinigameReward(options: {
     } catch (err) {
       console.warn('[StarRewardService] Mini-game submit failed (offline fallback):', err);
 
-      // Critical: In offline mode, do NOT replace the user's balance with the game score!
-      // The session is already saved in SQLite — sync service will retry.
+      // Award stars locally so the student immediately sees their new total
+      const provisionalBalance = currentStarsBalance + score;
+      updateUserStars(provisionalBalance);
+
+      // Persist in local SQLite so the new star balance survives app restarts while offline
+      if (effectiveStudentId) {
+        updateCachedUserStars(effectiveStudentId, provisionalBalance).catch((e) =>
+          console.warn('[StarRewardService] Failed to update cached user stars:', e)
+        );
+      }
+
       const fallbackResult: MinigameRewardResult = {
         success: false,
         isDuplicate: false,
         isPending: true, // Saved locally, will sync later
-        starsAwarded: score, // Shown as provisional in UI
-        newBalance: currentStarsBalance, // Preserved — NOT score
+        starsAwarded: score, // Shown in celebration UI
+        newBalance: provisionalBalance, // Updated total stars!
         session: {
           score,
           total_levels: 20,
           stars_awarded: score,
-          stars_balance: currentStarsBalance,
+          stars_balance: provisionalBalance,
           qualifies_for_collectible: score >= 15,
-          // No collectible — only awarded after server sync
+          // Collectible card will be finalized upon server sync
         },
         error: err,
       };
@@ -316,12 +326,21 @@ export async function submitQuizReward(options: {
       console.warn('[StarRewardService] Quiz submit failed (offline fallback):', err);
 
       const total = answers.length;
+      const provisionalBalance = currentStarsBalance + correctCount;
+      updateUserStars(provisionalBalance);
+
+      if (effectiveStudentId) {
+        updateCachedUserStars(effectiveStudentId, provisionalBalance).catch((e) =>
+          console.warn('[StarRewardService] Failed to update cached user stars:', e)
+        );
+      }
+
       const fallbackResult: QuizRewardResult = {
         success: false,
         isDuplicate: false,
         isPending: true,
         starsAwarded: correctCount,
-        newBalance: currentStarsBalance,
+        newBalance: provisionalBalance,
         session: {
           id: Date.now(),
           score: correctCount,
@@ -330,7 +349,7 @@ export async function submitQuizReward(options: {
           wrong_count: total - correctCount,
           passed: total > 0 ? correctCount / total >= 0.6 : false,
           stars_awarded: correctCount,
-          stars_balance: currentStarsBalance,
+          stars_balance: provisionalBalance,
         },
         error: err,
       };
