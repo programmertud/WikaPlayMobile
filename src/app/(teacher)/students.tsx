@@ -55,7 +55,7 @@ export default function StudentsMonitoringScreen() {
         setSections(res.sections);
       }
     } catch (err: any) {
-      setError(err?.message || 'Nabigong kunin ang listahan ng estudyante.');
+      setError(err?.message || 'Failed to load student list.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,15 +88,15 @@ export default function StudentsMonitoringScreen() {
 
   const handleToggleStatus = async (student: StudentMonitoringItem) => {
     const newStatus = student.status === 'disabled' ? 'active' : 'disabled';
-    const actionLabel = newStatus === 'active' ? 'buhayin (activate)' : 'i-disable';
+    const actionLabel = newStatus === 'active' ? 'activate' : 'disable';
 
     Alert.alert(
-      'Kumpirmahin ang Aksyon',
-      `Nais mo bang ${actionLabel} ang account ni ${student.name}?`,
+      'Confirm Action',
+      `Are you sure you want to ${actionLabel} ${student.name}'s account?`,
       [
-        { text: 'Kanselahin', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Ipagpatuloy',
+          text: 'Continue',
           onPress: async () => {
             setUpdatingStatusId(student.id);
             try {
@@ -107,9 +107,9 @@ export default function StudentsMonitoringScreen() {
               if (selectedStudent && selectedStudent.id === student.id) {
                 setSelectedStudent((prev) => (prev ? { ...prev, status: newStatus } : null));
               }
-              Alert.alert('Tagumpay', `Na-update na ang account status ni ${student.name}.`);
+              Alert.alert('Success', `Account status updated for ${student.name}.`);
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Nabigong i-update ang status.');
+              Alert.alert('Error', err?.message || 'Failed to update account status.');
             } finally {
               setUpdatingStatusId(null);
             }
@@ -129,18 +129,18 @@ export default function StudentsMonitoringScreen() {
     if (!selectedStudent) return;
     const amountNum = parseInt(adjustAmount, 10);
     if (isNaN(amountNum) || amountNum === 0) {
-      Alert.alert('Maling Halaga', 'Pakilagay ang wastong bilang ng bituin (hal. +10 o -5).');
+      Alert.alert('Invalid Amount', 'Please enter a valid number of stars (e.g. +10 or -5).');
       return;
     }
     if (!adjustReason.trim() || adjustReason.trim().length < 3) {
-      Alert.alert('Dahilan ay Kinakailangan', 'Pakilagay ang malinaw na dahilan para sa pagsasaayos ng bituin.');
+      Alert.alert('Reason Required', 'Please provide a clear reason for adjusting stars.');
       return;
     }
 
     setIsAdjusting(true);
     try {
       const res = await teacherService.adjustStudentStars(selectedStudent.id, amountNum, adjustReason.trim());
-      Alert.alert('Tagumpay ⭐', res.message);
+      Alert.alert('Success ⭐', res.message);
 
       // Refresh student details and students list
       const updatedBalance = res.student.stars_balance;
@@ -154,7 +154,7 @@ export default function StudentsMonitoringScreen() {
       const freshHistory = await teacherService.getStudentHistory(selectedStudent.id);
       setStudentDetails(freshHistory);
     } catch (err: any) {
-      Alert.alert('Hindi Naisakatuparan', err?.message || 'Nabigong isaayos ang bituin.');
+      Alert.alert('Action Failed', err?.message || 'Failed to adjust stars.');
     } finally {
       setIsAdjusting(false);
     }
@@ -174,7 +174,7 @@ export default function StudentsMonitoringScreen() {
     return true;
   });
 
-  if (loading && !refreshing) return <LoadingView message="Kinukuha ang mga estudyante..." />;
+  if (loading && !refreshing) return <LoadingView message="Loading student directory..." />;
   if (error && students.length === 0) return <ErrorView message={error} onRetry={loadStudents} />;
 
   return (
@@ -203,9 +203,9 @@ export default function StudentsMonitoringScreen() {
           <Ionicons name="people" size={24} color={Colors.teacherPurple} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>Pamamahala ng Mag-aaral</Text>
+          <Text style={styles.pageTitle}>Student Management</Text>
           <Text style={styles.pageSubtitle}>
-            {students.length} nakatalang mag-aaral · {students.filter((s) => s.is_online).length} online
+            {students.length} enrolled students · {students.filter((s) => s.is_online).length} online
           </Text>
         </View>
         <VolumeButton activeColor={Colors.teacherPurple} size={38} />
@@ -222,7 +222,7 @@ export default function StudentsMonitoringScreen() {
                   <Text style={styles.sectionBannerName}>{sec.name}</Text>
                 </View>
                 <Text style={styles.sectionBannerSub}>
-                  {sec.students_count || 0} mag-aaral ang kasalukuyang naka-enroll
+                  {sec.students_count || 0} students currently enrolled
                 </Text>
               </View>
               <View style={styles.codeBadge}>
@@ -239,7 +239,7 @@ export default function StudentsMonitoringScreen() {
         <Ionicons name="search" size={18} color={Colors.textMuted} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Ihanap ayon sa pangalan, ID code, o seksyon..."
+          placeholder="Search by name, ID code, or section..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           autoCapitalize="none"
@@ -255,10 +255,10 @@ export default function StudentsMonitoringScreen() {
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
         {[
-          { key: 'all', label: `Lahat (${students.length})` },
+          { key: 'all', label: `All (${students.length})` },
           { key: 'online', label: `Online (${students.filter((s) => s.is_online).length})` },
-          { key: 'active', label: `Aktibo (${students.filter((s) => s.status !== 'disabled').length})` },
-          { key: 'disabled', label: `Naka-disable (${students.filter((s) => s.status === 'disabled').length})` },
+          { key: 'active', label: `Active (${students.filter((s) => s.status !== 'disabled').length})` },
+          { key: 'disabled', label: `Disabled (${students.filter((s) => s.status === 'disabled').length})` },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -278,11 +278,11 @@ export default function StudentsMonitoringScreen() {
       {filteredStudents.length === 0 ? (
         <EmptyState
           emoji="👨‍🎓"
-          title={searchQuery ? 'Walang nahanap' : 'Walang Estudyante'}
+          title={searchQuery ? 'No Students Found' : 'No Students'}
           message={
             searchQuery
-              ? `Walang tumutugma sa "${searchQuery}". Pakisuri ang baybay o filter.`
-              : 'Walang estudyante na natagpuan sa kategoryang ito.'
+              ? `No students matching "${searchQuery}". Please check your search or filter.`
+              : 'No students found in this category.'
           }
         />
       ) : (
@@ -325,14 +325,14 @@ export default function StudentsMonitoringScreen() {
                         { color: student.status === 'disabled' ? Colors.coralPinkDark : Colors.grassGreenDark },
                       ]}
                     >
-                      {student.status === 'disabled' ? 'Naka-disable' : 'Aktibo'}
+                      {student.status === 'disabled' ? 'Disabled' : 'Active'}
                     </Text>
                   </View>
 
                   <Text style={styles.activity} numberOfLines={1}>
                     {student.is_online
-                      ? `🟢 ${student.current_activity || 'Nag-aaral...'}`
-                      : `Huling aktibo: ${student.last_active_at || 'Kamakailan'}`}
+                      ? `🟢 ${student.current_activity || 'Active on WikaPlay...'}`
+                      : `Last active: ${student.last_active_at || 'Recently'}`}
                   </Text>
                 </View>
 
@@ -388,12 +388,12 @@ export default function StudentsMonitoringScreen() {
                     <Ionicons name="star" size={32} color={Colors.sunYellow} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.heroLabel}>Kasalukuyang Balanse ng Bituin</Text>
+                    <Text style={styles.heroLabel}>Current Star Balance</Text>
                     <Text style={styles.heroBalanceText}>
                       {selectedStudent.stars_balance.toLocaleString()} ⭐
                     </Text>
                     <Text style={styles.heroSubNotice}>
-                      Walang 480-star cap. Autoritatibong datos mula sa backend.
+                      No 480-star cap. Authoritative balance from ledger.
                     </Text>
                   </View>
                 </View>
@@ -404,21 +404,21 @@ export default function StudentsMonitoringScreen() {
                     <Text style={styles.ledgerValue}>
                       {studentDetails?.student?.lifetime_stars ?? selectedStudent.lifetime_stars ?? selectedStudent.stars_balance}
                     </Text>
-                    <Text style={styles.ledgerLabel}>Lifetime Naipon</Text>
+                    <Text style={styles.ledgerLabel}>Lifetime Earned</Text>
                   </View>
                   <View style={styles.ledgerDivider} />
                   <View style={styles.ledgerItem}>
                     <Text style={styles.ledgerValue}>
                       {selectedStudent.stars_balance}
                     </Text>
-                    <Text style={styles.ledgerLabel}>Magagamit</Text>
+                    <Text style={styles.ledgerLabel}>Spendable</Text>
                   </View>
                   <View style={styles.ledgerDivider} />
                   <View style={styles.ledgerItem}>
                     <Text style={styles.ledgerValue}>
                       {studentDetails?.student?.stars_spent ?? selectedStudent.stars_spent ?? 0}
                     </Text>
-                    <Text style={styles.ledgerLabel}>Nagamit</Text>
+                    <Text style={styles.ledgerLabel}>Spent</Text>
                   </View>
                 </View>
 
@@ -429,23 +429,23 @@ export default function StudentsMonitoringScreen() {
                   activeOpacity={0.85}
                 >
                   <Ionicons name="create-outline" size={16} color={Colors.teacherPurple} />
-                  <Text style={styles.adjustStarsBtnText}>Isaayos ang Bituin (Teacher Adjustment)</Text>
+                  <Text style={styles.adjustStarsBtnText}>Adjust Stars (Teacher Override)</Text>
                 </TouchableOpacity>
               </LinearGradient>
 
               {/* Status and Authorization Management */}
               <View style={[styles.sectionBox, Shadows.soft]}>
-                <Text style={styles.sectionBoxTitle}>Katayuan ng Account</Text>
+                <Text style={styles.sectionBoxTitle}>Account Access & Status</Text>
                 <View style={styles.statusActionRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.statusLabelText}>
-                      Kasalukuyang Estado:{' '}
+                      Current Status:{' '}
                       <Text style={{ fontWeight: 'bold', color: selectedStudent.status === 'disabled' ? Colors.coralPinkDark : Colors.grassGreenDark }}>
-                        {selectedStudent.status === 'disabled' ? 'Naka-disable' : 'Aktibo'}
+                        {selectedStudent.status === 'disabled' ? 'Disabled' : 'Active'}
                       </Text>
                     </Text>
                     <Text style={styles.statusHelpText}>
-                      Kapag naka-disable, hindi makakapasok ang bata sa WikaPlay.
+                      When disabled, the student will be unable to log in to WikaPlay.
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -457,7 +457,7 @@ export default function StudentsMonitoringScreen() {
                     disabled={updatingStatusId === selectedStudent.id}
                   >
                     <Text style={styles.toggleStatusButtonText}>
-                      {selectedStudent.status === 'disabled' ? 'Buhayin' : 'I-disable'}
+                      {selectedStudent.status === 'disabled' ? 'Activate' : 'Disable'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -467,26 +467,26 @@ export default function StudentsMonitoringScreen() {
               <View style={[styles.sectionBox, Shadows.soft]}>
                 <View style={styles.sectionHeaderRow}>
                   <Ionicons name="ribbon" size={18} color="#8B5CF6" />
-                  <Text style={styles.sectionBoxTitle}>Mga Badge ng Gantimpala</Text>
+                  <Text style={styles.sectionBoxTitle}>Milestone Reward Badges</Text>
                 </View>
 
                 <View style={styles.badgesRow}>
                   {[
-                    { key: 'first_star', title: 'Unang Bituin', thresh: 10, icon: '🌱' },
-                    { key: 'star_collector', title: 'Kolektor ng Bituin', thresh: 50, icon: '⭐' },
-                    { key: 'super_learner', title: 'Super Mag-aaral', thresh: 100, icon: '🌟' },
-                    { key: 'bookworm', title: 'Mahilig Magbasa', thresh: 150, icon: '📚' },
-                    { key: 'quiz_master', title: 'Dalubhasa sa Pagsusulit', thresh: 200, icon: '🎯' },
-                    { key: 'rising_star', title: 'Papasikat na Bituin', thresh: 250, icon: '🚀' },
-                    { key: 'learning_champion', title: 'Kampeon ng Karunungan', thresh: 300, icon: '🏆' },
-                    { key: 'word_wizard', title: 'Salamangkero ng Salita', thresh: 360, icon: '🪄' },
-                    { key: 'ultimate_learner', title: 'Tunay na Henyo ng WikaPlay', thresh: 480, icon: '👑' },
-                    { key: 'knowledge_seeker', title: 'Tagahangad ng Kaalaman', thresh: 600, icon: '🔭' },
-                    { key: 'legend', title: 'Alamat ng WikaPlay', thresh: 750, icon: '🦅' },
-                    { key: 'grandmaster', title: 'Pinakadakilang Henyo', thresh: 900, icon: '💎' },
-                    { key: 'wika_hero', title: 'Bayani ng Wika', thresh: 1100, icon: '🦸' },
-                    { key: 'galaxy_brain', title: 'Galaktikong Isipan', thresh: 1350, icon: '🌌' },
-                    { key: 'immortal_scholar', title: 'Walang Hanggang Iskolar', thresh: 1650, icon: '🏛️' },
+                    { key: 'first_star', title: 'First Star', thresh: 10, icon: '🌱' },
+                    { key: 'star_collector', title: 'Star Collector', thresh: 50, icon: '⭐' },
+                    { key: 'super_learner', title: 'Super Learner', thresh: 100, icon: '🌟' },
+                    { key: 'bookworm', title: 'Bookworm', thresh: 150, icon: '📚' },
+                    { key: 'quiz_master', title: 'Quiz Master', thresh: 200, icon: '🎯' },
+                    { key: 'rising_star', title: 'Rising Star', thresh: 250, icon: '🚀' },
+                    { key: 'learning_champion', title: 'Learning Champion', thresh: 300, icon: '🏆' },
+                    { key: 'word_wizard', title: 'Word Wizard', thresh: 360, icon: '🪄' },
+                    { key: 'ultimate_learner', title: 'Ultimate Learner', thresh: 480, icon: '👑' },
+                    { key: 'knowledge_seeker', title: 'Knowledge Seeker', thresh: 600, icon: '🔭' },
+                    { key: 'legend', title: 'WikaPlay Legend', thresh: 750, icon: '🦅' },
+                    { key: 'grandmaster', title: 'Grandmaster Genius', thresh: 900, icon: '💎' },
+                    { key: 'wika_hero', title: 'Language Hero', thresh: 1100, icon: '🦸' },
+                    { key: 'galaxy_brain', title: 'Galaxy Brain', thresh: 1350, icon: '🌌' },
+                    { key: 'immortal_scholar', title: 'Immortal Scholar', thresh: 1650, icon: '🏛️' },
                   ].map((b) => {
                     const studentLifetime = studentDetails?.student?.lifetime_stars ?? selectedStudent.stars_balance;
                     const isUnlocked = studentLifetime >= b.thresh;
@@ -511,7 +511,7 @@ export default function StudentsMonitoringScreen() {
               <View style={[styles.sectionBox, Shadows.soft]}>
                 <View style={styles.sectionHeaderRow}>
                   <Ionicons name="newspaper-outline" size={18} color={Colors.teacherPurple} />
-                  <Text style={styles.sectionBoxTitle}>Kasaysayan ng Pagsusulit</Text>
+                  <Text style={styles.sectionBoxTitle}>Quiz Attempt History</Text>
                 </View>
 
                 {studentDetails?.quiz_history && studentDetails.quiz_history.length > 0 ? (
@@ -524,10 +524,10 @@ export default function StudentsMonitoringScreen() {
                       />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.historyTitleText}>
-                          {q.category?.name || 'Pagsusulit'} ({q.difficulty ? q.difficulty.toUpperCase() : 'MADALI'})
+                          {q.category?.name || 'Quiz'} ({q.difficulty ? q.difficulty.toUpperCase() : 'EASY'})
                         </Text>
                         <Text style={styles.historyDateText}>
-                          {q.created_at ? new Date(q.created_at).toLocaleString('fil-PH') : ''}
+                          {q.created_at ? new Date(q.created_at).toLocaleString() : ''}
                         </Text>
                       </View>
                       <Text style={[styles.historyScoreText, { color: q.passed ? Colors.grassGreenDark : Colors.coralPinkDark }]}>
@@ -537,7 +537,7 @@ export default function StudentsMonitoringScreen() {
                   ))
                 ) : (
                   <Text style={styles.emptyHistoryText}>
-                    {loadingDetails ? 'Kinukuha ang kasaysayan...' : 'Walang naitalang pagsusulit.'}
+                    {loadingDetails ? 'Loading history...' : 'No quiz results recorded yet.'}
                   </Text>
                 )}
               </View>
@@ -546,7 +546,7 @@ export default function StudentsMonitoringScreen() {
               <View style={[styles.sectionBox, Shadows.soft]}>
                 <View style={styles.sectionHeaderRow}>
                   <Ionicons name="game-controller-outline" size={18} color="#EC4899" />
-                  <Text style={styles.sectionBoxTitle}>Kasaysayan ng Mini-Games</Text>
+                  <Text style={styles.sectionBoxTitle}>Mini-Games History</Text>
                 </View>
 
                 {studentDetails?.game_history && studentDetails.game_history.length > 0 ? (
@@ -556,7 +556,7 @@ export default function StudentsMonitoringScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.historyTitleText}>{g.game_type}</Text>
                         <Text style={styles.historyDateText}>
-                          {g.created_at ? new Date(g.created_at).toLocaleString('fil-PH') : ''}
+                          {g.created_at ? new Date(g.created_at).toLocaleString() : ''}
                         </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
@@ -569,7 +569,7 @@ export default function StudentsMonitoringScreen() {
                   ))
                 ) : (
                   <Text style={styles.emptyHistoryText}>
-                    {loadingDetails ? 'Kinukuha ang kasaysayan...' : 'Walang naitalang nilarong laro.'}
+                    {loadingDetails ? 'Loading history...' : 'No games recorded yet.'}
                   </Text>
                 )}
               </View>
@@ -578,7 +578,7 @@ export default function StudentsMonitoringScreen() {
               <View style={[styles.sectionBox, Shadows.soft]}>
                 <View style={styles.sectionHeaderRow}>
                   <Ionicons name="receipt-outline" size={18} color={Colors.sunYellowDark} />
-                  <Text style={styles.sectionBoxTitle}>Audit Ledger ng mga Bituin</Text>
+                  <Text style={styles.sectionBoxTitle}>Star Audit Ledger</Text>
                 </View>
 
                 {studentDetails?.star_transactions && studentDetails.star_transactions.length > 0 ? (
@@ -587,7 +587,7 @@ export default function StudentsMonitoringScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.txDescText}>{tx.description || tx.source_type}</Text>
                         <Text style={styles.txDateText}>
-                          {tx.created_at ? new Date(tx.created_at).toLocaleString('fil-PH') : ''} · Balanse: {tx.balance_after} ⭐
+                          {tx.created_at ? new Date(tx.created_at).toLocaleString() : ''} · Balance: {tx.balance_after} ⭐
                         </Text>
                       </View>
                       <Text
@@ -602,7 +602,7 @@ export default function StudentsMonitoringScreen() {
                   ))
                 ) : (
                   <Text style={styles.emptyHistoryText}>
-                    {loadingDetails ? 'Kinukuha ang ledger...' : 'Walang naitalang transaksyon.'}
+                    {loadingDetails ? 'Loading ledger...' : 'No star transactions recorded yet.'}
                   </Text>
                 )}
               </View>
@@ -622,29 +622,29 @@ export default function StudentsMonitoringScreen() {
           <View style={[styles.adjustModalCard, Shadows.card]}>
             <View style={styles.adjustModalHeader}>
               <Ionicons name="star" size={24} color={Colors.sunYellowDark} />
-              <Text style={styles.adjustModalTitle}>Isaayos ang Bituin</Text>
+              <Text style={styles.adjustModalTitle}>Adjust Stars</Text>
             </View>
 
             <Text style={styles.adjustModalSub}>
-              Para kay: <Text style={{ fontWeight: 'bold' }}>{selectedStudent?.name}</Text>
+              Student: <Text style={{ fontWeight: 'bold' }}>{selectedStudent?.name}</Text>
             </Text>
             <Text style={styles.adjustModalCurrent}>
-              Kasalukuyang Balanse: {selectedStudent?.stars_balance} ⭐
+              Current Balance: {selectedStudent?.stars_balance} ⭐
             </Text>
 
-            <Text style={styles.inputLabel}>Bilang ng Bituin (+ o -):</Text>
+            <Text style={styles.inputLabel}>Star Amount (+ or -):</Text>
             <TextInput
               style={styles.adjustInput}
-              placeholder="Halimbawa: 20 o -10"
+              placeholder="Example: 20 or -10"
               keyboardType="numbers-and-punctuation"
               value={adjustAmount}
               onChangeText={setAdjustAmount}
             />
 
-            <Text style={styles.inputLabel}>Dahilan ng Pagsasaayos (Required):</Text>
+            <Text style={styles.inputLabel}>Adjustment Reason (Required):</Text>
             <TextInput
               style={[styles.adjustInput, { height: 70, textAlignVertical: 'top' }]}
-              placeholder="Halimbawa: Gantimpala sa aktibong pakikilahok sa silid-aralan"
+              placeholder="Example: Reward for active classroom participation"
               multiline
               value={adjustReason}
               onChangeText={setAdjustReason}
@@ -656,7 +656,7 @@ export default function StudentsMonitoringScreen() {
                 onPress={() => setShowAdjustModal(false)}
                 disabled={isAdjusting}
               >
-                <Text style={styles.adjustCancelText}>Kanselahin</Text>
+                <Text style={styles.adjustCancelText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -665,7 +665,7 @@ export default function StudentsMonitoringScreen() {
                 disabled={isAdjusting}
               >
                 <Text style={styles.adjustSubmitText}>
-                  {isAdjusting ? 'Nai-save...' : 'I-save ang Pagbabago'}
+                  {isAdjusting ? 'Saving...' : 'Save Adjustment'}
                 </Text>
               </TouchableOpacity>
             </View>

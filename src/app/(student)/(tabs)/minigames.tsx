@@ -17,6 +17,9 @@ import * as Haptics from '@/utils/haptics';
 import { PressableScale } from '../../../components/PressableScale';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { VolumeButton } from '../../../components/VolumeButton';
+import { OfflineStatusBanner } from '../../../components/OfflineStatusBanner';
+import { useAuth } from '../../../hooks/use-auth';
+import { useOfflineSync } from '../../../hooks/use-offline-sync';
 import { usePresence } from '../../../hooks/use-presence';
 import { bgm } from '../../../services/audio/bgm-service';
 import { Colors, Shadows, Typography, Radius } from '../../../theme';
@@ -106,6 +109,10 @@ const MINI_GAMES: GameInfo[] = [
 
 export default function MiniGamesScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { isOnline, syncState, pendingCount, lastSyncTime, triggerSync } = useOfflineSync(
+    user?.id ?? null
+  );
   const [selectedCategory, setSelectedCategory] = useState<string>(
     LEARNING_CATEGORIES[0]?.slug ?? 'mga-hayop'
   );
@@ -148,6 +155,15 @@ export default function MiniGamesScreen() {
         </View>
         <VolumeButton activeColor={Colors.skyBlueDark} size={38} />
       </View>
+
+      {/* Offline Status & Sync Banner */}
+      <OfflineStatusBanner
+        isOnline={isOnline}
+        syncState={syncState}
+        pendingCount={pendingCount}
+        lastSyncTime={lastSyncTime}
+        onRetry={triggerSync}
+      />
 
       {/* Rewards Info Banner */}
       <View style={[styles.statsBar, Shadows.soft]}>

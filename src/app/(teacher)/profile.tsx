@@ -29,12 +29,12 @@ import { authService, teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 
 const TEACHER_PRESET_AVATARS = [
-  { id: 'teacher_f', emoji: '👩‍🏫', label: 'Guro (B)' },
-  { id: 'teacher_m', emoji: '👨‍🏫', label: 'Guro (L)' },
-  { id: 'books', emoji: '📚', label: 'Aklat' },
-  { id: 'grad', emoji: '🎓', label: 'Toga' },
-  { id: 'pencil', emoji: '✏️', label: 'Lapis' },
-  { id: 'star', emoji: '🌟', label: 'Bituin' },
+  { id: 'teacher_f', emoji: '👩‍🏫', label: 'Teacher (F)' },
+  { id: 'teacher_m', emoji: '👨‍🏫', label: 'Teacher (M)' },
+  { id: 'books', emoji: '📚', label: 'Books' },
+  { id: 'grad', emoji: '🎓', label: 'Graduation' },
+  { id: 'pencil', emoji: '✏️', label: 'Pencil' },
+  { id: 'star', emoji: '🌟', label: 'Star' },
 ];
 
 export default function TeacherProfileScreen() {
@@ -69,7 +69,7 @@ export default function TeacherProfileScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Pahintulot', 'Kailangan ng pahintulot upang mabuksan ang gallery ng litrato.');
+        Alert.alert('Permission Required', 'Gallery access permission is required to select a photo.');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -84,7 +84,7 @@ export default function TeacherProfileScreen() {
         await processAndSetAvatar(result.assets[0]);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Nabigong pumili ng larawan.');
+      Alert.alert('Error', err.message || 'Failed to select image.');
     }
   };
 
@@ -92,7 +92,7 @@ export default function TeacherProfileScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Pahintulot', 'Kailangan ng pahintulot upang magamit ang camera.');
+        Alert.alert('Permission Required', 'Camera permission is required to take a photo.');
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -106,7 +106,7 @@ export default function TeacherProfileScreen() {
         await processAndSetAvatar(result.assets[0]);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Nabigong kumuha ng litrato.');
+      Alert.alert('Error', err.message || 'Failed to take photo.');
     }
   };
 
@@ -140,7 +140,7 @@ export default function TeacherProfileScreen() {
       setSelectedAvatar(avatarUrl);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e: any) {
-      Alert.alert('Paumanhin', e.message || 'Hindi nai-upload ang larawan.');
+      Alert.alert('Sorry', e.message || 'Failed to upload image.');
     } finally {
       setUploadingImage(false);
     }
@@ -149,7 +149,7 @@ export default function TeacherProfileScreen() {
   const handleSaveProfile = async () => {
     const trimmedName = nameInput.trim();
     if (!trimmedName || trimmedName.length < 2) {
-      Alert.alert('Paalala', 'Pakilagay ang inyong buong pangalan (hindi bababa sa 2 titik).');
+      Alert.alert('Notice', 'Please enter your full name (at least 2 characters).');
       return;
     }
 
@@ -162,9 +162,9 @@ export default function TeacherProfileScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setShowEditModal(false);
-      Alert.alert('Tagumpay! ✨', 'Matagumpay na na-update ang profile ng guro!');
+      Alert.alert('Success! ✨', 'Teacher profile updated successfully!');
     } catch (err: any) {
-      Alert.alert('Paumanhin', err.message || 'Hindi nai-save ang mga pagbabago.');
+      Alert.alert('Error', err.message || 'Failed to save changes.');
     } finally {
       setSavingProfile(false);
     }
@@ -186,9 +186,9 @@ export default function TeacherProfileScreen() {
     setShowLogoutModal(true);
   };
 
-  if (loading) return <LoadingView message="Kinukuha ang profile..." />;
+  if (loading) return <LoadingView message="Loading profile..." />;
 
-  const displayName = user?.name ?? 'Guro';
+  const displayName = user?.name ?? 'Teacher';
 
   return (
     <AnimatedBackground>
@@ -234,39 +234,39 @@ export default function TeacherProfileScreen() {
             activeOpacity={0.8}
           >
             <Ionicons name="create-outline" size={15} color={Colors.teacherPurple} />
-            <Text style={styles.editProfileBtnText}>I-edit ang Profile</Text>
+            <Text style={styles.editProfileBtnText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
 
         {/* Info Card */}
         <View style={[styles.infoCard, Shadows.card]}>
-          <InfoRow icon="person" label="Buong Pangalan" value={user?.name ?? '—'} />
+          <InfoRow icon="person" label="Full Name" value={user?.name ?? '—'} />
           <InfoRow icon="mail" label="Email Address" value={user?.email ?? '—'} />
-          <InfoRow icon="business" label="Seksyon / Departamento" value={user?.section ?? 'Kaguruan'} />
-          <InfoRow icon="shield-checkmark" label="Tungkulin" value="Guro / Administrator" />
+          <InfoRow icon="business" label="Section / Department" value={user?.section ?? 'Faculty'} />
+          <InfoRow icon="shield-checkmark" label="Role" value="Teacher / Administrator" />
         </View>
 
       {/* WikaPlay Info Card */}
       <View style={[styles.aboutCard, Shadows.card]}>
         <View style={styles.aboutHeader}>
           <Ionicons name="information-circle" size={20} color={Colors.teacherPurple} />
-          <Text style={styles.aboutTitle}>Tungkol sa WikaPlay</Text>
+          <Text style={styles.aboutTitle}>About WikaPlay</Text>
         </View>
         <Text style={styles.aboutText}>
-          Ang WikaPlay ay isang mobile learning application para sa mga mag-aaral sa kindergarten na nagtuturo ng
-          Filipino vocabulary sa pamamagitan ng interactive flashcards, audio quizzes, at mini-games.
+          WikaPlay is a mobile learning application for kindergarten students that teaches Filipino vocabulary
+          through interactive flashcards, audio quizzes, and mini-games.
         </Text>
-        <Text style={styles.version}>Bersyon: 1.0.0 (Expo SDK 58)</Text>
+        <Text style={styles.version}>Version: 1.0.0 (Expo SDK 58)</Text>
       </View>
 
       {/* Reports & CSV Export Hub */}
       <View style={[styles.aboutCard, Shadows.card]}>
         <View style={styles.aboutHeader}>
           <Ionicons name="document-text" size={20} color={Colors.teacherPurple} />
-          <Text style={styles.aboutTitle}>Mga Ulat at CSV Export</Text>
+          <Text style={styles.aboutTitle}>Reports &amp; CSV Export</Text>
         </View>
         <Text style={styles.aboutText}>
-          I-download o i-export ang opisyal na mga datos ng mag-aaral para sa pagtatala ng grado at ebalwasyon ng klase:
+          Download or export official student data for grade recording and class evaluation:
         </Text>
 
         <View style={styles.exportList}>
@@ -276,11 +276,11 @@ export default function TeacherProfileScreen() {
               try {
                 const res = await teacherService.exportReportsCsv('quizzes');
                 Alert.alert(
-                  'Ulat ng Pagsusulit (CSV)',
-                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} rekord ng pagsusulit.`
+                  'Quiz Report (CSV)',
+                  `"${res.filename}" prepared successfully with ${res.total_records} quiz records.`
                 );
               } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+                Alert.alert('Error', e?.message || 'Failed to export report.');
               }
             }}
           >
@@ -288,8 +288,8 @@ export default function TeacherProfileScreen() {
               <Ionicons name="newspaper" size={18} color={Colors.teacherPurple} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.exportItemTitle}>Ulat ng Pagsusulit (Quiz Records)</Text>
-              <Text style={styles.exportItemSub}>Mga marka, kahirapan, tamang sagot, at resulta</Text>
+              <Text style={styles.exportItemTitle}>Quiz Report (Quiz Records)</Text>
+              <Text style={styles.exportItemSub}>Scores, difficulty levels, correct answers, and results</Text>
             </View>
             <Ionicons name="download-outline" size={18} color={Colors.teacherPurple} />
           </TouchableOpacity>
@@ -300,11 +300,11 @@ export default function TeacherProfileScreen() {
               try {
                 const res = await teacherService.exportReportsCsv('minigames');
                 Alert.alert(
-                  'Ulat ng Mini-Games (CSV)',
-                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} sesyon ng laro.`
+                  'Mini-Games Report (CSV)',
+                  `"${res.filename}" prepared successfully with ${res.total_records} game sessions.`
                 );
               } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+                Alert.alert('Error', e?.message || 'Failed to export report.');
               }
             }}
           >
@@ -312,8 +312,8 @@ export default function TeacherProfileScreen() {
               <Ionicons name="game-controller" size={18} color="#DB2777" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.exportItemTitle}>Ulat ng Mini-Games</Text>
-              <Text style={styles.exportItemSub}>Puntos sa 5 mini-games at mystery box qualifiers</Text>
+              <Text style={styles.exportItemTitle}>Mini-Games Report</Text>
+              <Text style={styles.exportItemSub}>Scores across 5 mini-games and mystery box qualifiers</Text>
             </View>
             <Ionicons name="download-outline" size={18} color="#DB2777" />
           </TouchableOpacity>
@@ -324,11 +324,11 @@ export default function TeacherProfileScreen() {
               try {
                 const res = await teacherService.exportReportsCsv('stars');
                 Alert.alert(
-                  'Ledger ng mga Bituin (CSV)',
-                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} transaksyon.`
+                  'Star Ledger (CSV)',
+                  `"${res.filename}" prepared successfully with ${res.total_records} transactions.`
                 );
               } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+                Alert.alert('Error', e?.message || 'Failed to export report.');
               }
             }}
           >
@@ -336,8 +336,8 @@ export default function TeacherProfileScreen() {
               <Ionicons name="star" size={18} color={Colors.sunYellowDark} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.exportItemTitle}>Ledger ng mga Bituin (Star Audit)</Text>
-              <Text style={styles.exportItemSub}>Pumasok, lumabas, at adjustments ng guro</Text>
+              <Text style={styles.exportItemTitle}>Star Ledger (Star Audit)</Text>
+              <Text style={styles.exportItemSub}>Earnings, deductions, and teacher adjustments</Text>
             </View>
             <Ionicons name="download-outline" size={18} color={Colors.sunYellowDark} />
           </TouchableOpacity>
@@ -348,11 +348,11 @@ export default function TeacherProfileScreen() {
               try {
                 const res = await teacherService.exportReportsCsv('students');
                 Alert.alert(
-                  'Talaan ng Mag-aaral (CSV)',
-                  `Matagumpay na naihanda ang "${res.filename}" na may ${res.total_records} mag-aaral.`
+                  'Student Roster (CSV)',
+                  `"${res.filename}" prepared successfully with ${res.total_records} students.`
                 );
               } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Nabigong i-export ang ulat.');
+                Alert.alert('Error', e?.message || 'Failed to export report.');
               }
             }}
           >
@@ -360,8 +360,8 @@ export default function TeacherProfileScreen() {
               <Ionicons name="people" size={18} color={Colors.grassGreenDark} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.exportItemTitle}>Talaan ng Mag-aaral (Roster)</Text>
-              <Text style={styles.exportItemSub}>Pangalan, Student ID, seksyon, at estado ng account</Text>
+              <Text style={styles.exportItemTitle}>Student Roster</Text>
+              <Text style={styles.exportItemSub}>Name, Student ID, section, and account status</Text>
             </View>
             <Ionicons name="download-outline" size={18} color={Colors.grassGreenDark} />
           </TouchableOpacity>
@@ -373,7 +373,7 @@ export default function TeacherProfileScreen() {
 
       {/* Logout Button */}
       <PrimaryButton
-        title={loggingOut ? 'Lumalabas...' : 'Mag-logout'}
+        title={loggingOut ? 'Logging out...' : 'Logout'}
         variant="danger"
         size="lg"
         icon="log-out"
@@ -400,7 +400,7 @@ export default function TeacherProfileScreen() {
           <View style={styles.editCardHeader}>
             <View style={styles.editCardTitleRow}>
               <Ionicons name="person-circle" size={26} color={Colors.teacherPurple} />
-              <Text style={styles.editCardTitle}>I-edit ang Profile ng Guro</Text>
+              <Text style={styles.editCardTitle}>Edit Teacher Profile</Text>
             </View>
             <TouchableOpacity
               onPress={() => setShowEditModal(false)}
@@ -423,7 +423,7 @@ export default function TeacherProfileScreen() {
                 ringColors={Gradients.teacher}
               />
 
-              <Text style={styles.editAvatarLabel}>Palitan ang Profile Picture:</Text>
+              <Text style={styles.editAvatarLabel}>Change Profile Picture:</Text>
 
               <View style={styles.photoActionsRow}>
                 <TouchableOpacity
@@ -465,12 +465,12 @@ export default function TeacherProfileScreen() {
               {uploadingImage && (
                 <View style={styles.uploadingBox}>
                   <ActivityIndicator size="small" color={Colors.teacherPurple} />
-                  <Text style={styles.uploadingText}>Ina-upload ang larawan...</Text>
+                  <Text style={styles.uploadingText}>Uploading image...</Text>
                 </View>
               )}
 
               {/* Preset Teacher Avatars */}
-              <Text style={styles.presetLabel}>O pumili ng avatar badge:</Text>
+              <Text style={styles.presetLabel}>Or choose an avatar badge:</Text>
               <View style={styles.presetRow}>
                 {TEACHER_PRESET_AVATARS.map((p) => (
                   <TouchableOpacity
@@ -490,24 +490,24 @@ export default function TeacherProfileScreen() {
 
             {/* Input Fields */}
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Buong Pangalan (Full Name):</Text>
+              <Text style={styles.inputLabel}>Full Name:</Text>
               <TextInput
                 style={styles.textInput}
                 value={nameInput}
                 onChangeText={setNameInput}
-                placeholder="Hal. Maria Santos"
+                placeholder="e.g. Maria Santos"
                 placeholderTextColor={Colors.textMuted}
                 autoCapitalize="words"
                 editable={!savingProfile}
                 maxLength={60}
               />
 
-              <Text style={styles.inputLabel}>Seksyon / Kaguruan (Department):</Text>
+              <Text style={styles.inputLabel}>Section / Department:</Text>
               <TextInput
                 style={styles.textInput}
                 value={sectionInput}
                 onChangeText={setSectionInput}
-                placeholder="Hal. Kinder - Mabait / Kaguruan"
+                placeholder="e.g. Kinder - Mabait / Faculty"
                 placeholderTextColor={Colors.textMuted}
                 editable={!savingProfile}
                 maxLength={60}
@@ -521,7 +521,7 @@ export default function TeacherProfileScreen() {
                 disabled={savingProfile}
                 onPress={() => setShowEditModal(false)}
               >
-                <Text style={styles.cancelBtnText}>Kanselahin</Text>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -532,7 +532,7 @@ export default function TeacherProfileScreen() {
                 {savingProfile ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.saveBtnText}>I-save</Text>
+                  <Text style={styles.saveBtnText}>Save</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -555,13 +555,13 @@ export default function TeacherProfileScreen() {
           <View style={modalStyles.iconCircle}>
             <Ionicons name="log-out" size={32} color="#EF4444" />
           </View>
-          <Text style={modalStyles.title}>Mag-logout sa Portal ng Guro?</Text>
+          <Text style={modalStyles.title}>Logout from Teacher Portal?</Text>
           <Text style={modalStyles.subtitle}>
-            Sigurado ka bang nais mong lumabas sa portal, {user?.name || 'Guro'}?
+            Are you sure you want to sign out, {user?.name || 'Teacher'}?
           </Text>
           <View style={modalStyles.btnGroup}>
             <PrimaryButton
-              title={loggingOut ? 'Lumalabas...' : 'Oo, Lumabas'}
+              title={loggingOut ? 'Logging out...' : 'Yes, Logout'}
               variant="danger"
               size="md"
               icon="log-out"
@@ -570,7 +570,7 @@ export default function TeacherProfileScreen() {
               style={{ width: '100%', marginBottom: 10 }}
             />
             <PrimaryButton
-              title="Bumalik"
+              title="Go Back"
               variant="outline"
               size="md"
               onPress={() => setShowLogoutModal(false)}

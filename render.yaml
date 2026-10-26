@@ -3,7 +3,7 @@ services:
     name: wikaplay-api
     runtime: docker
     rootDir: wikaplay-api
-    dockerfilePath: wikaplay-api/Dockerfile
+    dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /up
     envVars:
@@ -14,7 +14,7 @@ services:
       - key: APP_DEBUG
         value: "false"
       - key: APP_KEY
-        value: base64:XTRGoA46Fs40+wuilyd7f/4Vg/1c1zP1K923AfxEuGs=
+        value: "base64:XTRGoA46Fs40+wuilyd7f/4Vg/1c1zP1K923AfxEuGs="
       - key: APP_URL
         sync: false
       - key: LOG_CHANNEL

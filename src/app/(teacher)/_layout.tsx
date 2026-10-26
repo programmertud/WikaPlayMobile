@@ -78,7 +78,7 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="students"
         options={{
-          title: 'Mga Estudyante',
+          title: 'Students',
           tabBarIcon: ({ focused }) => (
             <TeacherTabBarIcon
               name="people"
@@ -91,7 +91,7 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="content"
         options={{
-          title: 'Nilalaman',
+          title: 'Content',
           tabBarIcon: ({ focused }) => (
             <TeacherTabBarIcon
               name="book"
@@ -107,7 +107,7 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="rewards"
         options={{
-          title: 'Gantimpala',
+          title: 'Rewards',
           tabBarIcon: ({ focused }) => (
             <TeacherTabBarIcon
               name="gift"
@@ -120,7 +120,7 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Ako',
+          title: 'Profile',
           tabBarIcon: ({ focused }) => (
             <TeacherTabBarIcon
               name="school"

@@ -274,6 +274,7 @@ export default function GuLongLetra() {
         metadata: { category: category.slug, correct: finalScore, total: TOTAL_ROUNDS },
         currentStarsBalance: user?.stars_balance ?? 0,
         updateUserStars,
+        studentId: user?.id,
       });
       setStarsAwarded(res.starsAwarded);
       if (res.session?.qualifies_for_collectible && res.session?.collectible) {

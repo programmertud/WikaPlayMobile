@@ -142,6 +142,7 @@ export default function PaghahanapLarawan() {
         metadata: { category: category.slug, correct: finalScore, total: totalRounds },
         currentStarsBalance: user?.stars_balance ?? 0,
         updateUserStars,
+        studentId: user?.id,
       });
 
       setStarsAwarded(res.starsAwarded);

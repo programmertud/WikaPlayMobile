@@ -35,13 +35,19 @@ import { playFeedbackSound, playWelcomeSound } from '../services/audio/sound-ser
 import { Colors, Gradients, Shadows, Typography, Radius } from '../theme';
 
 export default function LoginScreen() {
-  const { login, studentLogin } = useAuth();
+  const { login, studentLogin, isAuthenticated, isTeacher, isLoading } = useAuth();
   const [studentName, setStudentName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace(isTeacher ? ('/(teacher)' as any) : ('/(student)/(tabs)' as any));
+    }
+  }, [isLoading, isAuthenticated, isTeacher]);
 
   // Gentle float animation for the logo
   const floatY = useSharedValue(0);

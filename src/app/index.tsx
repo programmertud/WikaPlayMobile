@@ -455,9 +455,13 @@ const splashStyles = StyleSheet.create({
 
 // ── Root Gateway ──────────────────────────────────────────────────────────────
 export default function IndexGateway() {
-  const { isLoading } = useAuth();
+  const { isLoading, isAuthenticated, isTeacher } = useAuth();
 
   if (isLoading) return <SplashScreenView />;
+
+  if (isAuthenticated) {
+    return <Redirect href={isTeacher ? ('/(teacher)' as any) : ('/(student)/(tabs)' as any)} />;
+  }
 
   return <WelcomeScreen />;
 }

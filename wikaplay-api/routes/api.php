@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\MinigameController;
+use App\Http\Controllers\Api\OfflineSyncController;
 use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\RewardController;
@@ -59,8 +60,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/history', [QuizController::class, 'history']);
     });
 
-    // Mini-games Submission
+    // Mini-games Submission & Batch Offline Sync
     Route::post('/minigames/submit', [MinigameController::class, 'submit']);
+    Route::post('/sync/batch', [OfflineSyncController::class, 'batchSync']);
 
     // Rewards & Collectibles (Gantimpala & Nakolekta)
     Route::prefix('rewards')->group(function () {

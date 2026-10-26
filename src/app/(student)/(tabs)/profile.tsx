@@ -26,6 +26,7 @@ import { UserAvatar } from '../../../components/UserAvatar';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { VolumeSettingsCard } from '../../../components/VolumeButton';
 import { useAuth } from '../../../hooks/use-auth';
+import { useOfflineSync } from '../../../hooks/use-offline-sync';
 import { usePresence } from '../../../hooks/use-presence';
 import {
   studentService,
@@ -53,6 +54,9 @@ const PRESET_AVATARS = [
 
 export default function ProfileScreen() {
   const { user, logout, updateProfile } = useAuth();
+  const { isOnline, syncState, pendingCount, lastSyncTime, triggerSync } = useOfflineSync(
+    user?.id ?? null
+  );
   const insets = useSafeAreaInsets();
 
   const [profileData, setProfileData] = useState<StudentProfileStatsResponse | null>(null);
@@ -310,6 +314,70 @@ export default function ProfileScreen() {
           <View style={styles.encouragementBanner}>
             <Text style={styles.encouragementText}>{encouragement}</Text>
           </View>
+        </View>
+
+        {/* Offline Status & Sync Section */}
+        <View style={[styles.syncCard, Shadows.card]}>
+          <View style={styles.syncCardHeader}>
+            <View style={styles.syncCardTitleRow}>
+              <Ionicons
+                name={isOnline ? 'cloud-done' : 'cloud-offline'}
+                size={22}
+                color={isOnline ? Colors.grassGreenDark : Colors.coralPink}
+              />
+              <Text style={styles.syncCardTitle}>
+                {isOnline ? 'Konektado sa Internet' : 'Naka-offline Mode'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.syncBadge,
+                { backgroundColor: isOnline ? '#DCFCE7' : '#FEE2E2' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.syncBadgeText,
+                  { color: isOnline ? Colors.grassGreenDark : Colors.coralPinkDark },
+                ]}
+              >
+                {isOnline ? 'Online' : 'Offline'}
+              </Text>
+            </View>
+          </View>
+
+          {pendingCount > 0 ? (
+            <View style={styles.pendingAlertBox}>
+              <Ionicons name="time" size={18} color="#D97706" />
+              <Text style={styles.pendingAlertText}>
+                May <Text style={{ fontWeight: '700' }}>{pendingCount}</Text> laro na naghihintay ma-sync sa server.
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.syncCardSub}>
+              {lastSyncTime
+                ? `Huling na-sync: ${lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : 'Ligtas at naka-sync ang lahat ng iyong mga laro.'}
+            </Text>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.syncNowButton,
+              (!isOnline || syncState === 'syncing') && styles.syncNowButtonDisabled,
+            ]}
+            disabled={!isOnline || syncState === 'syncing'}
+            onPress={triggerSync}
+          >
+            {syncState === 'syncing' ? (
+              <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+            ) : (
+              <Ionicons name="refresh" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+            )}
+            <Text style={styles.syncNowButtonText}>
+              {syncState === 'syncing' ? 'Kasalukuyang nag-sy-sync...' : 'I-sync ang mga Laro'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* B. Learning Overview Stats Grid */}
@@ -1358,6 +1426,81 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveNameBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.white,
+  },
+
+  /* Sync Card */
+  syncCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  syncCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  syncCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  syncCardTitle: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  syncBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+  },
+  syncBadgeText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+  },
+  pendingAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    padding: 10,
+    borderRadius: Radius.md,
+    marginVertical: 8,
+  },
+  pendingAlertText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    color: '#92400E',
+    flex: 1,
+  },
+  syncCardSub: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    color: Colors.textLight,
+    marginBottom: 12,
+  },
+  syncNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.skyBlueDark,
+    paddingVertical: 10,
+    borderRadius: Radius.pill,
+  },
+  syncNowButtonDisabled: {
+    backgroundColor: '#94A3B8',
+  },
+  syncNowButtonText: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,

@@ -1,6 +1,30 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+/**
+ * WikaPlay Authentication Hook — Offline-First Edition
+ *
+ * Changes from original:
+ * 1. Cold boot no longer clears the auth token — restores the previous session
+ * 2. Cached user metadata is persisted to SQLite for offline identity display
+ * 3. On cold boot: tries to restore session from token (online) or SQLite (offline)
+ * 4. Logout properly clears SQLite user cache for the logged-out account
+ * 5. Account switching is safe — each account's pending sessions are account-scoped
+ *
+ * Preserved behaviors:
+ * - All login/register methods work exactly as before when online
+ * - Teacher/admin role checks unchanged
+ * - Star balance update, profile update, avatar update unchanged
+ * - If token is invalid/expired, user is shown as not authenticated
+ */
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ApiClient, authService } from '../services/api';
 import { User } from '../types';
+import {
+  cacheUser,
+  clearCachedUser,
+  getCachedUser,
+  getLatestCachedUser,
+} from '../services/offline/offline-session-store';
+import { getDatabase } from '../services/offline/database';
+import { setHealthCheckUrl } from '../services/offline/connectivity-service';
 
 interface AuthContextType {
   user: User | null;
@@ -25,15 +49,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // On app cold launch / fresh start, clear previous session so reopening the APK always returns to Welcome Screen
+  // Cache user info to SQLite whenever user changes (not on logout)
+  const cacheUserInfo = useCallback(async (u: User) => {
+    if (u.role !== 'student') return; // Only cache students for offline play
+    try {
+      await cacheUser({
+        student_id: u.id,
+        name: u.name,
+        role: u.role,
+        avatar: u.avatar ?? null,
+        section: u.section ?? null,
+        stars_balance_last_known: u.stars_balance ?? 0,
+        cached_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('[AuthProvider] Failed to cache user info:', err);
+    }
+  }, []);
+
   useEffect(() => {
     const initAuth = async () => {
       try {
+        // Initialize SQLite database first
+        await getDatabase();
+
         await ApiClient.init();
-        // Clear stored session on cold boot
-        await ApiClient.setToken(null);
-        setUser(null);
-      } catch {
+
+        // Set health check URL for connectivity service
+        setHealthCheckUrl(ApiClient.getBaseUrl());
+
+        // Try to restore session from stored token (CHANGED: no longer clears token on boot)
+        const token = ApiClient.getToken();
+        if (token) {
+          try {
+            const res = await authService.getMe();
+            setUser(res.user);
+            await cacheUserInfo(res.user);
+          } catch (err: any) {
+            // Token expired or invalid — clear it only on 401 / auth errors
+            const isAuthError =
+              err?.status === 401 ||
+              err?.response?.status === 401 ||
+              err?.message?.includes('sesyon') ||
+              err?.message?.includes('401') ||
+              err?.message?.includes('Unauthenticated');
+
+            if (isAuthError) {
+              await ApiClient.setToken(null);
+              setUser(null);
+            } else {
+              // Network error (offline mode) — restore from SQLite cache
+              // Retain the token so when network reconnects, sync can proceed immediately
+              const cached = await getLatestCachedUser();
+              if (cached) {
+                setUser({
+                  id: cached.student_id,
+                  name: cached.name,
+                  role: (cached.role as 'student' | 'teacher' | 'admin') || 'student',
+                  avatar: cached.avatar ?? undefined,
+                  section: cached.section ?? undefined,
+                  stars_balance: cached.stars_balance_last_known,
+                } as User);
+              } else {
+                setUser(null);
+              }
+            }
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.warn('[AuthProvider] Init error:', err);
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -41,13 +127,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initAuth();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setAndCacheUser = useCallback(async (u: User | null) => {
+    setUser(u);
+    if (u) await cacheUserInfo(u);
+  }, [cacheUserInfo]);
 
   const login = async (email: string, password: string, role?: string): Promise<User> => {
     setIsLoading(true);
     try {
       const res = await authService.login({ email, password, role });
-      setUser(res.user);
+      await setAndCacheUser(res.user);
       return res.user;
     } finally {
       setIsLoading(false);
@@ -64,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authService.register({ name, email, password, role, section_name });
-      setUser(res.user);
+      await setAndCacheUser(res.user);
       return res.user;
     } finally {
       setIsLoading(false);
@@ -75,8 +166,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authService.studentLogin(name);
-      setUser(res.user);
+      await setAndCacheUser(res.user);
       return res.user;
+    } catch (err: any) {
+      // Check if student exists in local offline SQLite cache
+      const cached = await getLatestCachedUser();
+      if (
+        cached &&
+        cached.name.trim().toLowerCase() === name.trim().toLowerCase()
+      ) {
+        const offlineUser: User = {
+          id: cached.student_id,
+          name: cached.name,
+          role: (cached.role as 'student' | 'teacher' | 'admin') || 'student',
+          avatar: cached.avatar ?? undefined,
+          section: cached.section ?? undefined,
+          stars_balance: cached.stars_balance_last_known,
+        };
+        setUser(offlineUser);
+        return offlineUser;
+      }
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authService.studentRegister({ name, enrollment_code });
-      setUser(res.user);
+      await setAndCacheUser(res.user);
       return res.user;
     } finally {
       setIsLoading(false);
@@ -95,6 +205,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      // Clear user cache for this account before logging out
+      if (user?.id) {
+        await clearCachedUser(user.id);
+        // NOTE: We do NOT delete pending_sessions on logout — they belong to this student
+        // and must be synced on next login. The student_id scoping prevents data leakage.
+      }
       await authService.logout();
     } catch {
       // Ignore network errors — always clear local token
@@ -108,17 +224,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async () => {
     try {
       const res = await authService.getMe();
-      setUser(res.user);
+      await setAndCacheUser(res.user);
     } catch {}
   };
 
   const updateUserStars = (newBalance: number) => {
-    setUser((prev) => (prev ? { ...prev, stars_balance: newBalance } : null));
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, stars_balance: newBalance };
+      // Update cache asynchronously
+      cacheUserInfo(updated).catch(console.warn);
+      return updated;
+    });
   };
 
   const updateProfile = async (payload: { name?: string; avatar?: string; section?: string }): Promise<User> => {
     const res = await authService.updateProfile(payload);
-    setUser(res.user);
+    await setAndCacheUser(res.user);
     return res.user;
   };
 
@@ -126,8 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser((prev) => (prev ? { ...prev, avatar } : null));
   };
 
-  // Memoize the context value so consumers only re-render when user or isLoading
-  // actually change — prevents the infinite setState/update-depth loops
+  // Memoize the context value so consumers only re-render when user or isLoading actually change
   const value = useMemo<AuthContextType>(
     () => ({
       user,
@@ -145,7 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateProfile,
       updateUserAvatar,
     }),
-    [user, isLoading]
+    [user, isLoading] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return (

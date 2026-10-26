@@ -185,6 +185,7 @@ export default function MemoryMatch() {
         metadata: { category: category.slug, levels_completed: finalScore, total_levels: TOTAL_LEVELS },
         currentStarsBalance: user?.stars_balance ?? 0,
         updateUserStars,
+        studentId: user?.id,
       });
 
       setStarsAwarded(res.starsAwarded);

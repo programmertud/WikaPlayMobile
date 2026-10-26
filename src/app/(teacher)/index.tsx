@@ -120,10 +120,10 @@ export default function TeacherDashboardScreen() {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  if (loading && !refreshing) return <LoadingView message="Kinukuha ang Teacher Dashboard..." />;
+  if (loading && !refreshing) return <LoadingView message="Loading Teacher Dashboard..." />;
   if (error && students.length === 0) return <ErrorView message={error} onRetry={loadData} />;
 
-  const greeting = user?.name ? user.name.split(' ')[0] : 'Guro';
+  const greeting = user?.name ? user.name.split(' ')[0] : 'Teacher';
   const onlineStudents = students.filter((s) => s.is_online);
 
   return (
@@ -149,8 +149,8 @@ export default function TeacherDashboardScreen() {
       {/* Top Header */}
       <View style={styles.topBar}>
         <View style={styles.brandingCol}>
-          <Text style={styles.appTitle}>WikaPlay Guro</Text>
-          <Text style={styles.greeting}>Magandang araw, {greeting}! 👋</Text>
+          <Text style={styles.appTitle}>WikaPlay Teacher</Text>
+          <Text style={styles.greeting}>Welcome back, {greeting}! 👋</Text>
         </View>
         <View style={styles.topBarRight}>
           {/* Music Volume Button (tap = mute/unmute, hold = slider) */}
@@ -176,7 +176,7 @@ export default function TeacherDashboardScreen() {
             color={activeTab === 'overview' ? Colors.white : Colors.teacherPurple}
           />
           <Text style={[styles.tabNavText, activeTab === 'overview' && styles.tabNavTextActive]}>
-            Buod (Overview)
+            Overview
           </Text>
         </TouchableOpacity>
 
@@ -190,7 +190,7 @@ export default function TeacherDashboardScreen() {
             color={activeTab === 'charts' ? Colors.white : Colors.teacherPurple}
           />
           <Text style={[styles.tabNavText, activeTab === 'charts' && styles.tabNavTextActive]}>
-            Tsart at Graph
+            Charts & Analytics
           </Text>
         </TouchableOpacity>
 
@@ -215,7 +215,7 @@ export default function TeacherDashboardScreen() {
           {/* Section: Content Management Navigation */}
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="folder-open" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Pamamahala ng Nilalaman</Text>
+            <Text style={styles.sectionTitle}>Content Management</Text>
           </View>
 
           <View style={styles.dashboardHeroCards}>
@@ -230,15 +230,15 @@ export default function TeacherDashboardScreen() {
                   <Ionicons name="albums" size={22} color={Colors.teacherPurple} />
                 </View>
                 <View style={[styles.dashboardHeroBadge, { backgroundColor: '#EDE9FE' }]}>
-                  <Text style={[styles.dashboardHeroBadgeText, { color: Colors.teacherPurple }]}>151 Kard</Text>
+                  <Text style={[styles.dashboardHeroBadgeText, { color: Colors.teacherPurple }]}>151 Cards</Text>
                 </View>
               </View>
               <Text style={styles.dashboardHeroTitle}>Manage Flashcards</Text>
               <Text style={styles.dashboardHeroSub}>
-                Magdagdag at mag-edit ng mga salita, larawan, audio recording, at pagsasalin.
+                Add and edit words, images, audio recordings, and translations.
               </Text>
               <View style={styles.dashboardHeroFooter}>
-                <Text style={[styles.dashboardHeroAction, { color: Colors.teacherPurple }]}>Buksan ang Flashcards →</Text>
+                <Text style={[styles.dashboardHeroAction, { color: Colors.teacherPurple }]}>Open Flashcards →</Text>
               </View>
             </TouchableOpacity>
 
@@ -256,12 +256,12 @@ export default function TeacherDashboardScreen() {
                   <Text style={[styles.dashboardHeroBadgeText, { color: '#0369A1' }]}>Lock & Questions</Text>
                 </View>
               </View>
-              <Text style={styles.dashboardHeroTitle}>Manage Quiz</Text>
+              <Text style={styles.dashboardHeroTitle}>Manage Quizzes</Text>
               <Text style={styles.dashboardHeroSub}>
-                Ayusin ang mga tanong at i-lock o i-unlock ang pagsusulit bawat kategorya.
+                Manage questions and lock or unlock quizzes per category.
               </Text>
               <View style={styles.dashboardHeroFooter}>
-                <Text style={[styles.dashboardHeroAction, { color: '#0284C7' }]}>Buksan ang Pagsusulit →</Text>
+                <Text style={[styles.dashboardHeroAction, { color: '#0284C7' }]}>Open Quizzes →</Text>
               </View>
             </TouchableOpacity>
 
@@ -276,15 +276,15 @@ export default function TeacherDashboardScreen() {
                   <Ionicons name="game-controller" size={22} color="#DB2777" />
                 </View>
                 <View style={[styles.dashboardHeroBadge, { backgroundColor: '#FCE7F3' }]}>
-                  <Text style={[styles.dashboardHeroBadgeText, { color: '#BE185D' }]}>5 Laro</Text>
+                  <Text style={[styles.dashboardHeroBadgeText, { color: '#BE185D' }]}>5 Games</Text>
                 </View>
               </View>
               <Text style={styles.dashboardHeroTitle}>Manage Mini-Games</Text>
               <Text style={styles.dashboardHeroSub}>
-                Memory Match, Paghahanap, Hulaan, Gulong, Pop Balloon at patakaran sa puntos.
+                Memory Match, Picture Search, Word Guess, Letter Wheel, Pop Balloon & score rules.
               </Text>
               <View style={styles.dashboardHeroFooter}>
-                <Text style={[styles.dashboardHeroAction, { color: '#DB2777' }]}>Buksan ang Mini-Games →</Text>
+                <Text style={[styles.dashboardHeroAction, { color: '#DB2777' }]}>Open Mini-Games →</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -292,7 +292,7 @@ export default function TeacherDashboardScreen() {
           {/* Section: 11 Summary Cards */}
           <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
             <Ionicons name="stats-chart" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Pangkalahatang Datos ng Klase</Text>
+            <Text style={styles.sectionTitle}>Class Overview & Metrics</Text>
           </View>
 
           {/* Grid of 11 Cards */}
@@ -300,103 +300,103 @@ export default function TeacherDashboardScreen() {
             <MetricCard
               icon="people"
               value={stats.total_students}
-              label="Kabuuan ng Mag-aaral"
+              label="Total Students"
               color={Colors.teacherPurple}
               sub={`${stats.offline_students} offline`}
             />
             <MetricCard
               icon="radio-button-on"
               value={stats.online_students}
-              label="Kasalukuyang Online"
+              label="Currently Online"
               color={Colors.grassGreenDark}
-              sub="Huling 3 minuto"
+              sub="Past 3 minutes"
             />
             <MetricCard
               icon="time"
               value={stats.recently_active_students}
-              label="Kamakailang Aktibo"
+              label="Recently Active"
               color={Colors.skyBlueDark}
-              sub="Huling 15 minuto"
+              sub="Past 15 minutes"
             />
             <MetricCard
               icon="newspaper"
               value={stats.total_quiz_attempts}
-              label="Pagsusulit na Kinuha"
+              label="Quizzes Taken"
               color="#6366F1"
               sub={`Avg: ${stats.average_quiz_score} pts`}
             />
             <MetricCard
               icon="game-controller"
               value={stats.completed_minigames}
-              label="Natapos na Mini-Games"
+              label="Mini-Games Completed"
               color="#EC4899"
-              sub="Lahat ng 5 laro"
+              sub="All 5 games"
             />
             <MetricCard
               icon="shield-checkmark"
               value={`${stats.average_accuracy}%`}
-              label="Katumpakan (Accuracy)"
+              label="Average Accuracy"
               color={Colors.grassGreenDark}
-              sub="Tamang sagot"
+              sub="Correct answers"
             />
             <MetricCard
               icon="trending-up"
               value={`${stats.average_progress}%`}
-              label="Katamtamang Antas"
+              label="Average Progress"
               color="#F59E0B"
-              sub="Patungo sa 480 milestone"
+              sub="Toward 480 milestone"
             />
             <MetricCard
               icon="star"
               value={stats.total_stars_earned.toLocaleString()}
-              label="Kabuuang Bituin (Lifetime)"
+              label="Total Stars (Lifetime)"
               color={Colors.sunYellowDark}
-              sub="Lahat ng naipong bituin"
+              sub="All cumulative stars"
             />
             <MetricCard
               icon="wallet"
               value={stats.total_stars_available.toLocaleString()}
-              label="Bituin na Magagamit"
+              label="Spendable Stars"
               color="#10B981"
-              sub="Hawak ng mga bata ngayon"
+              sub="Active student balance"
             />
             <MetricCard
               icon="ribbon"
               value={stats.total_badges_earned}
-              label="Mga Badges na Na-claim"
+              label="Badges Claimed"
               color="#8B5CF6"
-              sub="Gantimpala milestones"
+              sub="Milestone awards"
             />
             <MetricCard
               icon="albums"
               value={stats.total_collectibles_claimed}
-              label="Kolektibles na Nakuha"
+              label="Collectibles Unlocked"
               color="#F97316"
-              sub="Nakolekta cards (151 items)"
+              sub="Collection cards (151 items)"
             />
           </View>
 
           {/* Quick Notice on Star Balance (No 480 Cap) */}
           <View style={[styles.infoBanner, Shadows.subtle]}>
             <Ionicons name="information-circle" size={20} color={Colors.teacherPurple} />
-              <Text style={styles.infoBannerText}>
-              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Bituin:</Text> Walang 480-star cap ang kabuuang bituin ng mga mag-aaral. Ang 480 ay milestone lamang para sa badge na &ldquo;Ultimate Learner&rdquo;. Patuloy na makakaipon ng bituin ang bata nang walang limitasyon.
+            <Text style={styles.infoBannerText}>
+              <Text style={{ fontWeight: 'bold' }}>Star Policy:</Text> There is no 480-star cap on total student stars. 480 is simply a milestone for the &ldquo;Ultimate Learner&rdquo; badge. Students can continue earning unlimited stars.
             </Text>
           </View>
 
           {/* Mini-Games Overview Row */}
           <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
             <Ionicons name="game-controller" size={18} color="#EC4899" />
-            <Text style={styles.sectionTitle}>5 Mini-Games ng WikaPlay</Text>
+            <Text style={styles.sectionTitle}>WikaPlay 5 Mini-Games</Text>
           </View>
 
           <View style={styles.miniGamesRow}>
             {[
-              { name: 'Memory Match', tag: '20 Antas', color: '#10B981' },
-              { name: 'Paghahanap ng Larawan', tag: 'Makinig', color: '#F59E0B' },
-              { name: 'Hulaan ang Salita', tag: 'Talas-Isip', color: '#3B82F6' },
-              { name: 'Gulong ng Letra', tag: 'Ayusin', color: '#8B5CF6' },
-              { name: 'Pop Balloon', tag: 'Bilis', color: '#EC4899' },
+              { name: 'Memory Match', tag: '20 Levels', color: '#10B981' },
+              { name: 'Picture Search', tag: 'Listening', color: '#F59E0B' },
+              { name: 'Word Guess', tag: 'Vocabulary', color: '#3B82F6' },
+              { name: 'Letter Wheel', tag: 'Spelling', color: '#8B5CF6' },
+              { name: 'Pop Balloon', tag: 'Speed', color: '#EC4899' },
             ].map((g, i) => (
               <View key={i} style={[styles.gameMiniChip, { borderColor: g.color + '40' }]}>
                 <View style={[styles.gameMiniDot, { backgroundColor: g.color }]} />
@@ -409,7 +409,7 @@ export default function TeacherDashboardScreen() {
           {/* Recent Quiz Results */}
           <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
             <Ionicons name="newspaper-outline" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Pinakabagong Resulta ng Pagsusulit</Text>
+            <Text style={styles.sectionTitle}>Recent Quiz Results</Text>
           </View>
 
           {recentQuizResults.length > 0 ? (
@@ -429,10 +429,10 @@ export default function TeacherDashboardScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.resultStudentName}>
-                    {result.user?.name || 'Estudyante'}
+                    {result.user?.name || 'Student'}
                   </Text>
                   <Text style={styles.resultMeta}>
-                    {result.category?.name || 'Aralin'} · {result.difficulty ? result.difficulty.toUpperCase() : 'MADALI'}
+                    {result.category?.name || 'Lesson'} · {result.difficulty ? result.difficulty.toUpperCase() : 'EASY'}
                   </Text>
                 </View>
                 <View style={styles.resultScoreCol}>
@@ -450,14 +450,14 @@ export default function TeacherDashboardScreen() {
             ))
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Wala pang naitalang pagsusulit.</Text>
+              <Text style={styles.emptyText}>No quiz results recorded yet.</Text>
             </View>
           )}
 
           {/* Top Performers by Lifetime Stars */}
           <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
             <Ionicons name="trophy" size={18} color={Colors.sunYellowDark} />
-            <Text style={styles.sectionTitle}>Mga Nangunguna sa Klase (Bituin)</Text>
+            <Text style={styles.sectionTitle}>Top Performers (Stars)</Text>
           </View>
 
           {[...students]
@@ -471,7 +471,7 @@ export default function TeacherDashboardScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.lbStudentName}>{student.name}</Text>
                   <Text style={styles.lbMeta}>
-                    {student.student_id_code || 'ID-' + student.id} · {student.quizzes_passed} naipasang quiz
+                    {student.student_id_code || 'ID-' + student.id} · {student.quizzes_passed} passed quizzes
                   </Text>
                 </View>
                 <View style={styles.lbStarBadge}>
@@ -492,9 +492,9 @@ export default function TeacherDashboardScreen() {
           <View style={[styles.chartContainer, Shadows.soft]}>
             <View style={styles.chartHeader}>
               <Ionicons name="calendar-outline" size={18} color={Colors.teacherPurple} />
-              <Text style={styles.chartTitle}>Partisipasyon sa Nakaraang 7 Araw</Text>
+              <Text style={styles.chartTitle}>7-Day Activity & Participation</Text>
             </View>
-            <Text style={styles.chartSub}>Kabuuan ng kinuha na quiz at nilarong mini-games bawat araw</Text>
+            <Text style={styles.chartSub}>Total quizzes taken and mini-games played each day</Text>
 
             <View style={styles.barChartRow}>
               {charts.participation_over_time.length > 0 ? (
@@ -513,7 +513,7 @@ export default function TeacherDashboardScreen() {
                   );
                 })
               ) : (
-                <Text style={styles.emptyText}>Wala pang sapat na datos para sa tsart.</Text>
+                <Text style={styles.emptyText}>No data available for chart yet.</Text>
               )}
             </View>
           </View>
@@ -522,9 +522,9 @@ export default function TeacherDashboardScreen() {
           <View style={[styles.chartContainer, Shadows.soft, { marginTop: 16 }]}>
             <View style={styles.chartHeader}>
               <Ionicons name="pie-chart-outline" size={18} color="#0284C7" />
-              <Text style={styles.chartTitle}>Katumpakan ayon sa Kategorya</Text>
+              <Text style={styles.chartTitle}>Category Accuracy & Performance</Text>
             </View>
-            <Text style={styles.chartSub}>Porsyento ng tamang sagot ng mga estudyante sa bawat paksa</Text>
+            <Text style={styles.chartSub}>Percentage of correct answers across each subject category</Text>
 
             {charts.category_performance.length > 0 ? (
               charts.category_performance.map((c) => (
@@ -532,7 +532,7 @@ export default function TeacherDashboardScreen() {
                   <View style={styles.catProgressHead}>
                     <Text style={styles.catNameText}>{c.name}</Text>
                     <Text style={styles.catStatText}>
-                      {c.accuracy}% ({c.attempts} kinuha)
+                      {c.accuracy}% ({c.attempts} attempts)
                     </Text>
                   </View>
                   <View style={styles.catProgressBarTrack}>
@@ -549,7 +549,7 @@ export default function TeacherDashboardScreen() {
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>Wala pang natapos na quiz sa mga kategorya.</Text>
+              <Text style={styles.emptyText}>No completed quizzes across categories yet.</Text>
             )}
           </View>
 
@@ -557,32 +557,32 @@ export default function TeacherDashboardScreen() {
           <View style={[styles.chartContainer, Shadows.soft, { marginTop: 16 }]}>
             <View style={styles.chartHeader}>
               <Ionicons name="checkmark-done-circle-outline" size={18} color={Colors.grassGreenDark} />
-              <Text style={styles.chartTitle}>Katayuan ng Pagkumpleto ng Gawain</Text>
+              <Text style={styles.chartTitle}>Activity Completion Breakdown</Text>
             </View>
 
             <View style={styles.completionGrid}>
               <View style={[styles.compCard, { backgroundColor: '#DCFCE7' }]}>
                 <Ionicons name="checkmark-circle" size={24} color={Colors.grassGreenDark} />
                 <Text style={styles.compVal}>{charts.activity_completion.quizzes_passed}</Text>
-                <Text style={styles.compLabel}>Naipasang Quiz</Text>
+                <Text style={styles.compLabel}>Passed Quizzes</Text>
               </View>
 
               <View style={[styles.compCard, { backgroundColor: '#FEE2E2' }]}>
                 <Ionicons name="alert-circle" size={24} color={Colors.coralPinkDark} />
                 <Text style={styles.compVal}>{charts.activity_completion.quizzes_failed}</Text>
-                <Text style={styles.compLabel}>Kailangang Ulitin</Text>
+                <Text style={styles.compLabel}>Needs Retake</Text>
               </View>
 
               <View style={[styles.compCard, { backgroundColor: '#EDE9FE' }]}>
                 <Ionicons name="game-controller" size={24} color={Colors.teacherPurple} />
                 <Text style={styles.compVal}>{charts.activity_completion.minigames_completed}</Text>
-                <Text style={styles.compLabel}>Natapos na Laro</Text>
+                <Text style={styles.compLabel}>Completed Games</Text>
               </View>
 
               <View style={[styles.compCard, { backgroundColor: '#FEF08A' }]}>
                 <Ionicons name="gift" size={24} color={Colors.sunYellowDark} />
                 <Text style={styles.compVal}>{charts.activity_completion.mystery_box_qualified}</Text>
-                <Text style={styles.compLabel}>Mahiwagang Kahon</Text>
+                <Text style={styles.compLabel}>Mystery Boxes Qualified</Text>
               </View>
             </View>
           </View>
@@ -594,7 +594,7 @@ export default function TeacherDashboardScreen() {
         <>
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="pulse" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Kasalukuyang Aktibidad ng mga Bata</Text>
+            <Text style={styles.sectionTitle}>Live Student Activity</Text>
           </View>
 
           {onlineStudents.length > 0 ? (
@@ -615,7 +615,7 @@ export default function TeacherDashboardScreen() {
                     <View style={styles.onlinePip} />
                   </View>
                   <Text style={styles.liveActivityText} numberOfLines={1}>
-                    {s.current_activity || 'Nag-aaral sa WikaPlay'}
+                    {s.current_activity || 'Active on WikaPlay'}
                   </Text>
                   {s.section ? <Text style={styles.liveSectionText}>{s.section}</Text> : null}
                 </View>
@@ -629,9 +629,9 @@ export default function TeacherDashboardScreen() {
           ) : (
             <View style={[styles.emptyContainer, Shadows.subtle]}>
               <Ionicons name="moon-outline" size={36} color={Colors.textMuted} style={{ marginBottom: 6 }} />
-              <Text style={styles.emptyTitle}>Walang Online Ngayon</Text>
+              <Text style={styles.emptyTitle}>No Students Online Right Now</Text>
               <Text style={styles.emptyText}>
-                Awtomatikong lalabas dito ang mga mag-aaral kapag nagbukas sila ng WikaPlay Mobile.
+                Students will automatically appear here in real time when they open WikaPlay Mobile.
               </Text>
             </View>
           )}
@@ -639,7 +639,7 @@ export default function TeacherDashboardScreen() {
           {/* Recent Mini-Game Sessions Feed */}
           <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
             <Ionicons name="game-controller" size={18} color="#EC4899" />
-            <Text style={styles.sectionTitle}>Kamakailang Mini-Game Sessions</Text>
+            <Text style={styles.sectionTitle}>Recent Mini-Game Sessions</Text>
           </View>
 
           {recentMinigames.length > 0 ? (
@@ -649,7 +649,7 @@ export default function TeacherDashboardScreen() {
                   <Ionicons name="game-controller" size={18} color="#DB2777" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.gameFeedStudent}>{game.user?.name || 'Estudyante'}</Text>
+                  <Text style={styles.gameFeedStudent}>{game.user?.name || 'Student'}</Text>
                   <Text style={styles.gameFeedType}>{game.game_type}</Text>
                 </View>
                 <View style={styles.gameFeedScore}>
@@ -660,7 +660,7 @@ export default function TeacherDashboardScreen() {
             ))
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Wala pang naitalang nilarong mini-game.</Text>
+              <Text style={styles.emptyText}>No mini-game sessions recorded yet.</Text>
             </View>
           )}
         </>

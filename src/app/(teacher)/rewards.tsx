@@ -88,7 +88,7 @@ export default function TeacherRewardsScreen() {
         setCollectibleCategories(collectiblesRes.value.categories);
       }
     } catch (err: any) {
-      setError(err?.message || 'Nabigong kunin ang datos ng gantimpala at nakolekta.');
+      setError(err?.message || 'Failed to load rewards and collectibles data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -109,7 +109,7 @@ export default function TeacherRewardsScreen() {
   const handleSaveCard = async () => {
     if (!editingCard) return;
     if (!editFilipinoName.trim() || !editDescription.trim()) {
-      Alert.alert('Kulang na Datos', 'Punan ang Filipino name at description.');
+      Alert.alert('Missing Data', 'Please fill in the Filipino name and description.');
       return;
     }
 
@@ -125,19 +125,19 @@ export default function TeacherRewardsScreen() {
         rarity: editingCard.rarity,
       });
 
-      Alert.alert('Tagumpay', 'Nai-save ang bagong impormasyon ng kard!');
+      Alert.alert('Success', 'Card information updated successfully!');
       setEditingCard(null);
       // Reload updated cards
       const res = await teacherService.getCollectibles();
       setCollectibles(res.collectibles);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Nabigong i-save ang kard.');
+      Alert.alert('Error', err?.message || 'Failed to save card.');
     } finally {
       setIsSavingCard(false);
     }
   };
 
-  if (loading && !refreshing) return <LoadingView message="Kinukuha ang Gantimpala & Nakolekta Center..." />;
+  if (loading && !refreshing) return <LoadingView message="Loading Rewards & Collectibles Center..." />;
   if (error && !rewardAudit) return <ErrorView message={error} onRetry={loadData} />;
 
   const filteredCollectibles = collectibles.filter((c) => {
@@ -179,9 +179,9 @@ export default function TeacherRewardsScreen() {
           <Ionicons name="gift" size={24} color={Colors.teacherPurple} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>Gantimpala at Nakolekta</Text>
+          <Text style={styles.pageTitle}>Rewards & Collectibles</Text>
           <Text style={styles.pageSub}>
-            Pamahalaan ang mga bituin, badge, mini-game qualification, at 151 kard.
+            Manage stars, badges, mini-game qualifications, and 151 collectible cards.
           </Text>
         </View>
         <VolumeButton activeColor={Colors.teacherPurple} size={38} />
@@ -199,7 +199,7 @@ export default function TeacherRewardsScreen() {
             color={subTab === 'stars' ? Colors.white : Colors.sunYellowDark}
           />
           <Text style={[styles.subTabText, subTab === 'stars' && styles.subTabTextActive]}>
-            Bituin at Badges
+            Stars & Badges
           </Text>
         </TouchableOpacity>
 
@@ -213,7 +213,7 @@ export default function TeacherRewardsScreen() {
             color={subTab === 'collectibles' ? Colors.white : Colors.coralPinkDark}
           />
           <Text style={[styles.subTabText, subTab === 'collectibles' && styles.subTabTextActive]}>
-            Nakolekta (151 Kard)
+            Collectibles (151 Cards)
           </Text>
         </TouchableOpacity>
 
@@ -247,12 +247,12 @@ export default function TeacherRewardsScreen() {
                 <Ionicons name="star" size={32} color={Colors.sunYellow} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.heroLabel}>Kabuuang Bituin sa Klase</Text>
+                <Text style={styles.heroLabel}>Total Class Stars</Text>
                 <Text style={styles.heroValue}>
                   {(rewardAudit?.total_earned ?? 0).toLocaleString()} ⭐
                 </Text>
                 <Text style={styles.heroNotice}>
-                  Patakarang Walang 480-Star Cap: Patuloy na makakaipon ng higit sa 480 bituin ang bawat mag-aaral.
+                  No 480-Star Cap Policy: Students can continue earning beyond 480 stars without limit.
                 </Text>
               </View>
             </View>
@@ -262,21 +262,21 @@ export default function TeacherRewardsScreen() {
                 <Text style={styles.ledgerNum}>
                   {(rewardAudit?.total_earned ?? 0).toLocaleString()}
                 </Text>
-                <Text style={styles.ledgerDesc}>Lifetime Naipon</Text>
+                <Text style={styles.ledgerDesc}>Lifetime Earned</Text>
               </View>
               <View style={styles.ledgerDivider} />
               <View style={styles.ledgerCol}>
                 <Text style={styles.ledgerNum}>
                   {(rewardAudit?.total_spendable ?? 0).toLocaleString()}
                 </Text>
-                <Text style={styles.ledgerDesc}>Kasalukuyang Hawak</Text>
+                <Text style={styles.ledgerDesc}>Currently Held</Text>
               </View>
               <View style={styles.ledgerDivider} />
               <View style={styles.ledgerCol}>
                 <Text style={styles.ledgerNum}>
                   {(rewardAudit?.total_spent ?? 0).toLocaleString()}
                 </Text>
-                <Text style={styles.ledgerDesc}>Nagamit sa Rewards</Text>
+                <Text style={styles.ledgerDesc}>Spent on Rewards</Text>
               </View>
             </View>
           </LinearGradient>
@@ -285,10 +285,10 @@ export default function TeacherRewardsScreen() {
           <View style={[styles.sectionBox, Shadows.soft]}>
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="ribbon" size={20} color={Colors.sunYellowDark} />
-              <Text style={styles.sectionBoxTitle}>Pamamahagi ng Badge ng Karangalan</Text>
+              <Text style={styles.sectionBoxTitle}>Honor Badge Distribution</Text>
             </View>
             <Text style={styles.sectionBoxSub}>
-              Bilang ng mga mag-aaral na umabot at nag-claim ng bawat badge milestone
+              Number of students who reached and claimed each badge milestone
             </Text>
 
             {rewardAudit?.badge_stats?.map((b) => (
@@ -300,10 +300,10 @@ export default function TeacherRewardsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.badgeStatTitle}>{b.title}</Text>
-                  <Text style={styles.badgeStatThreshold}>Threshold: {b.threshold} na kabuuang bituin</Text>
+                  <Text style={styles.badgeStatThreshold}>Threshold: {b.threshold} total stars</Text>
                 </View>
                 <View style={styles.badgeClaimCountBadge}>
-                  <Text style={styles.badgeClaimCountText}>{b.claimed_count} mag-aaral</Text>
+                  <Text style={styles.badgeClaimCountText}>{b.claimed_count} students</Text>
                 </View>
               </View>
             ))}
@@ -313,17 +313,17 @@ export default function TeacherRewardsScreen() {
           <View style={[styles.sectionBox, Shadows.soft, { marginTop: 14 }]}>
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="receipt-outline" size={20} color={Colors.teacherPurple} />
-              <Text style={styles.sectionBoxTitle}>Kamakailang Transaksyon sa Bituin</Text>
+              <Text style={styles.sectionBoxTitle}>Recent Star Transactions</Text>
             </View>
 
             {rewardAudit?.recent_transactions && rewardAudit.recent_transactions.length > 0 ? (
               rewardAudit.recent_transactions.slice(0, 12).map((tx, idx) => (
                 <View key={tx.id || idx} style={styles.txRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.txStudentName}>{tx.user?.name || 'Mag-aaral'}</Text>
+                    <Text style={styles.txStudentName}>{tx.user?.name || 'Student'}</Text>
                     <Text style={styles.txDesc}>{tx.description || tx.source_type}</Text>
                     <Text style={styles.txDate}>
-                      {tx.created_at ? new Date(tx.created_at).toLocaleString('fil-PH') : ''} · Balanse: {tx.balance_after} ⭐
+                      {tx.created_at ? new Date(tx.created_at).toLocaleString('en-PH') : ''} · Balance: {tx.balance_after} ⭐
                     </Text>
                   </View>
                   <Text
@@ -337,7 +337,7 @@ export default function TeacherRewardsScreen() {
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>Wala pang naitalang transaksyon.</Text>
+              <Text style={styles.emptyText}>No transactions recorded yet.</Text>
             )}
           </View>
         </>
@@ -349,14 +349,14 @@ export default function TeacherRewardsScreen() {
           {/* Summary Banner */}
           <View style={[styles.collectibleBanner, Shadows.soft]}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cbTitle}>Katalogo ng Nakolekta (151 Kard)</Text>
+              <Text style={styles.cbTitle}>Collectibles Catalog (151 Cards)</Text>
               <Text style={styles.cbSub}>
-                May {totalCollectibles} kard sa sistema. Kabuuang {totalClaims} kard ang na-claim ng mga mag-aaral.
+                {totalCollectibles} cards in the system. {totalClaims} total cards claimed by students.
               </Text>
             </View>
             <View style={styles.cbBadge}>
               <Ionicons name="sparkles" size={18} color={Colors.sunYellowDark} />
-              <Text style={styles.cbBadgeText}>{totalClaims} Na-unlock</Text>
+              <Text style={styles.cbBadgeText}>{totalClaims} Unlocked</Text>
             </View>
           </View>
 
@@ -365,7 +365,7 @@ export default function TeacherRewardsScreen() {
             <Ionicons name="search" size={16} color={Colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Ihanap ayon sa pangalan o deskripsyon..."
+              placeholder="Search by name or description..."
               value={collectibleSearch}
               onChangeText={setCollectibleSearch}
             />
@@ -385,7 +385,7 @@ export default function TeacherRewardsScreen() {
               <Text
                 style={[styles.catFilterText, selectedCategoryFilter === 'all' && styles.catFilterTextActive]}
               >
-                Lahat ({collectibles.length})
+                All ({collectibles.length})
               </Text>
             </TouchableOpacity>
 
@@ -411,8 +411,8 @@ export default function TeacherRewardsScreen() {
           {filteredCollectibles.length === 0 ? (
             <EmptyState
               emoji="🎴"
-              title="Walang Nahanap na Kard"
-              message="Walang tumutugma sa iyong filter o hinahanap."
+              title="No Cards Found"
+              message="No cards match your filter or search term."
             />
           ) : (
             filteredCollectibles.map((card) => (
@@ -432,12 +432,12 @@ export default function TeacherRewardsScreen() {
                       <Text style={styles.rarityText}>{card.rarity.toUpperCase()}</Text>
                     </View>
                   </View>
-                  <Text style={styles.cardCategory}>{card.category || 'Mga Hayop'}</Text>
+                  <Text style={styles.cardCategory}>{card.category || 'Animals'}</Text>
                   <Text style={styles.cardDesc} numberOfLines={2}>
                     {card.description}
                   </Text>
                   <Text style={styles.cardClaimsCount}>
-                    {card.claims_count ?? 0} mag-aaral ang nagmamay-ari
+                    {card.claims_count ?? 0} students own this card
                   </Text>
                 </View>
 
@@ -446,7 +446,7 @@ export default function TeacherRewardsScreen() {
                   onPress={() => handleOpenEditCard(card)}
                 >
                   <Ionicons name="pencil" size={16} color={Colors.teacherPurple} />
-                  <Text style={styles.cardEditText}>I-edit</Text>
+                  <Text style={styles.cardEditText}>Edit</Text>
                 </TouchableOpacity>
               </View>
             ))
@@ -460,10 +460,10 @@ export default function TeacherRewardsScreen() {
           <View style={[styles.sectionBox, Shadows.soft]}>
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="game-controller" size={20} color="#EC4899" />
-              <Text style={styles.sectionBoxTitle}>5 Mini-Games ng WikaPlay</Text>
+              <Text style={styles.sectionBoxTitle}>5 WikaPlay Mini-Games</Text>
             </View>
             <Text style={styles.sectionBoxSub}>
-              Patakaran sa Mystery Box: 15–20 / 20 puntos ay kwalipikado sa mahiwagang kahon. 0–14 puntos ay hindi kwalipikado.
+              Mystery Box Policy: Scoring 15–20 / 20 points qualifies for the mystery box. 0–14 points do not qualify.
             </Text>
 
             {minigamesData?.games?.map((g) => (
@@ -475,7 +475,7 @@ export default function TeacherRewardsScreen() {
                   </View>
                   <View style={[styles.gamePlaysPill, { backgroundColor: g.color + '20' }]}>
                     <Text style={[styles.gamePlaysText, { color: g.color }]}>
-                      {g.total_plays} Laro
+                      {g.total_plays} Plays
                     </Text>
                   </View>
                 </View>
@@ -483,17 +483,17 @@ export default function TeacherRewardsScreen() {
                 <View style={styles.gameMetricsRow}>
                   <View style={styles.gameMetricCol}>
                     <Text style={styles.gameMetricVal}>{g.average_score} / 20</Text>
-                    <Text style={styles.gameMetricLabel}>Avg Puntos</Text>
+                    <Text style={styles.gameMetricLabel}>Avg Score</Text>
                   </View>
                   <View style={styles.gameMetricDivider} />
                   <View style={styles.gameMetricCol}>
                     <Text style={styles.gameMetricVal}>{g.qualifiers_count}</Text>
-                    <Text style={styles.gameMetricLabel}>Mahiwagang Kahon (15-20 pts)</Text>
+                    <Text style={styles.gameMetricLabel}>Mystery Box (15-20 pts)</Text>
                   </View>
                   <View style={styles.gameMetricDivider} />
                   <View style={styles.gameMetricCol}>
                     <Text style={styles.gameMetricVal}>+{g.stars_awarded} ⭐</Text>
-                    <Text style={styles.gameMetricLabel}>Bituin na Naipamahagi</Text>
+                    <Text style={styles.gameMetricLabel}>Stars Awarded</Text>
                   </View>
                 </View>
               </View>
@@ -512,27 +512,27 @@ export default function TeacherRewardsScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.editModalCard, Shadows.card]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.editModalTitle}>I-edit ang Kolektibles Kard</Text>
+              <Text style={styles.editModalTitle}>Edit Collectible Card</Text>
               <TouchableOpacity onPress={() => setEditingCard(null)}>
                 <Ionicons name="close" size={22} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Pangalan sa Filipino:</Text>
+            <Text style={styles.inputLabel}>Filipino Name:</Text>
             <TextInput
               style={styles.modalInput}
               value={editFilipinoName}
               onChangeText={setEditFilipinoName}
-              placeholder="Halimbawa: Ang Aso"
+              placeholder="Example: Ang Aso"
             />
 
-            <Text style={styles.inputLabel}>Deskripsyon / Kuwento:</Text>
+            <Text style={styles.inputLabel}>Description / Story:</Text>
             <TextInput
               style={[styles.modalInput, { height: 90, textAlignVertical: 'top' }]}
               multiline
               value={editDescription}
               onChangeText={setEditDescription}
-              placeholder="Pang-edukasyong deskripsyon ng kard..."
+              placeholder="Educational description of the card..."
             />
 
             <View style={styles.modalActions}>
@@ -541,7 +541,7 @@ export default function TeacherRewardsScreen() {
                 onPress={() => setEditingCard(null)}
                 disabled={isSavingCard}
               >
-                <Text style={styles.modalCancelText}>Kanselahin</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -550,7 +550,7 @@ export default function TeacherRewardsScreen() {
                 disabled={isSavingCard}
               >
                 <Text style={styles.modalSaveText}>
-                  {isSavingCard ? 'Nai-save...' : 'I-save'}
+                  {isSavingCard ? 'Saving...' : 'Save'}
                 </Text>
               </TouchableOpacity>
             </View>

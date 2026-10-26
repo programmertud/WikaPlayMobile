@@ -13,7 +13,7 @@ services:
       - key: APP_DEBUG
         value: "false"
       - key: APP_KEY
-        sync: false
+        value: "base64:XTRGoA46Fs40+wuilyd7f/4Vg/1c1zP1K923AfxEuGs="
       - key: APP_URL
         sync: false
       - key: LOG_CHANNEL
@@ -23,11 +23,11 @@ services:
       - key: RUN_SEEDER
         value: "true"
       - key: DB_CONNECTION
-        value: pgsql
+        value: mysql
       - key: DB_HOST
         sync: false
       - key: DB_PORT
-        value: "5432"
+        value: "3306"
       - key: DB_DATABASE
         sync: false
       - key: DB_USERNAME

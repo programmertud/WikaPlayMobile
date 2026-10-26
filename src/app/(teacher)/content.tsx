@@ -55,9 +55,9 @@ const EMPTY_FLASHCARD: Partial<Flashcard & { localImageSource?: any; localAudioS
 
 const DIFFICULTIES: QuizDifficulty[] = ['madali', 'katamtaman', 'mahirap'];
 const DIFF_LABELS: Record<QuizDifficulty, string> = {
-  madali: 'Madali',
-  katamtaman: 'Katamtaman',
-  mahirap: 'Mahirap',
+  madali: 'Easy',
+  katamtaman: 'Medium',
+  mahirap: 'Hard',
 };
 const DIFF_COLORS: Record<QuizDifficulty, string> = {
   madali: Colors.grassGreen,
@@ -277,7 +277,7 @@ export default function ContentManagementScreen({
         setMinigamesData(mgRes.value);
       }
     } catch (err: any) {
-      setError(err?.message || 'Nabigong kunin ang datos.');
+      setError(err?.message || 'Failed to fetch data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -317,7 +317,7 @@ export default function ContentManagementScreen({
         } else {
           questions = catObj.items.map((item, idx) => ({
             id: idx + 1, category_id: catId, flashcard_id: null,
-            question_text: diff === 'katamtaman' ? `Pakinggan ang tunog at piliin ang tamang larawan para sa "${item.filipino}":` : 'Ano ang wastong baybay o pangalan ng nasa larawan?',
+            question_text: diff === 'katamtaman' ? `Listen to the sound and choose the correct picture for "${item.filipino}":` : 'What is the correct spelling or word for the picture shown?',
             target_image_url: typeof item.image === 'string' ? item.image : '', target_item_name: item.filipino,
             choices: [], correct_answer: item.filipino, points: diff === 'katamtaman' ? 2 : 3, difficulty: diff,
           })) as QuizQuestion[];
@@ -360,7 +360,7 @@ export default function ContentManagementScreen({
         prev ? { ...prev, availability: { ...prev.availability, is_locked: newLocked } } : prev
       );
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Hindi nai-save ang pagbabago.');
+      Alert.alert('Error', err?.message || 'Failed to save changes.');
     } finally {
       setSavingLock(false);
     }
@@ -368,16 +368,16 @@ export default function ContentManagementScreen({
 
   const handleToggleCategoryQuizLock = (cat: Category, currentlyLocked: boolean) => {
     Alert.alert(
-      'Kumpirmahin ang Aksyon',
-      `Sigurado ka bang nais mong ${currentlyLocked ? 'i-unlock (buksan)' : 'i-lock'} ang pagsusulit para sa "${cat.name}"?\n\n${
+      'Confirm Action',
+      `Are you sure you want to ${currentlyLocked ? 'unlock' : 'lock'} quizzes for "${cat.name}"?\n\n${
         currentlyLocked
-          ? 'Maaari nang sagutan at laruin ng mga mag-aaral ang pagsusulit para sa kategoryang ito.'
-          : 'Hindi na mabubuksan o masasagutan ng mga mag-aaral ang pagsusulit para sa kategoryang ito hangga\'t naka-lock.'
+          ? 'Students can now play and take quizzes for this category.'
+          : 'Students will not be able to open or answer quizzes for this category while locked.'
       }`,
       [
-        { text: 'Kanselahin', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: currentlyLocked ? 'I-unlock' : 'I-lock',
+          text: currentlyLocked ? 'Unlock' : 'Lock',
           style: currentlyLocked ? 'default' : 'destructive',
           onPress: async () => {
             try {
@@ -407,13 +407,13 @@ export default function ContentManagementScreen({
                 })
               );
               Alert.alert(
-                'Tagumpay',
+                'Success',
                 !currentlyLocked
-                  ? `Nai-lock na ang pagsusulit para sa ${cat.name}. Hindi na ito mabubuksan ng mga mag-aaral.`
-                  : `Nabuksan na ang pagsusulit para sa ${cat.name}. Maaari na itong sagutan ng mga mag-aaral.`
+                  ? `Quiz locked for ${cat.name}. Students cannot access it.`
+                  : `Quiz unlocked for ${cat.name}. Students can now access it.`
               );
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Nabigong baguhin ang estado ng pagsusulit.');
+              Alert.alert('Error', err?.message || 'Failed to update quiz status.');
             }
           },
         },
@@ -426,7 +426,7 @@ export default function ContentManagementScreen({
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Pahintulot', 'Kailangan ng pahintulot para ma-access ang gallery ng iyong device o computer.');
+        Alert.alert('Permission Required', 'Permission is required to access your device gallery or photo library.');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -470,7 +470,7 @@ export default function ContentManagementScreen({
         }));
       }
     } catch (err: any) {
-      Alert.alert('Pumili ng Larawan', err?.message || 'Hindi napili ang larawan.');
+      Alert.alert('Select Image', err?.message || 'Failed to select image.');
     } finally {
       setIsUploadingImage(false);
     }
@@ -516,7 +516,7 @@ export default function ContentManagementScreen({
         }));
       }
     } catch (err: any) {
-      Alert.alert('Pumili ng Audio', err?.message || 'Hindi napili ang audio.');
+      Alert.alert('Select Audio', err?.message || 'Failed to select audio.');
     } finally {
       setIsUploadingAudio(false);
     }
@@ -552,7 +552,7 @@ export default function ContentManagementScreen({
   const handleSaveFlashcard = async () => {
     const c = flashcardModal.card;
     if (!c.filipino_name?.trim() || !c.category_id) {
-      Alert.alert('Kulang na Patlang', 'Pakilagay ang Filipino name at kategorya.');
+      Alert.alert('Missing Fields', 'Please provide the Filipino name and select a category.');
       return;
     }
 
@@ -622,10 +622,10 @@ export default function ContentManagementScreen({
         }
       });
 
-      Alert.alert('Tagumpay', 'Nai-save ang flashcard!');
+      Alert.alert('Success', 'Flashcard saved successfully!');
       setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false });
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Nabigong i-save ang flashcard.');
+      Alert.alert('Error', err?.message || 'Failed to save flashcard.');
     } finally {
       setIsSavingFlashcard(false);
     }
@@ -633,20 +633,20 @@ export default function ContentManagementScreen({
 
   const handleDeleteFlashcard = (id: number, name: string) => {
     Alert.alert(
-      'Kumpirmahin ang Pagbura',
-      `Sigurado ka bang nais mong burahin ang flashcard na "${name}"?`,
+      'Confirm Deletion',
+      `Are you sure you want to delete the flashcard "${name}"?`,
       [
-        { text: 'Kanselahin', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Burahin',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               await teacherService.deleteFlashcard(id).catch(() => {});
               setFlashcards((prev) => prev.filter((f) => f.id !== id));
-              Alert.alert('Tagumpay', 'Matagumpay na nabura ang flashcard.');
+              Alert.alert('Success', 'Flashcard deleted successfully.');
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Nabigong burahin ang flashcard.');
+              Alert.alert('Error', err?.message || 'Failed to delete flashcard.');
             }
           },
         },
@@ -656,7 +656,7 @@ export default function ContentManagementScreen({
 
   const handlePlayAudioPreview = (cardOrAudio?: any) => {
     if (!cardOrAudio) {
-      Alert.alert('Walang Audio', 'Walang naka-link na audio recording sa flashcard na ito.');
+      Alert.alert('No Audio', 'No audio recording linked to this flashcard.');
       return;
     }
     if (typeof cardOrAudio === 'object') {
@@ -676,7 +676,7 @@ export default function ContentManagementScreen({
       playSound(cardOrAudio);
       return;
     }
-    Alert.alert('Walang Audio', 'Walang naka-link na audio recording sa flashcard na ito.');
+    Alert.alert('No Audio', 'No audio recording linked to this flashcard.');
   };
 
   // ── Quiz Question Actions ───────────────────────────────────────────────
@@ -700,7 +700,7 @@ export default function ContentManagementScreen({
   const handleSaveQuestion = async () => {
     const q = questionModal.question;
     if (!q.correct_answer || !selectedCategory) {
-      Alert.alert('Paalala', 'Punan ang tamang sagot at kategorya.');
+      Alert.alert('Notice', 'Please fill in the correct answer and category.');
       return;
     }
 
@@ -713,28 +713,28 @@ export default function ContentManagementScreen({
 
       setQuestionModal({ open: false, question: {} });
       loadQuiz(selectedCategory.id, selectedDiff);
-      Alert.alert('Tagumpay', 'Nai-save ang tanong sa quiz!');
+      Alert.alert('Success', 'Quiz question saved successfully!');
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Hindi nai-save ang tanong.');
+      Alert.alert('Error', err?.message || 'Failed to save question.');
     }
   };
 
   const handleDeleteQuestion = (questionId: number) => {
     Alert.alert(
-      'Kumpirmahin ang Pagbura',
-      'Nais mo bang burahin ang tanong na ito?',
+      'Confirm Deletion',
+      'Are you sure you want to delete this question?',
       [
-        { text: 'Kanselahin', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Burahin',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               await teacherService.deleteQuizQuestion(questionId);
               if (selectedCategory) loadQuiz(selectedCategory.id, selectedDiff);
-              Alert.alert('Tagumpay', 'Nabura ang tanong.');
+              Alert.alert('Success', 'Question deleted successfully.');
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Nabigong burahin ang tanong.');
+              Alert.alert('Error', err?.message || 'Failed to delete question.');
             }
           },
         },
@@ -742,7 +742,7 @@ export default function ContentManagementScreen({
     );
   };
 
-  if (loading && !refreshing) return <LoadingView message="Kinukuha ang nilalaman at mga aralin..." />;
+  if (loading && !refreshing) return <LoadingView message="Loading content and lessons..." />;
   if (error && categories.length === 0) return <ErrorView message={error} onRetry={loadAllData} />;
 
   // Filtered flashcards
@@ -782,7 +782,7 @@ export default function ContentManagementScreen({
           activeOpacity={0.8}
         >
           <Ionicons name="arrow-back" size={20} color={Colors.teacherPurple} />
-          <Text style={styles.backToDashboardText}>Bumalik sa Dashboard</Text>
+          <Text style={styles.backToDashboardText}>Back to Dashboard</Text>
         </TouchableOpacity>
       )}
 
@@ -804,17 +804,17 @@ export default function ContentManagementScreen({
         <View style={{ flex: 1 }}>
           <Text style={styles.pageTitle}>
             {activeMode === 'flashcards'
-              ? 'Pamahalaan ang Flashcards'
+              ? 'Manage Flashcards'
               : activeMode === 'quizzes'
-              ? 'Pamahalaan ang Pagsusulit'
-              : 'Pamahalaan ang Mini-Games'}
+              ? 'Manage Quizzes'
+              : 'Manage Mini-Games'}
           </Text>
           <Text style={styles.pageSub}>
             {activeMode === 'flashcards'
-              ? 'Pamahalaan ang 151 bokabularyo, larawan, audio recording, at pagsasalin.'
+              ? 'Manage 151 vocabulary words, pictures, audio recordings, and translations.'
               : activeMode === 'quizzes'
-              ? 'Ayusin ang mga tanong at i-lock o i-unlock ang pagsusulit bawat kategorya.'
-              : 'Pamahalaan ang 5 mini-games, patakaran sa puntos, at kategorya.'}
+              ? 'Configure quiz questions and lock or unlock quizzes per category.'
+              : 'Manage 5 mini-games, scoring policies, and learning categories.'}
           </Text>
         </View>
         <VolumeButton activeColor={Colors.teacherPurple} size={38} />
@@ -862,7 +862,7 @@ export default function ContentManagementScreen({
               activeMode === 'quizzes' && styles.quickTabBtnTextActive,
             ]}
           >
-            Pagsusulit
+            Quizzes
           </Text>
         </TouchableOpacity>
 
@@ -895,9 +895,9 @@ export default function ContentManagementScreen({
           {/* Action Header */}
           <View style={styles.sectionHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionHeading}>Mga Flashcards sa Sistema</Text>
+              <Text style={styles.sectionHeading}>System Flashcards</Text>
               <Text style={styles.sectionSubText}>
-                Kabuuang {flashcards.length} salita sa lahat ng {categories.length} kategorya
+                Total {flashcards.length} words across all {categories.length} categories
               </Text>
             </View>
 
@@ -907,7 +907,7 @@ export default function ContentManagementScreen({
               activeOpacity={0.85}
             >
               <Ionicons name="add-circle" size={18} color={Colors.white} />
-              <Text style={styles.addBtnText}>Magdagdag ng Kard</Text>
+              <Text style={styles.addBtnText}>Add Card</Text>
             </TouchableOpacity>
           </View>
 
@@ -916,7 +916,7 @@ export default function ContentManagementScreen({
             <Ionicons name="search" size={16} color={Colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Ihanap ang salitang Filipino o Ingles..."
+              placeholder="Search Filipino or English word..."
               value={flashcardSearch}
               onChangeText={setFlashcardSearch}
             />
@@ -942,7 +942,7 @@ export default function ContentManagementScreen({
                   flashcardCategoryFilter === 'all' && styles.filterPillTextActive,
                 ]}
               >
-                Lahat ({flashcards.length})
+                All ({flashcards.length})
               </Text>
             </TouchableOpacity>
 
@@ -967,8 +967,8 @@ export default function ContentManagementScreen({
           {filteredFlashcards.length === 0 ? (
             <EmptyState
               emoji="🎴"
-              title="Walang Flashcards"
-              message="Walang tumutugma sa filter o paghahanap. Pindutin ang '+ Magdagdag ng Kard' upang magsimula."
+              title="No Flashcards"
+              message="No cards match your filter or search. Tap '+ Add Card' to create one."
             />
           ) : (
             filteredFlashcards.map((fc, fcIdx) => {
@@ -990,7 +990,7 @@ export default function ContentManagementScreen({
                       <Text style={styles.cardFilipino}>{fc.filipino_name || fc.name}</Text>
                       {fc.is_published ? (
                         <View style={styles.publishedBadge}>
-                          <Text style={styles.publishedText}>Naka-publish</Text>
+                          <Text style={styles.publishedText}>Published</Text>
                         </View>
                       ) : (
                         <View style={styles.draftBadge}>
@@ -1010,7 +1010,7 @@ export default function ContentManagementScreen({
                           { color: categoryObj?.color || Colors.teacherPurple },
                         ]}
                       >
-                        {categoryObj?.name || 'Kategorya'}
+                        {categoryObj?.name || 'Category'}
                       </Text>
                       {fc.description ? (
                         <Text style={styles.cardDesc} numberOfLines={1}>
@@ -1062,9 +1062,9 @@ export default function ContentManagementScreen({
                     <Ionicons name="lock-closed" size={20} color={Colors.teacherPurple} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.accessSectionTitle}>Pamamahala sa Akses ng Pagsusulit</Text>
+                    <Text style={styles.accessSectionTitle}>Quiz Access Management</Text>
                     <Text style={styles.accessSectionSub}>
-                      I-lock o i-unlock ang pagsusulit bawat kategorya. Ang naka-lock na kategorya ay awtomatikong hindi mabubuksan ng mga mag-aaral sa app at haharangin ng backend API (HTTP 403 QUIZ_LOCKED).
+                      Lock or unlock quizzes per category. Locked categories are blocked for students in the app and enforced by the backend API (HTTP 403 QUIZ_LOCKED).
                     </Text>
                   </View>
                 </View>
@@ -1079,7 +1079,7 @@ export default function ContentManagementScreen({
                       <View style={styles.accessRowInfo}>
                         <Text style={styles.accessCatName}>{cat.name}</Text>
                         <Text style={styles.accessCatMeta}>
-                          {cat.flashcards_count ?? 20} Flashcards · 15 Tanong (3 Antas)
+                          {cat.flashcards_count ?? 20} Flashcards · 15 Questions (3 Levels)
                         </Text>
                       </View>
 
@@ -1100,7 +1100,7 @@ export default function ContentManagementScreen({
                             { color: isLocked ? Colors.coralPinkDark : Colors.grassGreenDark },
                           ]}
                         >
-                          {isLocked ? 'Naka-lock' : 'Bukas'}
+                          {isLocked ? 'Locked' : 'Open'}
                         </Text>
                       </View>
 
@@ -1118,7 +1118,7 @@ export default function ContentManagementScreen({
                             isLocked ? styles.accessUnlockBtnText : styles.accessLockBtnText,
                           ]}
                         >
-                          {isLocked ? 'I-unlock' : 'I-lock'}
+                          {isLocked ? 'Unlock' : 'Lock'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -1128,9 +1128,9 @@ export default function ContentManagementScreen({
 
               <View style={[styles.sectionHeaderRow, { marginTop: 12 }]}>
                 <View>
-                  <Text style={styles.sectionHeading}>Pumili ng Kategorya para i-edit ang Tanong</Text>
+                  <Text style={styles.sectionHeading}>Select Category to Edit Questions</Text>
                   <Text style={styles.sectionSubText}>
-                    I-configure ang Madali, Katamtaman, at Mahirap na tanong bawat aralin.
+                    Configure Easy, Medium, and Hard questions for each lesson.
                   </Text>
                 </View>
               </View>
@@ -1148,7 +1148,7 @@ export default function ContentManagementScreen({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.catName}>{cat.name}</Text>
                     <Text style={styles.catMeta}>
-                      {cat.flashcards_count ?? 0} flashcards · 3 Antas (Madali, Katamtaman, Mahirap)
+                      {cat.flashcards_count ?? 0} flashcards · 3 Levels (Easy, Medium, Hard)
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
@@ -1163,7 +1163,7 @@ export default function ContentManagementScreen({
                 style={styles.backBtn}
               >
                 <Ionicons name="arrow-back" size={18} color={Colors.teacherPurple} />
-                <Text style={styles.backBtnText}>Bumalik sa Mga Kategorya</Text>
+                <Text style={styles.backBtnText}>Back to Categories</Text>
               </TouchableOpacity>
 
               <Text style={styles.selectedCatTitle}>{selectedCategory.name}</Text>
@@ -1203,13 +1203,13 @@ export default function ContentManagementScreen({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.lockTitle}>
                       {quizData.availability?.is_locked
-                        ? 'Naka-lock ang antas na ito'
-                        : 'Bukas sa mga mag-aaral'}
+                        ? 'Level is locked'
+                        : 'Open to students'}
                     </Text>
                     <Text style={styles.lockSub}>
                       {quizData.availability?.is_locked
-                        ? 'Hindi mabubuksan ng mga mag-aaral ang pagsusulit na ito.'
-                        : 'Maaaring laruin at sagutan ng mga mag-aaral.'}
+                        ? 'Students cannot open this quiz level.'
+                        : 'Students can play and take this quiz.'}
                     </Text>
                   </View>
                   <Switch
@@ -1225,7 +1225,7 @@ export default function ContentManagementScreen({
               {/* Add Question Button */}
               {quizData && <View style={styles.addQuestionRow}>
                 <Text style={styles.questionsCountText}>
-                  {quizData?.questions?.length ?? 0} Tanong ({DIFF_LABELS[selectedDiff]})
+                  {quizData?.questions?.length ?? 0} Questions ({DIFF_LABELS[selectedDiff]})
                 </Text>
 
                 <TouchableOpacity
@@ -1233,13 +1233,13 @@ export default function ContentManagementScreen({
                   onPress={() => handleOpenQuestionModal()}
                 >
                   <Ionicons name="add-circle" size={16} color={Colors.white} />
-                  <Text style={styles.addQuestionBtnText}>Magdagdag ng Tanong</Text>
+                  <Text style={styles.addQuestionBtnText}>Add Question</Text>
                 </TouchableOpacity>
               </View>}
 
               {/* Questions List */}
               {loadingQuiz ? (
-                <LoadingView message="Kinukuha ang mga tanong..." />
+                <LoadingView message="Loading questions..." />
               ) : quizData?.questions && quizData.questions.length > 0 ? (
                 quizData.questions.map((q, idx) => (
                   <View key={`quiz_q_${q.id || idx}_${idx}`} style={[styles.questionCard, Shadows.soft]}>
@@ -1249,7 +1249,7 @@ export default function ContentManagementScreen({
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.questionText}>
-                          {q.question_text || `Tanong #${idx + 1}`}
+                          {q.question_text || `Question #${idx + 1}`}
                         </Text>
                         <Text style={styles.targetItemText}>
                           Target: <Text style={{ fontWeight: 'bold' }}>{q.target_item_name}</Text>
@@ -1294,8 +1294,8 @@ export default function ContentManagementScreen({
               ) : (
                 <EmptyState
                   emoji="📝"
-                  title="Walang Tanong"
-                  message="Wala pang tanong para sa antas na ito. Pindutin ang '+ Magdagdag ng Tanong'."
+                  title="No Questions"
+                  message="No questions yet for this difficulty. Tap '+ Add Question'."
                 />
               )}
             </>
@@ -1308,9 +1308,9 @@ export default function ContentManagementScreen({
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionHeading}>5 Mini-Games ng WikaPlay</Text>
+              <Text style={styles.sectionHeading}>5 WikaPlay Mini-Games</Text>
               <Text style={styles.sectionSubText}>
-                I-configure ang mga kategorya na gagamitin ng bawat mini-game.
+                Configure categories and content used by each mini-game.
               </Text>
             </View>
           </View>
@@ -1319,7 +1319,7 @@ export default function ContentManagementScreen({
           <View style={[styles.policyBanner, Shadows.subtle]}>
             <Ionicons name="shield-checkmark" size={20} color={Colors.grassGreenDark} />
             <Text style={styles.policyText}>
-              <Text style={{ fontWeight: 'bold' }}>Patakaran sa Puntos:</Text> 0–20 puntos bawat sesyon · 1 puntos = 1 bituin · <Text style={{ fontWeight: 'bold', color: Colors.grassGreenDark }}>15–20 puntos</Text> = Kwalipikado sa Mahiwagang Kahon.
+              <Text style={{ fontWeight: 'bold' }}>Scoring Policy:</Text> 0–20 points per session · 1 point = 1 star · <Text style={{ fontWeight: 'bold', color: Colors.grassGreenDark }}>15–20 points</Text> = Mystery Box Qualified.
             </Text>
           </View>
 
@@ -1328,12 +1328,12 @@ export default function ContentManagementScreen({
             <View style={[styles.mgStatsRow, Shadows.subtle]}>
               <View style={styles.mgStatItem}>
                 <Text style={styles.mgStatVal}>{minigamesData.total_completed_sessions}</Text>
-                <Text style={styles.mgStatLabel}>Kabuuang Sesyon</Text>
+                <Text style={styles.mgStatLabel}>Total Sessions</Text>
               </View>
               <View style={styles.gameMetricDivider} />
               <View style={styles.mgStatItem}>
                 <Text style={styles.mgStatVal}>{minigamesData.total_qualifying_sessions}</Text>
-                <Text style={styles.mgStatLabel}>Nakakuha ng Kahon</Text>
+                <Text style={styles.mgStatLabel}>Mystery Boxes Won</Text>
               </View>
               <View style={styles.gameMetricDivider} />
               <View style={styles.mgStatItem}>
@@ -1345,11 +1345,11 @@ export default function ContentManagementScreen({
 
           {/* 5 Mini-Games with Category Management */}
           {(minigamesData?.games ?? [
-            { id: 'memory_match', title: 'Memory Match', description: 'Ipares ang magkakatulad na larawan.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#7C3AED', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
-            { id: 'paghahanap_larawan', title: 'Paghahanap ng Larawan', description: 'Makinig sa tunog at piliin ang tamang larawan.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#0284C7', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
-            { id: 'hulaan_salita', title: 'Hulaan ang Salita', description: 'Tingnan ang pahiwatig at hulaan ang salita.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#059669', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
-            { id: 'gulong_letra', title: 'Gulong ng mga Letra', description: 'Ayusin ang mga letra upang mabuo ang salita.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#D97706', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
-            { id: 'pop_balloon', title: 'Pop Balloon', description: 'Paputukin ang lobo na may tamang sagot.', rules: '0–20 puntos · 1:1 bituin · 15–20 = Mystery Box.', color: '#DC2626', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'memory_match', title: 'Memory Match', description: 'Match corresponding picture cards.', rules: '0–20 points · 1:1 star · 15–20 = Mystery Box.', color: '#7C3AED', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'paghahanap_larawan', title: 'Paghahanap ng Larawan', description: 'Listen to the sound and choose the matching picture.', rules: '0–20 points · 1:1 star · 15–20 = Mystery Box.', color: '#0284C7', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'hulaan_salita', title: 'Hulaan ang Salita', description: 'Look at the clue and guess the hidden word.', rules: '0–20 points · 1:1 star · 15–20 = Mystery Box.', color: '#059669', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'gulong_letra', title: 'Gulong ng mga Letra', description: 'Rearrange scrambled letters to form the word.', rules: '0–20 points · 1:1 star · 15–20 = Mystery Box.', color: '#D97706', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
+            { id: 'pop_balloon', title: 'Pop Balloon', description: 'Pop the balloon containing the correct answer.', rules: '0–20 points · 1:1 star · 15–20 = Mystery Box.', color: '#DC2626', total_plays: 0, average_score: 0, qualifiers_count: 0, stars_awarded: 0 },
           ]).map((g) => {
             const selected = gameCategories[g.id] ?? [];
             return (
@@ -1361,7 +1361,7 @@ export default function ContentManagementScreen({
                   </View>
                   <View style={[styles.gameManagePill, { backgroundColor: (g.color || '#EC4899') + '20' }]}>
                     <Text style={[styles.gameManagePillText, { color: g.color || '#EC4899' }]}>
-                      {g.total_plays} Nilaro
+                      {g.total_plays} Plays
                     </Text>
                   </View>
                 </View>
@@ -1385,13 +1385,13 @@ export default function ContentManagementScreen({
                   <View style={styles.gameMetricDivider} />
                   <View style={styles.gameMetricCol}>
                     <Text style={styles.gameMetricVal}>+{g.stars_awarded ?? 0} ⭐</Text>
-                    <Text style={styles.gameMetricLabel}>Bituin</Text>
+                    <Text style={styles.gameMetricLabel}>Stars</Text>
                   </View>
                 </View>
 
                 {/* Category Selector */}
                 <View style={styles.gameCatSection}>
-                  <Text style={styles.gameCatSectionTitle}>📚 Mga Kategorya na Ginagamit:</Text>
+                  <Text style={styles.gameCatSectionTitle}>📚 Active Categories:</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                     {LOCAL_CATEGORIES.map((cat) => {
                       const isSelected = selected.includes(cat.slug);
@@ -1418,8 +1418,8 @@ export default function ContentManagementScreen({
                   </ScrollView>
                   <Text style={styles.gameCatHint}>
                     {selected.length === 0
-                      ? '⚠️ Walang napiling kategorya — piliin ang isa man'
-                      : `✓ ${selected.length} kategorya ang napili · ${LOCAL_CATEGORIES.filter(c => selected.includes(c.slug)).reduce((sum, c) => sum + c.count, 0)} kard`}
+                      ? '⚠️ No categories selected — select at least one'
+                      : `✓ ${selected.length} categories selected · ${LOCAL_CATEGORIES.filter(c => selected.includes(c.slug)).reduce((sum, c) => sum + c.count, 0)} cards`}
                   </Text>
                 </View>
               </View>
@@ -1439,7 +1439,7 @@ export default function ContentManagementScreen({
           <View style={[styles.modalCard, Shadows.card]}>
             <View style={styles.modalHeadRow}>
               <Text style={styles.modalTitle}>
-                {flashcardModal.isEditing ? 'I-edit ang Flashcard' : 'Magdagdag ng Bagong Flashcard'}
+                {flashcardModal.isEditing ? 'Edit Flashcard' : 'Add New Flashcard'}
               </Text>
               <TouchableOpacity
                 onPress={() => setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false })}
@@ -1450,7 +1450,7 @@ export default function ContentManagementScreen({
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               {/* Category Selection */}
-              <Text style={styles.inputLabel}>Kategorya:</Text>
+              <Text style={styles.inputLabel}>Category:</Text>
               <View style={styles.modalCatRow}>
                 {categories.map((c) => {
                   const isSelected = flashcardModal.card.category_id === c.id;
@@ -1481,10 +1481,10 @@ export default function ContentManagementScreen({
                 })}
               </View>
 
-              <Text style={styles.inputLabel}>Pangalan sa Filipino (Required):</Text>
+              <Text style={styles.inputLabel}>Filipino Name (Required):</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="Hal. Aso, Pusa, Mansanas..."
+                placeholder="e.g. Aso, Pusa, Mansanas..."
                 value={flashcardModal.card.filipino_name || ''}
                 onChangeText={(val) =>
                   setFlashcardModal((prev) => ({
@@ -1494,10 +1494,10 @@ export default function ContentManagementScreen({
                 }
               />
 
-              <Text style={styles.inputLabel}>Pangalan sa Ingles:</Text>
+              <Text style={styles.inputLabel}>English Name:</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="Hal. Dog, Cat, Apple..."
+                placeholder="e.g. Dog, Cat, Apple..."
                 value={flashcardModal.card.english_name || ''}
                 onChangeText={(val) =>
                   setFlashcardModal((prev) => ({
@@ -1507,11 +1507,11 @@ export default function ContentManagementScreen({
                 }
               />
 
-              <Text style={styles.inputLabel}>Deskripsyon / Pangungusap:</Text>
+              <Text style={styles.inputLabel}>Description / Sentence:</Text>
               <TextInput
                 style={[styles.modalInput, { height: 60, textAlignVertical: 'top' }]}
                 multiline
-                placeholder="Maikling paliwanag para sa mga bata..."
+                placeholder="Brief explanation for learners..."
                 value={flashcardModal.card.description || ''}
                 onChangeText={(val) =>
                   setFlashcardModal((prev) => ({
@@ -1522,7 +1522,7 @@ export default function ContentManagementScreen({
               />
 
               {/* Image Picker */}
-              <Text style={styles.inputLabel}>Larawan:</Text>
+              <Text style={styles.inputLabel}>Image:</Text>
               {getFlashcardImageSource(flashcardModal.card) ? (
                 <View style={styles.previewImageWrap}>
                   <Image
@@ -1541,7 +1541,7 @@ export default function ContentManagementScreen({
                       <Ionicons name="camera" size={16} color={Colors.white} />
                     )}
                     <Text style={styles.changeMediaBtnText}>
-                      {isUploadingImage ? 'Ini-upload...' : 'Palitan mula sa Device/Computer'}
+                      {isUploadingImage ? 'Uploading...' : 'Replace from Device/Computer'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1557,7 +1557,7 @@ export default function ContentManagementScreen({
                     <Ionicons name="image-outline" size={22} color={Colors.teacherPurple} />
                   )}
                   <Text style={styles.pickMediaBtnText}>
-                    {isUploadingImage ? 'Ini-upload...' : 'Pumili ng Larawan mula sa Device/Computer'}
+                    {isUploadingImage ? 'Uploading...' : 'Choose Image from Device/Computer'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1570,7 +1570,7 @@ export default function ContentManagementScreen({
                   <Text style={styles.audioPickedText} numberOfLines={1}>
                     {flashcardModal.card.audio_url
                       ? flashcardModal.card.audio_url.split('/').pop()
-                      : `${flashcardModal.card.filipino_name || 'Boses'}.mp3 (Bundled Audio)`}
+                      : `${flashcardModal.card.filipino_name || 'Voice'}.mp3 (Bundled Audio)`}
                   </Text>
                   <TouchableOpacity
                     onPress={() => handlePlayAudioPreview(flashcardModal.card)}
@@ -1586,7 +1586,7 @@ export default function ContentManagementScreen({
                     {isUploadingAudio ? (
                       <ActivityIndicator size="small" color={Colors.teacherPurple} />
                     ) : (
-                      <Text style={styles.audioReplaceBtnText}>Palitan</Text>
+                      <Text style={styles.audioReplaceBtnText}>Replace</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1602,7 +1602,7 @@ export default function ContentManagementScreen({
                     <Ionicons name="mic-outline" size={22} color={Colors.teacherPurple} />
                   )}
                   <Text style={styles.pickMediaBtnText}>
-                    {isUploadingAudio ? 'Ini-upload...' : 'Pumili ng Audio mula sa Device/Computer'}
+                    {isUploadingAudio ? 'Uploading...' : 'Choose Audio from Device/Computer'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1614,7 +1614,7 @@ export default function ContentManagementScreen({
                 onPress={() => setFlashcardModal({ open: false, card: EMPTY_FLASHCARD, isEditing: false })}
                 disabled={isSavingFlashcard}
               >
-                <Text style={styles.modalCancelText}>Kanselahin</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1623,7 +1623,7 @@ export default function ContentManagementScreen({
                 disabled={isSavingFlashcard}
               >
                 <Text style={styles.modalSaveText}>
-                  {isSavingFlashcard ? 'Nai-save...' : 'I-save ang Flashcard'}
+                  {isSavingFlashcard ? 'Saving...' : 'Save Flashcard'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1641,17 +1641,17 @@ export default function ContentManagementScreen({
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, Shadows.card]}>
             <View style={styles.modalHeadRow}>
-              <Text style={styles.modalTitle}>Tanong sa Quiz ({DIFF_LABELS[selectedDiff]})</Text>
+              <Text style={styles.modalTitle}>Quiz Question ({DIFF_LABELS[selectedDiff]})</Text>
               <TouchableOpacity onPress={() => setQuestionModal({ open: false, question: {} })}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              <Text style={styles.inputLabel}>Teksto ng Tanong:</Text>
+              <Text style={styles.inputLabel}>Question Text:</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="Alin sa mga sumusunod ang...?"
+                placeholder="Which of the following is...?"
                 value={questionModal.question.question_text || ''}
                 onChangeText={(val) =>
                   setQuestionModal((prev) => ({
@@ -1664,7 +1664,7 @@ export default function ContentManagementScreen({
               <Text style={styles.inputLabel}>Target Item Name (Filipino):</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="Hal. Aso, Pusa..."
+                placeholder="e.g. Aso, Pusa..."
                 value={questionModal.question.target_item_name || ''}
                 onChangeText={(val) =>
                   setQuestionModal((prev) => ({
@@ -1674,10 +1674,10 @@ export default function ContentManagementScreen({
                 }
               />
 
-              <Text style={styles.inputLabel}>Tamang Sagot (Correct Answer):</Text>
+              <Text style={styles.inputLabel}>Correct Answer:</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="I-type ang eksaktong tamang sagot..."
+                placeholder="Type the exact correct answer..."
                 value={questionModal.question.correct_answer || ''}
                 onChangeText={(val) =>
                   setQuestionModal((prev) => ({
@@ -1687,14 +1687,14 @@ export default function ContentManagementScreen({
                 }
               />
 
-              <Text style={styles.inputLabel}>Mga Pagpipilian (4 Choices):</Text>
+              <Text style={styles.inputLabel}>Options (4 Choices):</Text>
               {(questionModal.question.choices || ['', '', '', '']).map((ch: any, i: number) => {
                 const valStr = typeof ch === 'string' ? ch : (ch?.text || '');
                 return (
                   <TextInput
                     key={i}
                     style={[styles.modalInput, { marginBottom: 6 }]}
-                    placeholder={`Pagpipilian #${i + 1}`}
+                    placeholder={`Choice #${i + 1}`}
                     value={valStr}
                     onChangeText={(val) => {
                       const next = [...(questionModal.question.choices || ['', '', '', ''])];
@@ -1714,11 +1714,11 @@ export default function ContentManagementScreen({
                 style={styles.modalCancelBtn}
                 onPress={() => setQuestionModal({ open: false, question: {} })}
               >
-                <Text style={styles.modalCancelText}>Kanselahin</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveQuestion}>
-                <Text style={styles.modalSaveText}>I-save ang Tanong</Text>
+                <Text style={styles.modalSaveText}>Save Question</Text>
               </TouchableOpacity>
             </View>
           </View>
