@@ -124,6 +124,25 @@ export function CelebrationOverlay({
   const cardScale = useSharedValue(0.6);
   const cardOpacity = useSharedValue(0);
 
+  let computedStars = stars;
+  let computedTitle = title;
+
+  if (score !== undefined) {
+    if (score >= 15) {
+      computedStars = 3;
+      computedTitle = 'Napaka-galing mo';
+    } else if (score >= 10) {
+      computedStars = 2;
+      computedTitle = 'Mahusay ka';
+    } else if (score >= 5) {
+      computedStars = 1;
+      computedTitle = 'Okay lang yan';
+    } else {
+      computedStars = 0;
+      computedTitle = 'Bawi ka nalang';
+    }
+  }
+
   const shouldShowFireworks = showFireworks ?? (score !== undefined && score >= 15 && score <= 20);
 
   useEffect(() => {
@@ -164,13 +183,17 @@ export function CelebrationOverlay({
       <View style={styles.centerContainer}>
         <Animated.View style={[styles.card, Shadows.card, animatedCardStyle]}>
           <LinearGradient
-            colors={Gradients.sunLight}
+            colors={computedStars > 0 ? Gradients.sunLight : ['#F1F5F9', '#E2E8F0']}
             style={styles.iconCircle}
           >
-            <Ionicons name="trophy" size={54} color={Colors.sunYellowDark} />
+            <Ionicons
+              name={computedStars > 0 ? 'trophy' : 'refresh-circle'}
+              size={54}
+              color={computedStars > 0 ? Colors.sunYellowDark : Colors.textMuted}
+            />
           </LinearGradient>
 
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>{computedTitle}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
 
           {/* Stars display */}
@@ -178,9 +201,9 @@ export function CelebrationOverlay({
             {Array.from({ length: 3 }).map((_, i) => (
               <Ionicons
                 key={i}
-                name={i < stars ? 'star' : 'star-outline'}
+                name={i < computedStars ? 'star' : 'star-outline'}
                 size={34}
-                color={i < stars ? Colors.sunYellow : Colors.textMuted}
+                color={i < computedStars ? Colors.sunYellow : Colors.textMuted}
                 style={styles.starIcon}
               />
             ))}

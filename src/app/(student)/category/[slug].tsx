@@ -65,7 +65,7 @@ export default function CategoryDetailScreen() {
       english: 'Easy',
       stars: '+5 ⭐',
       color: Colors.grassGreen,
-      desc: 'Piliin ang wastong salita ayon sa larawan',
+      desc: 'Piliin ang wastong salita ayon sa litrato',
     },
     {
       key: 'katamtaman',
@@ -73,7 +73,7 @@ export default function CategoryDetailScreen() {
       english: 'Medium',
       stars: '+10 ⭐',
       color: Colors.sunYellowDark,
-      desc: 'Makinig sa audio at piliin ang larawan',
+      desc: 'Makinig sa audio at piliin ang litrato',
     },
     {
       key: 'mahirap',
@@ -95,10 +95,10 @@ export default function CategoryDetailScreen() {
     },
     {
       slug: 'paghahanap-larawan',
-      title: 'Paghahanap ng Larawan',
+      title: 'Paghahanap ng Litrato',
       emoji: '🔍',
       color: '#4ADE80',
-      desc: `Hanapin ang tamang larawan ng ${category.name}`,
+      desc: `Hanapin ang tamang litrato ng ${category.name}`,
     },
     {
       slug: 'hulaan-salita',

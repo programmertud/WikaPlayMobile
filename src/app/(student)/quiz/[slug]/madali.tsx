@@ -489,9 +489,7 @@ export default function MadaliQuizScreen() {
 
         <CelebrationOverlay
           visible={showCelebration}
-          title="Binabati Kita!"
           subtitle={`Nakakuha ka ng ${correctCount} tamang sagot!`}
-          stars={1}
           score={correctCount}
           showFireworks={correctCount >= 15 && correctCount <= 20}
           onContinue={() => setShowCelebration(false)}
@@ -570,7 +568,7 @@ export default function MadaliQuizScreen() {
               ]}
             >
               {currentQuestion?.type === 'picture-id'
-                ? '🖼️ Pagkilala ng Larawan'
+                ? '🖼️ Pagkilala ng Litrato'
                 : '🔤 Bokabularyo'}
             </Text>
           </View>

@@ -102,7 +102,7 @@ export default function PaghahanapLarawan() {
     };
   }, [currentIdx, gameOver, target]);
 
-  usePresence(`Paghahanap ng Larawan (${category.name})`, 'minigame_paghahanap');
+  usePresence(`Paghahanap ng Litrato (${category.name})`, 'minigame_paghahanap');
 
   const handleSelect = async (choice: VocabularyItem) => {
     if (locked) return;
@@ -254,10 +254,8 @@ export default function PaghahanapLarawan() {
       {/* WIN CELEBRATION OVERLAY */}
       <CelebrationOverlay
         visible={gameOver}
-        title="Tagumpay!"
-        subtitle={`Nakuha mo ang ${correct} sa ${totalRounds} tamang larawan!`}
+        subtitle={`Nakuha mo ang ${correct} sa ${totalRounds} tamang litrato!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
-        stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
         score={correct}
         showFireworks={correct >= 15 && correct <= 20}
         continueText="Maglaro Ulit"

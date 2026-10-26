@@ -114,7 +114,6 @@ function FloatingBalloon({
     return (
       <View style={[styles.balloonSlot, { width: size, height: size * 1.3 }]}>
         <Text style={styles.popBurst}>💥</Text>
-        <Text style={styles.poppedWord}>{balloon.item.filipino}</Text>
       </View>
     );
   }
@@ -143,15 +142,9 @@ function FloatingBalloon({
         >
           {/* Shine */}
           <View style={[styles.balloonShine, { width: size * 0.18, height: size * 0.1 }]} />
-          {/* Picture */}
-          <View style={styles.balloonImageWrap}>
-            <ItemVisual item={balloon.item} size={size * 0.46} />
-          </View>
-          {/* Word label */}
-          <View style={styles.balloonLabelWrap}>
-            <Text style={styles.balloonLabel} numberOfLines={1}>
-              {balloon.item.filipino}
-            </Text>
+          {/* Picture Only (no text label) */}
+          <View style={[styles.balloonImageWrap, { marginBottom: 0 }]}>
+            <ItemVisual item={balloon.item} size={size * 0.58} />
           </View>
         </LinearGradient>
         {/* Knot */}
@@ -376,10 +369,8 @@ export default function PopBalloon() {
 
       <CelebrationOverlay
         visible={gameOver}
-        title="Magaling!"
         subtitle={`Napasabog mo ang ${correct} sa ${TOTAL_ROUNDS} tamang lobo sa ${category.name}!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
-        stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
         score={correct}
         showFireworks={correct >= 15 && correct <= 20}
         continueText="Maglaro Ulit"

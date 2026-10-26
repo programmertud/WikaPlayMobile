@@ -405,10 +405,8 @@ export default function GuLongLetra() {
 
       <CelebrationOverlay
         visible={gameOver}
-        title="Napakahusay!"
         subtitle={`Nabuong muli ang ${correct} sa ${TOTAL_ROUNDS} mga salita!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
-        stars={correct >= 15 ? 3 : correct >= 10 ? 2 : 1}
         score={correct}
         showFireworks={correct >= 15 && correct <= 20}
         continueText="Maglaro Ulit"

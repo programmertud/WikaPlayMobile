@@ -303,7 +303,7 @@ export default function QuizGameplayScreen() {
             vocabularyItem: c,
           }));
 
-          let qText = 'Ano ang tawag sa larawang ito?';
+          let qText = 'Ano ang tawag sa litratong ito?';
           let correctAnswer: string = target.id;
 
           if (difficulty === 'katamtaman') {
@@ -508,9 +508,7 @@ export default function QuizGameplayScreen() {
         {/* Confetti celebration for passing */}
         <CelebrationOverlay
           visible={isPassed}
-          title="Binabati Kita!"
           subtitle={`Nakakuha ka ng ${resultSession.correct_count} tamang sagot!`}
-          stars={Math.min(3, Math.max(1, resultSession.stars_awarded))}
           score={resultSession.correct_count}
           showFireworks={resultSession.correct_count >= 15 && resultSession.correct_count <= 20}
           onContinue={() => {
@@ -605,7 +603,7 @@ export default function QuizGameplayScreen() {
               {choicesDisabled && !isAnswerLocked && (
                 <View style={styles.lockNotice}>
                   <Text style={styles.lockNoticeText}>
-                    {isPlayingAudio ? '🎶 Nakikinig... Mangyaring maghintay' : '⏳ Inihahanda ang mga larawan...'}
+                    {isPlayingAudio ? '🎶 Nakikinig... Mangyaring maghintay' : '⏳ Inihahanda ang mga litrato...'}
                   </Text>
                 </View>
               )}

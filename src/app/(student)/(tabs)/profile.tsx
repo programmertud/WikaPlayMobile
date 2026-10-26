@@ -140,7 +140,7 @@ export default function ProfileScreen() {
         await processAndSaveAvatar(result.assets[0]);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Nabigong pumili ng larawan.');
+      Alert.alert('Error', err.message || 'Nabigong pumili ng litrato.');
     }
   };
 
@@ -199,7 +199,7 @@ export default function ProfileScreen() {
       loadProfile();
       Alert.alert('Tagumpay! 🎉', 'Matagumpay na napalitan ang iyong profile picture!');
     } catch (e: any) {
-      Alert.alert('Paumanhin', e.message || 'Hindi nai-upload ang larawan.');
+      Alert.alert('Paumanhin', e.message || 'Hindi nai-upload ang litrato.');
     } finally {
       setUploadingPhoto(false);
     }
@@ -611,7 +611,7 @@ export default function ProfileScreen() {
             {uploadingPhoto && (
               <View style={styles.uploadingBox}>
                 <ActivityIndicator size="small" color={Colors.skyBlueDark} />
-                <Text style={styles.uploadingText}>Ina-upload ang iyong larawan...</Text>
+                <Text style={styles.uploadingText}>Ina-upload ang iyong litrato...</Text>
               </View>
             )}
 

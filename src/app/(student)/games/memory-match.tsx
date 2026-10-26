@@ -420,10 +420,8 @@ export default function MemoryMatch() {
       {/* Game Over Celebration */}
       <CelebrationOverlay
         visible={gameOver}
-        title="Napakagaling!"
         subtitle={`Natapos mo ang ${levelsDone} sa ${TOTAL_LEVELS} na antas ng Memory Match!`}
         scoreText={`+${starsAwarded} Bituin! ⭐`}
-        stars={levelsDone >= 15 ? 3 : levelsDone >= 10 ? 2 : 1}
         score={levelsDone}
         showFireworks={levelsDone >= 15 && levelsDone <= 20}
         continueText="Maglaro Ulit"
