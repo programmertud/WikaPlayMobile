@@ -1,16 +1,23 @@
 import { Redirect, Stack } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../../hooks/use-auth';
 import { usePresence } from '../../hooks/use-presence';
 import { useOfflineSync } from '../../hooks/use-offline-sync';
 
 export default function StudentLayout() {
-  const { user, isStudent, isAuthenticated, isLoading } = useAuth();
+  const { user, isStudent, isAuthenticated, isLoading, refreshProfile } = useAuth();
 
   // Background student heartbeat & automatic offline sync when online
   usePresence('Nag-aaral sa Dashboard', 'student_main');
-  useOfflineSync(user?.id ?? null);
+  const { syncState } = useOfflineSync(user?.id ?? null);
+
+  // Automatically update dashboard stars when background sync completes
+  useEffect(() => {
+    if (syncState === 'complete') {
+      refreshProfile();
+    }
+  }, [syncState, refreshProfile]);
 
   // While auth is resolving, render a spinner — avoids premature redirect
   if (isLoading) {

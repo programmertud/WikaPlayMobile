@@ -22,6 +22,7 @@ import {
   recordSyncAttempt,
   getLatestCachedUser,
   updateCachedUserStars,
+  saveOfflineCollectible,
   reassignPendingSessionsToStudent,
   PendingSession,
 } from './offline-session-store';
@@ -244,6 +245,14 @@ async function syncSession(session: PendingSession): Promise<boolean> {
     }
 
     await markSessionSynced(session.session_id, response);
+
+    if (response?.session?.stars_balance !== undefined && session.student_id) {
+      await updateCachedUserStars(session.student_id, response.session.stars_balance).catch(() => {});
+    }
+    if (response?.session?.collectible) {
+      await saveOfflineCollectible(response.session.collectible).catch(() => {});
+    }
+
     return true;
   } catch (err: any) {
     const status = err?.status || err?.response?.status;
