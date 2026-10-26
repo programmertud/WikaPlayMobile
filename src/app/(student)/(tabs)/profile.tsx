@@ -24,6 +24,7 @@ import { PrimaryButton } from '../../../components/PrimaryButton';
 import { PressableScale } from '../../../components/PressableScale';
 import { UserAvatar } from '../../../components/UserAvatar';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
+import { VolumeSettingsCard } from '../../../components/VolumeButton';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import {
@@ -476,6 +477,15 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
+        </View>
+
+        {/* F. Background Music & Sound Settings */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="musical-notes" size={20} color={Colors.skyBlueDark} />
+            <Text style={styles.sectionTitle}>Tunog at Musika (happy.mp3)</Text>
+          </View>
+          <VolumeSettingsCard accentColor={Colors.skyBlueDark} />
         </View>
 
         {/* Logout Button */}

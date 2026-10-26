@@ -23,6 +23,7 @@ import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { CategoryCard } from '../../../components/CategoryCard';
 import { LoadingView } from '../../../components/LoadingView';
 import { PressableScale } from '../../../components/PressableScale';
+import { VolumeButton } from '../../../components/VolumeButton';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
@@ -33,7 +34,6 @@ import { bgm } from '../../../services/audio/bgm-service';
 export default function StudentDashboardScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [isMuted, setIsMuted] = useState<boolean>(bgm.getMuted());
 
   const categories: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
     id: idx + 1,
@@ -64,14 +64,6 @@ export default function StudentDashboardScreen() {
     bgm.init();
     bgm.restore();
     loadData();
-
-    const unsubscribeMute = bgm.subscribeMute((muted) => {
-      setIsMuted(muted);
-    });
-
-    return () => {
-      unsubscribeMute();
-    };
   }, []);
 
   const handleRefresh = () => {
@@ -130,18 +122,8 @@ export default function StudentDashboardScreen() {
         </View>
 
         <View style={styles.topBarActions}>
-          {/* Background Music Toggle */}
-          <PressableScale
-            onPress={() => bgm.toggleMute()}
-            style={[styles.musicButton, Shadows.subtle, isMuted && styles.musicButtonMuted]}
-            accessibilityLabel={isMuted ? 'I-on ang tugtog' : 'I-off ang tugtog'}
-          >
-            <Ionicons
-              name={isMuted ? 'volume-mute' : 'volume-high'}
-              size={20}
-              color={isMuted ? Colors.textMuted : Colors.skyBlueDark}
-            />
-          </PressableScale>
+          {/* Background Music Volume Button (tap = mute, hold = volume slider) */}
+          <VolumeButton activeColor={Colors.skyBlueDark} size={38} />
 
           {/* Live Stars Badge with Pulse animation */}
           <Animated.View style={starAnimatedStyle}>
@@ -267,19 +249,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  musicButton: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  musicButtonMuted: {
-    backgroundColor: '#F1F5F9',
   },
   starIcon: {
     marginRight: 4,

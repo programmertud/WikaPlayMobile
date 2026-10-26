@@ -23,6 +23,7 @@ import { LoadingView } from '../../components/LoadingView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { UserAvatar } from '../../components/UserAvatar';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
+import { VolumeSettingsCard } from '../../components/VolumeButton';
 import { useAuth } from '../../hooks/use-auth';
 import { authService, teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
@@ -366,6 +367,9 @@ export default function TeacherProfileScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Sound & Music Settings */}
+      <VolumeSettingsCard accentColor={Colors.teacherPurple} />
 
       {/* Logout Button */}
       <PrimaryButton

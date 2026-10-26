@@ -34,6 +34,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { PressableScale } from '../../components/PressableScale';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
+import { VolumeButton } from '../../components/VolumeButton';
 import { teacherService } from '../../services/api';
 import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
@@ -816,6 +817,7 @@ export default function ContentManagementScreen({
               : 'Pamahalaan ang 5 mini-games, patakaran sa puntos, at kategorya.'}
           </Text>
         </View>
+        <VolumeButton activeColor={Colors.teacherPurple} size={38} />
       </View>
 
       {/* Quick Mode Toggle Bar */}

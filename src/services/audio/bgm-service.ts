@@ -3,10 +3,14 @@ import { createAudioPlayer } from 'expo-audio';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { storage } from '../../utils/storage';
+
 const BGM_ASSET = require('../../../assets/audio/happy.mp3');
 
 const VOLUME_NORMAL = 0.32;
 const VOLUME_MINIMIZED = 0.06;
+const STORAGE_VOLUME_KEY = 'wikaplay_bgm_volume';
+const STORAGE_MUTED_KEY = 'wikaplay_bgm_muted';
 
 class BackgroundMusicManager {
   private webAudio: HTMLAudioElement | null = null;
@@ -14,10 +18,33 @@ class BackgroundMusicManager {
   private isPlaying = false;
   private isMuted = false;
   private currentVolume = VOLUME_NORMAL;
+  /** The user-set volume level (0.0–1.0). Separate from duck/minimize logic. */
+  private userVolume = VOLUME_NORMAL;
   private isInitialized = false;
 
   public async init() {
-    if (this.isInitialized && (this.webAudio || this.nativePlayer)) return;
+    // Load persisted volume & mute settings
+    try {
+      const savedVolStr = await storage.getItem(STORAGE_VOLUME_KEY);
+      const savedMutedStr = await storage.getItem(STORAGE_MUTED_KEY);
+      if (savedVolStr !== null) {
+        const parsed = parseFloat(savedVolStr);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+          this.userVolume = parsed;
+          this.currentVolume = parsed;
+        }
+      }
+      if (savedMutedStr !== null) {
+        this.isMuted = savedMutedStr === 'true';
+      }
+    } catch {
+      // Non-critical: defaults used
+    }
+
+    if (this.isInitialized && (this.webAudio || this.nativePlayer)) {
+      this.applyVolume();
+      return;
+    }
     this.isInitialized = true;
 
     if (Platform.OS === 'web') {
@@ -87,11 +114,16 @@ class BackgroundMusicManager {
         this.nativePlayer = createAudioPlayer(BGM_ASSET);
         if (this.nativePlayer) {
           this.nativePlayer.loop = true;
+          const targetVol = this.isMuted ? 0 : this.currentVolume;
           if (typeof this.nativePlayer.setVolume === 'function') {
-            this.nativePlayer.setVolume(this.currentVolume);
+            this.nativePlayer.setVolume(targetVol);
+          } else {
+            this.nativePlayer.volume = targetVol;
           }
-          this.nativePlayer.play();
-          this.isPlaying = true;
+          if (!this.isMuted) {
+            this.nativePlayer.play();
+            this.isPlaying = true;
+          }
         }
       } catch {
         // Fallback gracefully
@@ -102,11 +134,17 @@ class BackgroundMusicManager {
   public play() {
     this.isMuted = false;
     this.isPlaying = true;
+    storage.setItem(STORAGE_MUTED_KEY, 'false').catch(() => {});
     if (Platform.OS === 'web' && this.webAudio) {
       this.webAudio.volume = this.currentVolume;
       this.webAudio.play().catch(() => {});
     } else if (this.nativePlayer) {
       try {
+        if (typeof this.nativePlayer.setVolume === 'function') {
+          this.nativePlayer.setVolume(this.currentVolume);
+        } else {
+          this.nativePlayer.volume = this.currentVolume;
+        }
         this.nativePlayer.play();
       } catch {}
     }
@@ -116,7 +154,7 @@ class BackgroundMusicManager {
 
   public minimize() {
     this.duckCount++;
-    this.currentVolume = VOLUME_MINIMIZED;
+    this.currentVolume = Math.min(VOLUME_MINIMIZED, this.userVolume * 0.25);
     this.applyVolume();
   }
 
@@ -127,24 +165,83 @@ class BackgroundMusicManager {
       this.duckCount = Math.max(0, this.duckCount - 1);
     }
     if (this.duckCount === 0) {
-      this.currentVolume = VOLUME_NORMAL;
+      this.currentVolume = this.userVolume;
       this.applyVolume();
     }
   }
 
   private muteListeners = new Set<(muted: boolean) => void>();
+  private volumeListeners = new Set<(volume: number) => void>();
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     if (!this.isMuted) {
       this.isPlaying = true;
+      if (this.userVolume === 0) {
+        this.userVolume = VOLUME_NORMAL;
+        this.currentVolume = VOLUME_NORMAL;
+        this.volumeListeners.forEach((fn) => fn(VOLUME_NORMAL));
+        storage.setItem(STORAGE_VOLUME_KEY, VOLUME_NORMAL.toString()).catch(() => {});
+      }
       if (Platform.OS === 'web' && this.webAudio) {
         this.webAudio.play().catch(() => {});
       }
     }
     this.applyVolume();
     this.muteListeners.forEach((fn) => fn(this.isMuted));
+    storage.setItem(STORAGE_MUTED_KEY, this.isMuted.toString()).catch(() => {});
     return this.isMuted;
+  }
+
+  public setMuted(muted: boolean) {
+    if (this.isMuted === muted) return;
+    this.isMuted = muted;
+    if (!this.isMuted && this.userVolume === 0) {
+      this.userVolume = VOLUME_NORMAL;
+      this.currentVolume = VOLUME_NORMAL;
+      this.volumeListeners.forEach((fn) => fn(VOLUME_NORMAL));
+      storage.setItem(STORAGE_VOLUME_KEY, VOLUME_NORMAL.toString()).catch(() => {});
+    }
+    this.applyVolume();
+    this.muteListeners.forEach((fn) => fn(this.isMuted));
+    storage.setItem(STORAGE_MUTED_KEY, this.isMuted.toString()).catch(() => {});
+  }
+
+  /**
+   * Set user-controlled volume level (0.0 – 1.0).
+   * Also unmutes if volume > 0, and saves to storage.
+   */
+  public setUserVolume(volume: number) {
+    const clamped = Math.max(0, Math.min(1, volume));
+    this.userVolume = clamped;
+    if (this.duckCount === 0) {
+      this.currentVolume = clamped;
+    } else {
+      this.currentVolume = Math.min(VOLUME_MINIMIZED, clamped * 0.25);
+    }
+
+    if (clamped > 0 && this.isMuted) {
+      this.isMuted = false;
+      this.muteListeners.forEach((fn) => fn(false));
+      storage.setItem(STORAGE_MUTED_KEY, 'false').catch(() => {});
+    } else if (clamped === 0 && !this.isMuted) {
+      this.isMuted = true;
+      this.muteListeners.forEach((fn) => fn(true));
+      storage.setItem(STORAGE_MUTED_KEY, 'true').catch(() => {});
+    }
+
+    this.applyVolume();
+    this.volumeListeners.forEach((fn) => fn(clamped));
+    storage.setItem(STORAGE_VOLUME_KEY, clamped.toString()).catch(() => {});
+  }
+
+  /** Get current user-set volume (0.0 – 1.0). */
+  public getUserVolume(): number {
+    return this.userVolume;
+  }
+
+  public getVolumePercent(): number {
+    return Math.round(this.userVolume * 100);
   }
 
   public getIsMuted(): boolean {
@@ -159,6 +256,14 @@ class BackgroundMusicManager {
     this.muteListeners.add(callback);
     return () => {
       this.muteListeners.delete(callback);
+    };
+  }
+
+  /** Subscribe to volume changes from setUserVolume. */
+  public subscribeVolume(callback: (volume: number) => void): () => void {
+    this.volumeListeners.add(callback);
+    return () => {
+      this.volumeListeners.delete(callback);
     };
   }
 
@@ -178,6 +283,8 @@ class BackgroundMusicManager {
       try {
         if (typeof this.nativePlayer.setVolume === 'function') {
           this.nativePlayer.setVolume(targetVol);
+        } else {
+          this.nativePlayer.volume = targetVol;
         }
         if (!this.isMuted) {
           this.nativePlayer.play();

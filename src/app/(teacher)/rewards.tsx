@@ -20,6 +20,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
+import { VolumeButton } from '../../components/VolumeButton';
 import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { Collectible } from '../../types';
@@ -183,6 +184,7 @@ export default function TeacherRewardsScreen() {
             Pamahalaan ang mga bituin, badge, mini-game qualification, at 151 kard.
           </Text>
         </View>
+        <VolumeButton activeColor={Colors.teacherPurple} size={38} />
       </View>
 
       {/* Sub Tabs */}

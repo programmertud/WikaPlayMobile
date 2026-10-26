@@ -26,6 +26,7 @@ import { LoadingView } from '../../../components/LoadingView';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { PressableScale } from '../../../components/PressableScale';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
+import { VolumeButton } from '../../../components/VolumeButton';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import {
@@ -137,10 +138,13 @@ export default function GantimpalaScreen() {
               <Text style={styles.headerSub}>Aking mga Bituin, Badge at Misyon ⭐</Text>
             </View>
           </View>
-          <Animated.View style={[styles.starsBadge, Shadows.subtle, starAnimStyle]}>
-            <Ionicons name="star" size={20} color={Colors.sunYellowDark} />
-            <Text style={styles.starsCount}>{starsBalance}</Text>
-          </Animated.View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <VolumeButton activeColor={Colors.skyBlueDark} size={36} />
+            <Animated.View style={[styles.starsBadge, Shadows.subtle, starAnimStyle]}>
+              <Ionicons name="star" size={20} color={Colors.sunYellowDark} />
+              <Text style={styles.starsCount}>{starsBalance}</Text>
+            </Animated.View>
+          </View>
         </View>
 
         {error ? (

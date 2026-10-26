@@ -27,6 +27,7 @@ import { PressableScale } from '../../../components/PressableScale';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../components/ProgressIndicator';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
+import { VolumeButton } from '../../../components/VolumeButton';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { collectibleService } from '../../../services/api';
@@ -360,9 +361,12 @@ export default function NakolektaScreen() {
               <Text style={styles.headerSub}>{totalUnlocked} ng {totalAvailable} kolektible</Text>
             </View>
           </View>
-          <View style={[styles.starsBadge, Shadows.subtle]}>
-            <Ionicons name="star" size={16} color="#F59E0B" />
-            <Text style={styles.starsCount}>{starsBalance}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <VolumeButton activeColor={Colors.skyBlueDark} size={36} />
+            <View style={[styles.starsBadge, Shadows.subtle]}>
+              <Ionicons name="star" size={16} color="#F59E0B" />
+              <Text style={styles.starsCount}>{starsBalance}</Text>
+            </View>
           </View>
         </View>
 

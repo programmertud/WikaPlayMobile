@@ -16,6 +16,7 @@ import * as Haptics from '@/utils/haptics';
 
 import { PressableScale } from '../../../components/PressableScale';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
+import { VolumeButton } from '../../../components/VolumeButton';
 import { usePresence } from '../../../hooks/use-presence';
 import { bgm } from '../../../services/audio/bgm-service';
 import { Colors, Shadows, Typography, Radius } from '../../../theme';
@@ -145,6 +146,7 @@ export default function MiniGamesScreen() {
           <Text style={styles.headerTitle}>Mga Mini-Games</Text>
           <Text style={styles.headerSub}>Maglaro at matuto ng Filipino! 🌟</Text>
         </View>
+        <VolumeButton activeColor={Colors.skyBlueDark} size={38} />
       </View>
 
       {/* Rewards Info Banner */}

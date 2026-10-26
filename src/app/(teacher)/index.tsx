@@ -16,8 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
+import { VolumeButton } from '../../components/VolumeButton';
 import { useAuth } from '../../hooks/use-auth';
 import { teacherService } from '../../services/api';
+import { bgm } from '../../services/audio/bgm-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { StudentMonitoringItem } from '../../types';
 
@@ -111,6 +113,8 @@ export default function TeacherDashboardScreen() {
   }, []);
 
   useEffect(() => {
+    bgm.init();
+    bgm.restore();
     loadData();
     const interval = setInterval(loadData, 20000);
     return () => clearInterval(interval);
@@ -148,11 +152,15 @@ export default function TeacherDashboardScreen() {
           <Text style={styles.appTitle}>WikaPlay Guro</Text>
           <Text style={styles.greeting}>Magandang araw, {greeting}! 👋</Text>
         </View>
-        <View style={[styles.onlineBadge, Shadows.subtle]}>
-          <View style={[styles.onlineDot, { backgroundColor: stats.online_students > 0 ? Colors.grassGreen : '#94A3B8' }]} />
-          <Text style={styles.onlineText}>
-            {stats.online_students} Online
-          </Text>
+        <View style={styles.topBarRight}>
+          {/* Music Volume Button (tap = mute/unmute, hold = slider) */}
+          <VolumeButton activeColor={Colors.teacherPurple} size={38} />
+          <View style={[styles.onlineBadge, Shadows.subtle]}>
+            <View style={[styles.onlineDot, { backgroundColor: stats.online_students > 0 ? Colors.grassGreen : '#94A3B8' }]} />
+            <Text style={styles.onlineText}>
+              {stats.online_students} Online
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -745,6 +753,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.body,
     fontWeight: Typography.weights.bold,
     color: Colors.text,
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   tabNavRow: {
     flexDirection: 'row',

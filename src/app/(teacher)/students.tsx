@@ -19,6 +19,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { PressableScale } from '../../components/PressableScale';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
+import { VolumeButton } from '../../components/VolumeButton';
 import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { StudentMonitoringItem } from '../../types';
@@ -207,6 +208,7 @@ export default function StudentsMonitoringScreen() {
             {students.length} nakatalang mag-aaral · {students.filter((s) => s.is_online).length} online
           </Text>
         </View>
+        <VolumeButton activeColor={Colors.teacherPurple} size={38} />
       </View>
 
       {/* Managed Sections Banner */}
@@ -470,11 +472,21 @@ export default function StudentsMonitoringScreen() {
 
                 <View style={styles.badgesRow}>
                   {[
-                    { key: 'star_collector', title: 'Star Collector', thresh: 50, icon: '⭐' },
-                    { key: 'super_learner', title: 'Super Learner', thresh: 100, icon: '🌟' },
-                    { key: 'quiz_master', title: 'Quiz Master', thresh: 200, icon: '🎯' },
-                    { key: 'learning_champion', title: 'Learning Champion', thresh: 300, icon: '🏆' },
-                    { key: 'ultimate_learner', title: 'Ultimate Learner', thresh: 480, icon: '👑' },
+                    { key: 'first_star', title: 'Unang Bituin', thresh: 10, icon: '🌱' },
+                    { key: 'star_collector', title: 'Kolektor ng Bituin', thresh: 50, icon: '⭐' },
+                    { key: 'super_learner', title: 'Super Mag-aaral', thresh: 100, icon: '🌟' },
+                    { key: 'bookworm', title: 'Mahilig Magbasa', thresh: 150, icon: '📚' },
+                    { key: 'quiz_master', title: 'Dalubhasa sa Pagsusulit', thresh: 200, icon: '🎯' },
+                    { key: 'rising_star', title: 'Papasikat na Bituin', thresh: 250, icon: '🚀' },
+                    { key: 'learning_champion', title: 'Kampeon ng Karunungan', thresh: 300, icon: '🏆' },
+                    { key: 'word_wizard', title: 'Salamangkero ng Salita', thresh: 360, icon: '🪄' },
+                    { key: 'ultimate_learner', title: 'Tunay na Henyo ng WikaPlay', thresh: 480, icon: '👑' },
+                    { key: 'knowledge_seeker', title: 'Tagahangad ng Kaalaman', thresh: 600, icon: '🔭' },
+                    { key: 'legend', title: 'Alamat ng WikaPlay', thresh: 750, icon: '🦅' },
+                    { key: 'grandmaster', title: 'Pinakadakilang Henyo', thresh: 900, icon: '💎' },
+                    { key: 'wika_hero', title: 'Bayani ng Wika', thresh: 1100, icon: '🦸' },
+                    { key: 'galaxy_brain', title: 'Galaktikong Isipan', thresh: 1350, icon: '🌌' },
+                    { key: 'immortal_scholar', title: 'Walang Hanggang Iskolar', thresh: 1650, icon: '🏛️' },
                   ].map((b) => {
                     const studentLifetime = studentDetails?.student?.lifetime_stars ?? selectedStudent.stars_balance;
                     const isUnlocked = studentLifetime >= b.thresh;
