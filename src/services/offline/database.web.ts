@@ -87,8 +87,14 @@ class WebSQLiteShim {
     }
 
     if (cleanSql.startsWith('UPDATE PENDING_SESSIONS')) {
-      // Handle status / attempts updates
-      if (cleanSql.includes("SYNC_STATUS = 'SYNCED'")) {
+      if (cleanSql.includes('STUDENT_ID = ?') && params.length > 0) {
+        const targetStudentId = params[0];
+        data.pending_sessions.forEach((s) => {
+          if (s.sync_status === 'pending' || s.sync_status === 'syncing') {
+            s.student_id = targetStudentId;
+          }
+        });
+      } else if (cleanSql.includes("SYNC_STATUS = 'SYNCED'")) {
         const sessionId = params[params.length - 1];
         const s = data.pending_sessions.find((item) => item.session_id === sessionId);
         if (s) {
@@ -114,6 +120,9 @@ class WebSQLiteShim {
       if (u) {
         u.stars_balance_last_known = newStars;
         u.cached_at = new Date().toISOString();
+      } else if (data.cached_users.length > 0) {
+        data.cached_users[0].stars_balance_last_known = newStars;
+        data.cached_users[0].cached_at = new Date().toISOString();
       }
       saveStorage(data);
       return { lastInsertRowId: 0, changes: 1 };
@@ -137,10 +146,33 @@ class WebSQLiteShim {
     const cleanSql = sql.trim().toUpperCase();
 
     if (cleanSql.includes('FROM PENDING_SESSIONS')) {
-      if (cleanSql.includes("SYNC_STATUS = 'PENDING'")) {
-        const results = data.pending_sessions.filter((s) => s.sync_status === 'pending');
+      // Check for COUNT(*) query
+      if (cleanSql.includes('COUNT(*)')) {
+        const pending = data.pending_sessions.filter(
+          (s) => s.sync_status === 'pending' || s.sync_status === 'syncing'
+        );
+        return [{ count: pending.length }] as unknown as T[];
+      }
+
+      // Check for pending/syncing sessions
+      if (cleanSql.includes('SYNC_STATUS')) {
+        let results = data.pending_sessions.filter(
+          (s) => s.sync_status === 'pending' || s.sync_status === 'syncing'
+        );
+        if (params.length > 0 && typeof params[0] === 'number') {
+          // If student ID is given, match student ID or any unassigned/temporary ID
+          const sid = params[0];
+          results = results.filter((s) => s.student_id === sid || !s.student_id);
+          // If no specific match, still return pending sessions so they sync
+          if (results.length === 0) {
+            results = data.pending_sessions.filter(
+              (s) => s.sync_status === 'pending' || s.sync_status === 'syncing'
+            );
+          }
+        }
         return results as unknown as T[];
       }
+
       return data.pending_sessions as unknown as T[];
     }
 

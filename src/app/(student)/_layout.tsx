@@ -3,12 +3,14 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../../hooks/use-auth';
 import { usePresence } from '../../hooks/use-presence';
+import { useOfflineSync } from '../../hooks/use-offline-sync';
 
 export default function StudentLayout() {
-  const { isStudent, isAuthenticated, isLoading } = useAuth();
+  const { user, isStudent, isAuthenticated, isLoading } = useAuth();
 
-  // Send background student heartbeat to update teacher's live dashboard
+  // Background student heartbeat & automatic offline sync when online
   usePresence('Nag-aaral sa Dashboard', 'student_main');
+  useOfflineSync(user?.id ?? null);
 
   // While auth is resolving, render a spinner — avoids premature redirect
   if (isLoading) {

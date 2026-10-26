@@ -22,6 +22,7 @@ import * as Haptics from '@/utils/haptics';
 
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient, authService, studentService } from '../services/api';
+import { getLatestCachedUser } from '../services/offline/offline-session-store';
 import { bgm } from '../services/audio/bgm-service';
 import { playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Radius, Shadows, Typography } from '../theme';
@@ -176,31 +177,29 @@ export default function LoadingScreen() {
     const MINIMUM_DISPLAY_MS = 1600; // Brief sweet duration so animations & messages are enjoyed
 
     try {
-      // 1. Verify token exists
-      const token = ApiClient.getToken();
-      if (!token) {
-        // Not authenticated, redirect to login
-        router.replace('/login');
-        return;
-      }
+      let userRole = 'student';
 
-      // 2. Fetch authenticated profile & fresh stats
-      const meRes = await authService.getMe();
-      if (!meRes || !meRes.user) {
-        throw new Error('Walang nakitang profile data.');
-      }
-
-      // 3. For students, pre-load profile statistics to warm up dashboard/rewards caches
-      if (meRes.user.role === 'student') {
-        try {
-          await studentService.getProfileStats();
-        } catch {
-          // Non-fatal, profile stats can fall back to dashboard load
+      try {
+        const meRes = await authService.getMe();
+        if (meRes?.user) {
+          userRole = meRes.user.role;
+          if (userRole === 'student') {
+            try { await studentService.getProfileStats(); } catch {}
+          }
+          await refreshProfile();
+        }
+      } catch (netErr: any) {
+        if (netErr?.status === 401 || netErr?.message?.includes('Unauthenticated')) {
+          throw netErr;
+        }
+        // Offline mode: check for cached user profile
+        const cached = await getLatestCachedUser();
+        if (cached) {
+          userRole = (cached.role as any) || 'student';
+        } else {
+          throw netErr;
         }
       }
-
-      // Synchronize context state
-      await refreshProfile();
 
       // Complete progress bar animation
       progressAnim.value = withTiming(1, { duration: 300 });
@@ -216,10 +215,10 @@ export default function LoadingScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
         // Navigate to the correct portal
-        if (meRes.user.role === 'teacher' || meRes.user.role === 'admin') {
-          router.replace('/(teacher)');
+        if (userRole === 'teacher' || userRole === 'admin') {
+          router.replace('/(teacher)' as any);
         } else {
-          router.replace('/(student)/(tabs)');
+          router.replace('/(student)/(tabs)' as any);
         }
       }, remainingTime);
     } catch (err: any) {

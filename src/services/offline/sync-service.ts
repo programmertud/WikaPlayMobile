@@ -12,6 +12,7 @@
  * - Never discards a pending result just because a network request failed
  */
 import { ApiClient } from '../api/client';
+import { authService } from '../api';
 import {
   getPendingSessions,
   getPendingSessionCount,
@@ -19,6 +20,9 @@ import {
   markSessionRejected,
   markSessionPendingAfterFailure,
   recordSyncAttempt,
+  getLatestCachedUser,
+  updateCachedUserStars,
+  reassignPendingSessionsToStudent,
   PendingSession,
 } from './offline-session-store';
 import { checkApiReachability } from './connectivity-service';
@@ -62,20 +66,43 @@ export function getLastSyncTime(): Date | null { return _lastSyncTime; }
  * Trigger synchronization of all pending sessions for a student.
  * Safe to call multiple times — prevents concurrent runs.
  */
-export async function syncPendingSessions(studentId: number): Promise<void> {
+export async function syncPendingSessions(studentId?: number | null): Promise<void> {
   if (_isSyncing) return;
 
   const reachable = await checkApiReachability();
   if (!reachable) return;
 
-  const token = ApiClient.getToken();
-  if (!token) return; // Cannot sync without authentication
+  let token = ApiClient.getToken();
+  let effectiveStudentId = studentId;
+
+  if (!token) {
+    // If we don't have an auth token yet (e.g. student logged in while offline),
+    // authenticate automatically with their cached name now that internet is available
+    const cached = await getLatestCachedUser();
+    if (cached?.name) {
+      try {
+        const authRes = await authService.studentLogin(cached.name);
+        if (authRes?.token) {
+          await ApiClient.setToken(authRes.token);
+          token = authRes.token;
+          if (authRes.user?.id) {
+            effectiveStudentId = authRes.user.id;
+            await reassignPendingSessionsToStudent(authRes.user.id);
+          }
+        }
+      } catch {
+        return; // Still cannot authenticate with server
+      }
+    } else {
+      return; // Cannot sync without a student identity
+    }
+  }
 
   _isSyncing = true;
   notify('syncing');
 
   try {
-    const sessions = await getPendingSessions(studentId);
+    const sessions = await getPendingSessions(effectiveStudentId || undefined);
     _pendingCount = sessions.length;
 
     if (sessions.length === 0) {
@@ -121,7 +148,11 @@ export async function syncPendingSessions(studentId: number): Promise<void> {
             }
           }
 
-          _pendingCount = await getPendingSessionCount(studentId);
+          if (batchRes.stars_balance !== undefined && effectiveStudentId) {
+            await updateCachedUserStars(effectiveStudentId, batchRes.stars_balance);
+          }
+
+          _pendingCount = await getPendingSessionCount(effectiveStudentId || undefined);
           _lastSyncTime = new Date();
           notify(_pendingCount === 0 ? 'complete' : 'idle');
           return;

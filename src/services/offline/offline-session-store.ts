@@ -144,28 +144,59 @@ export async function markSessionPendingAfterFailure(sessionId: string): Promise
  * Excludes already synced or permanently rejected sessions.
  * Ordered by creation time (oldest first).
  */
-export async function getPendingSessions(studentId: number): Promise<PendingSession[]> {
+export async function getPendingSessions(studentId?: number): Promise<PendingSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<any>(
-    `SELECT * FROM pending_sessions
-     WHERE student_id = ? AND sync_status IN ('pending', 'syncing')
-     ORDER BY created_at ASC`,
-    [studentId]
+    studentId
+      ? `SELECT * FROM pending_sessions
+         WHERE (student_id = ? OR sync_status IN ('pending', 'syncing'))
+         ORDER BY created_at ASC`
+      : `SELECT * FROM pending_sessions
+         WHERE sync_status IN ('pending', 'syncing')
+         ORDER BY created_at ASC`,
+    studentId ? [studentId] : []
   );
   return rows.map(deserializeSession);
 }
 
 /**
- * Get the count of pending (unsynced) sessions for a student.
+ * Get the count of pending (unsynced) sessions on this device.
  */
-export async function getPendingSessionCount(studentId: number): Promise<number> {
+export async function getPendingSessionCount(studentId?: number): Promise<number> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM pending_sessions
-     WHERE student_id = ? AND sync_status IN ('pending', 'syncing')`,
-    [studentId]
+    studentId
+      ? `SELECT COUNT(*) as count FROM pending_sessions
+         WHERE (student_id = ? OR sync_status IN ('pending', 'syncing'))`
+      : `SELECT COUNT(*) as count FROM pending_sessions
+         WHERE sync_status IN ('pending', 'syncing')`,
+    studentId ? [studentId] : []
   );
   return row?.count ?? 0;
+}
+
+/**
+ * Calculate total unsynced stars from pending sessions on this device.
+ */
+export async function getPendingStarsTotal(): Promise<number> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ score: number }>(
+    `SELECT score FROM pending_sessions WHERE sync_status IN ('pending', 'syncing')`
+  );
+  return rows.reduce((sum, r) => sum + (Number(r.score) || 0), 0);
+}
+
+/**
+ * Reassign pending sessions to the official server student ID.
+ */
+export async function reassignPendingSessionsToStudent(targetStudentId: number): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE pending_sessions
+     SET student_id = ?
+     WHERE sync_status IN ('pending', 'syncing')`,
+    [targetStudentId]
+  );
 }
 
 /**
@@ -236,6 +267,18 @@ export async function cacheUser(user: CachedUser): Promise<void> {
       user.cached_at,
     ]
   );
+}
+
+/**
+ * Find a cached user by student name (case-insensitive).
+ */
+export async function getCachedUserByName(name: string): Promise<CachedUser | null> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<CachedUser>(
+    `SELECT * FROM cached_user`
+  );
+  const target = name.trim().toLowerCase();
+  return rows.find((u) => u.name.trim().toLowerCase() === target) || null;
 }
 
 /**

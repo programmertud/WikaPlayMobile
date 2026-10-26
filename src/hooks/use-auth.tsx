@@ -22,6 +22,8 @@ import {
   clearCachedUser,
   getCachedUser,
   getLatestCachedUser,
+  getCachedUserByName,
+  getPendingStarsTotal,
 } from '../services/offline/offline-session-store';
 import { getDatabase } from '../services/offline/database';
 import { setHealthCheckUrl } from '../services/offline/connectivity-service';
@@ -83,8 +85,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (token) {
           try {
             const res = await authService.getMe();
-            setUser(res.user);
-            await cacheUserInfo(res.user);
+            const pendingStars = await getPendingStarsTotal().catch(() => 0);
+            const cached = await getLatestCachedUser().catch(() => null);
+            const combinedStars = Math.max(
+              res.user.stars_balance ?? 0,
+              (res.user.stars_balance ?? 0) + pendingStars,
+              cached?.stars_balance_last_known ?? 0
+            );
+            const enrichedUser = {
+              ...res.user,
+              stars_balance: combinedStars,
+            };
+            setUser(enrichedUser);
+            await cacheUserInfo(enrichedUser);
           } catch (err: any) {
             // Token expired or invalid — clear it only on 401 / auth errors
             const isAuthError =
@@ -169,22 +182,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await setAndCacheUser(res.user);
       return res.user;
     } catch (err: any) {
-      // Check if student exists in local offline SQLite cache
-      const cached = await getLatestCachedUser();
-      if (
-        cached &&
-        cached.name.trim().toLowerCase() === name.trim().toLowerCase()
-      ) {
-        const offlineUser: User = {
-          id: cached.student_id,
-          name: cached.name,
-          role: (cached.role as 'student' | 'teacher' | 'admin') || 'student',
-          avatar: cached.avatar ?? undefined,
-          section: cached.section ?? undefined,
-          stars_balance: cached.stars_balance_last_known,
+      const isNetworkError =
+        err?.message?.includes('fetch') ||
+        err?.message?.includes('Network') ||
+        err?.message?.includes('network') ||
+        err?.message?.includes('Failed to fetch') ||
+        err?.message?.includes('Internet') ||
+        err?.status === 0;
+
+      if (isNetworkError) {
+        // 1. Check if this student is already in local SQLite cache
+        const existing = await getCachedUserByName(name);
+        if (existing) {
+          const offlineUser: User = {
+            id: existing.student_id,
+            name: existing.name,
+            role: (existing.role as 'student' | 'teacher' | 'admin') || 'student',
+            avatar: existing.avatar ?? undefined,
+            section: existing.section ?? undefined,
+            stars_balance: existing.stars_balance_last_known,
+          };
+          setUser(offlineUser);
+          return offlineUser;
+        }
+
+        // 2. First-time offline student on this device: create an instant offline profile!
+        const trimmed = name.trim();
+        let hash = 0;
+        for (let i = 0; i < trimmed.length; i++) {
+          hash = (hash << 5) - hash + trimmed.charCodeAt(i);
+          hash |= 0;
+        }
+        const offlineStudentId = Math.abs(hash) || Math.floor(Math.random() * 800000) + 100000;
+
+        const newOfflineUser: User = {
+          id: offlineStudentId,
+          name: trimmed,
+          role: 'student',
+          stars_balance: 0,
         };
-        setUser(offlineUser);
-        return offlineUser;
+
+        await setAndCacheUser(newOfflineUser);
+        return newOfflineUser;
       }
       throw err;
     } finally {
@@ -224,7 +263,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async () => {
     try {
       const res = await authService.getMe();
-      await setAndCacheUser(res.user);
+      const pendingStars = await getPendingStarsTotal().catch(() => 0);
+      const combinedStars = Math.max(
+        res.user.stars_balance ?? 0,
+        (res.user.stars_balance ?? 0) + pendingStars,
+        user?.stars_balance ?? 0
+      );
+      const updatedUser = {
+        ...res.user,
+        stars_balance: combinedStars,
+      };
+      await setAndCacheUser(updatedUser);
     } catch {}
   };
 
