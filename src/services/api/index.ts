@@ -10,6 +10,10 @@ import {
   StudentMonitoringItem,
   User,
 } from '../../types';
+import {
+  cacheServerCollectibles,
+  getOfflineCollectiblesCatalog,
+} from '../offline/offline-session-store';
 
 export * from './client';
 
@@ -327,12 +331,23 @@ export const studentService = {
 
 /** Collectible service — wraps rewardService with convenience helpers */
 export const collectibleService = {
-  /** Fetch all collectibles with the student's unlock status */
-  getAll: () => rewardService.getCollectibles(),
+  /** Fetch all collectibles with the student's unlock status (with offline fallback) */
+  getAll: async () => {
+    try {
+      const res = await rewardService.getCollectibles();
+      if (res?.collectibles && res.collectibles.length > 0) {
+        cacheServerCollectibles(res.collectibles).catch(() => {});
+      }
+      return res;
+    } catch (err) {
+      console.warn('[CollectibleService] Offline fallback loading collectibles album:', err);
+      return await getOfflineCollectiblesCatalog();
+    }
+  },
 
   /** Fetch collectibles for a specific category slug */
   getByCategory: async (categoryName: string) => {
-    const res = await rewardService.getCollectibles();
+    const res = await collectibleService.getAll();
     const filtered = res.collectibles.filter(
       (c) => c.category === categoryName
     );

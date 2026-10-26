@@ -18,11 +18,14 @@
  */
 import { minigameService, quizService } from '../api';
 import { Collectible, QuizDifficulty, QuizResultSession } from '../../types';
+import { LEARNING_CATEGORIES } from '../../data/categories';
+import { getCollectibleDescription } from '../../utils/collectible-assets';
 import {
   savePendingSession,
   markSessionSynced,
   getLatestCachedUser,
   updateCachedUserStars,
+  saveOfflineCollectible,
 } from '../offline/offline-session-store';
 
 // In-flight locking map to prevent duplicate network calls on rapid taps or re-renders
@@ -58,6 +61,65 @@ export interface MinigameRewardResult {
     collectible?: Collectible & { is_duplicate?: boolean };
   };
   error?: any;
+}
+
+/**
+ * Generates an offline collectible card from bundled educational categories
+ * when the student qualifies (score >= 15/20) while disconnected.
+ */
+export function generateOfflineCollectible(
+  categorySlugOrName?: string,
+  score = 20
+): Collectible {
+  const cleanCat = (categorySlugOrName || '').toLowerCase().trim();
+  const matchedCategory =
+    LEARNING_CATEGORIES.find((cat) => {
+      const cSlug = cat.slug.toLowerCase().trim();
+      const cName = cat.name.toLowerCase().trim();
+      return (
+        cSlug === cleanCat ||
+        cName === cleanCat ||
+        cleanCat.includes(cSlug) ||
+        cSlug.includes(cleanCat)
+      );
+    }) || LEARNING_CATEGORIES[0];
+
+  const items = matchedCategory.items || [];
+  const chosenItem =
+    items.length > 0
+      ? items[Math.floor(Math.random() * items.length)]
+      : { id: 'aso', filipino: 'Aso', english: 'Dog' };
+
+  let rarity: Collectible['rarity'] = 'common';
+  if (score >= 20) {
+    rarity = 'legendary';
+  } else if (score >= 18) {
+    rarity = 'epic';
+  } else if (score >= 16) {
+    rarity = 'rare';
+  } else {
+    rarity = 'common';
+  }
+
+  const desc = getCollectibleDescription({
+    filipino_name: chosenItem.filipino,
+    name: chosenItem.english,
+    slug: chosenItem.id,
+  });
+
+  return {
+    id: Date.now(),
+    slug: chosenItem.id,
+    name: chosenItem.english,
+    filipino_name: chosenItem.filipino,
+    category: matchedCategory.name,
+    description: desc,
+    rarity,
+    required_stars: 0,
+    is_unlocked: true,
+    unlocked_at: new Date().toISOString(),
+    is_duplicate: false,
+  };
 }
 
 /**
@@ -182,6 +244,17 @@ export async function submitMinigameReward(options: {
         );
       }
 
+      let awardedCollectible: (Collectible & { is_duplicate?: boolean }) | undefined;
+      const qualifiesForCollectible = score >= 15 && score <= 20;
+
+      if (qualifiesForCollectible) {
+        const catSlugOrName = metadata?.category || metadata?.category_slug || metadata?.category_name;
+        awardedCollectible = generateOfflineCollectible(catSlugOrName, score);
+        saveOfflineCollectible(awardedCollectible).catch((e) =>
+          console.warn('[StarRewardService] Failed to cache offline collectible:', e)
+        );
+      }
+
       const fallbackResult: MinigameRewardResult = {
         success: false,
         isDuplicate: false,
@@ -193,8 +266,8 @@ export async function submitMinigameReward(options: {
           total_levels: 20,
           stars_awarded: score,
           stars_balance: provisionalBalance,
-          qualifies_for_collectible: score >= 15,
-          // Collectible card will be finalized upon server sync
+          qualifies_for_collectible: qualifiesForCollectible,
+          collectible: awardedCollectible,
         },
         error: err,
       };

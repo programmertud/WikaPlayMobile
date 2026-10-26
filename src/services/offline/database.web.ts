@@ -11,20 +11,23 @@ interface WebStorageData {
   schema_version: number;
   pending_sessions: any[];
   cached_users: any[];
+  cached_collectibles?: any[];
 }
 
 const STORAGE_KEY = 'wikaplay_offline_web_db';
 
 function loadStorage(): WebStorageData {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return { schema_version: 1, pending_sessions: [], cached_users: [] };
+    return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [] };
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { schema_version: 1, pending_sessions: [], cached_users: [] };
-    return JSON.parse(raw);
+    if (!raw) return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [] };
+    const parsed = JSON.parse(raw);
+    if (!parsed.cached_collectibles) parsed.cached_collectibles = [];
+    return parsed;
   } catch {
-    return { schema_version: 1, pending_sessions: [], cached_users: [] };
+    return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [] };
   }
 }
 
@@ -84,6 +87,22 @@ class WebSQLiteShim {
       }
       saveStorage(data);
       return { lastInsertRowId: studentId, changes: 1 };
+    }
+
+    if (cleanSql.startsWith('INSERT OR REPLACE INTO CACHED_COLLECTIBLES')) {
+      const slug = params[0];
+      const collectibleData = params[1];
+      const unlockedAt = params[2] || new Date().toISOString();
+      if (!data.cached_collectibles) data.cached_collectibles = [];
+      const existingIdx = data.cached_collectibles.findIndex((c) => c.slug === slug);
+      const row = { slug, data: collectibleData, unlocked_at: unlockedAt };
+      if (existingIdx >= 0) {
+        data.cached_collectibles[existingIdx] = row;
+      } else {
+        data.cached_collectibles.push(row);
+      }
+      saveStorage(data);
+      return { lastInsertRowId: 1, changes: 1 };
     }
 
     if (cleanSql.startsWith('UPDATE PENDING_SESSIONS')) {
@@ -178,6 +197,10 @@ class WebSQLiteShim {
 
     if (cleanSql.includes('FROM CACHED_USER')) {
       return data.cached_users as unknown as T[];
+    }
+
+    if (cleanSql.includes('FROM CACHED_COLLECTIBLES')) {
+      return (data.cached_collectibles || []) as unknown as T[];
     }
 
     return [];

@@ -12,6 +12,9 @@
  *   3b. FAILURE → session stays 'pending', sync-service retries later
  */
 import { getDatabase } from './database';
+import { Collectible } from '../../types';
+import { LEARNING_CATEGORIES } from '../../data/categories';
+import { getCollectibleDescription } from '../../utils/collectible-assets';
 
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'rejected';
 
@@ -332,6 +335,116 @@ export async function clearCachedUser(studentId: number): Promise<void> {
   );
 }
 
+// ── Cached Collectibles ───────────────────────────────────────────────────
+
+/**
+ * Save or update an unlocked collectible in local SQLite storage.
+ */
+export async function saveOfflineCollectible(collectible: Collectible): Promise<void> {
+  const db = await getDatabase();
+  const now = collectible.unlocked_at || new Date().toISOString();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO cached_collectibles (slug, data, unlocked_at)
+     VALUES (?, ?, ?)`,
+    [collectible.slug, JSON.stringify(collectible), now]
+  );
+}
+
+/**
+ * Retrieve all cached unlocked collectibles.
+ */
+export async function getCachedCollectibles(): Promise<Collectible[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ slug: string; data: string; unlocked_at: string }>(
+    `SELECT * FROM cached_collectibles`
+  );
+  return rows
+    .map((r) => {
+      try {
+        const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+        return {
+          ...parsed,
+          is_unlocked: true,
+          unlocked_at: r.unlocked_at,
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((c): c is Collectible => c !== null);
+}
+
+/**
+ * Cache server unlocked collectibles locally so the student album is always available offline.
+ */
+export async function cacheServerCollectibles(collectibles: Collectible[]): Promise<void> {
+  const unlocked = collectibles.filter((c) => c.is_unlocked);
+  for (const c of unlocked) {
+    await saveOfflineCollectible(c);
+  }
+}
+
+/**
+ * Generates the full 151-card collectible album from local offline resources,
+ * merging all unlocked cards from previous server sessions and offline gameplay.
+ */
+export async function getOfflineCollectiblesCatalog(starsBalance = 0): Promise<{
+  collectibles: Collectible[];
+  stars_balance: number;
+  total_unlocked: number;
+  total_available: number;
+}> {
+  const cachedUnlocked = await getCachedCollectibles().catch(() => []);
+  const unlockedMap = new Map<string, Collectible>();
+  for (const c of cachedUnlocked) {
+    if (c.slug) {
+      unlockedMap.set(c.slug.toLowerCase().trim(), c);
+    }
+  }
+
+  const latestUser = await getLatestCachedUser().catch(() => null);
+  const effectiveStars = starsBalance || latestUser?.stars_balance_last_known || 0;
+
+  const catalog: Collectible[] = [];
+  let syntheticId = 1;
+
+  for (const category of LEARNING_CATEGORIES) {
+    for (const item of category.items) {
+      const slug = item.id.toLowerCase().trim();
+      const unlockedItem = unlockedMap.get(slug);
+
+      const desc = getCollectibleDescription({
+        filipino_name: item.filipino,
+        name: item.english,
+        slug: item.id,
+      });
+
+      catalog.push({
+        id: unlockedItem?.id || syntheticId++,
+        slug: item.id,
+        name: item.english,
+        filipino_name: item.filipino,
+        category: category.name,
+        description: desc,
+        rarity: unlockedItem?.rarity || 'common',
+        required_stars: 0,
+        is_unlocked: !!unlockedItem,
+        unlocked_at: unlockedItem?.unlocked_at || null,
+        is_duplicate: false,
+      });
+    }
+  }
+
+  const totalUnlocked = catalog.filter((c) => c.is_unlocked).length;
+
+  return {
+    collectibles: catalog,
+    stars_balance: effectiveStars,
+    total_unlocked: totalUnlocked,
+    total_available: catalog.length,
+  };
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function deserializeSession(row: any): PendingSession {
@@ -340,3 +453,4 @@ function deserializeSession(row: any): PendingSession {
     metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
   };
 }
+

@@ -59,6 +59,12 @@ async function initSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       stars_balance_last_known INTEGER NOT NULL DEFAULT 0,
       cached_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS cached_collectibles (
+      slug TEXT PRIMARY KEY NOT NULL,
+      data TEXT NOT NULL,
+      unlocked_at TEXT NOT NULL
+    );
   `);
 
   // Insert or verify schema version
