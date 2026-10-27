@@ -212,90 +212,13 @@ export default function TeacherDashboardScreen() {
       {/* VIEW: OVERVIEW */}
       {activeTab === 'overview' && (
         <>
-          {/* Section: Content Management Navigation */}
+          {/* Section: Key Student Activity Cards */}
           <View style={styles.sectionHeaderRow}>
-            <Ionicons name="folder-open" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Content Management</Text>
+            <Ionicons name="people" size={18} color={Colors.teacherPurple} />
+            <Text style={styles.sectionTitle}>Student Attendance & Activity</Text>
           </View>
 
-          <View style={styles.dashboardHeroCards}>
-            {/* Card 1: Manage Flashcards */}
-            <TouchableOpacity
-              style={[styles.dashboardHeroCard, Shadows.soft]}
-              onPress={() => router.push('/(teacher)/manage-flashcards' as any)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.dashboardHeroTop}>
-                <View style={[styles.dashboardHeroIcon, { backgroundColor: '#EDE9FE' }]}>
-                  <Ionicons name="albums" size={22} color={Colors.teacherPurple} />
-                </View>
-                <View style={[styles.dashboardHeroBadge, { backgroundColor: '#EDE9FE' }]}>
-                  <Text style={[styles.dashboardHeroBadgeText, { color: Colors.teacherPurple }]}>151 Cards</Text>
-                </View>
-              </View>
-              <Text style={styles.dashboardHeroTitle}>Manage Flashcards</Text>
-              <Text style={styles.dashboardHeroSub}>
-                Add and edit words, images, audio recordings, and translations.
-              </Text>
-              <View style={styles.dashboardHeroFooter}>
-                <Text style={[styles.dashboardHeroAction, { color: Colors.teacherPurple }]}>Open Flashcards →</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Card 2: Manage Quiz */}
-            <TouchableOpacity
-              style={[styles.dashboardHeroCard, Shadows.soft]}
-              onPress={() => router.push('/(teacher)/manage-quiz' as any)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.dashboardHeroTop}>
-                <View style={[styles.dashboardHeroIcon, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons name="newspaper" size={22} color="#0284C7" />
-                </View>
-                <View style={[styles.dashboardHeroBadge, { backgroundColor: '#E0F2FE' }]}>
-                  <Text style={[styles.dashboardHeroBadgeText, { color: '#0369A1' }]}>Lock & Questions</Text>
-                </View>
-              </View>
-              <Text style={styles.dashboardHeroTitle}>Manage Quizzes</Text>
-              <Text style={styles.dashboardHeroSub}>
-                Manage questions and lock or unlock quizzes per category.
-              </Text>
-              <View style={styles.dashboardHeroFooter}>
-                <Text style={[styles.dashboardHeroAction, { color: '#0284C7' }]}>Open Quizzes →</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Card 3: Manage Mini-Games */}
-            <TouchableOpacity
-              style={[styles.dashboardHeroCard, Shadows.soft]}
-              onPress={() => router.push('/(teacher)/manage-minigames' as any)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.dashboardHeroTop}>
-                <View style={[styles.dashboardHeroIcon, { backgroundColor: '#FCE7F3' }]}>
-                  <Ionicons name="game-controller" size={22} color="#DB2777" />
-                </View>
-                <View style={[styles.dashboardHeroBadge, { backgroundColor: '#FCE7F3' }]}>
-                  <Text style={[styles.dashboardHeroBadgeText, { color: '#BE185D' }]}>5 Games</Text>
-                </View>
-              </View>
-              <Text style={styles.dashboardHeroTitle}>Manage Mini-Games</Text>
-              <Text style={styles.dashboardHeroSub}>
-                Memory Match, Picture Search, Word Guess, Letter Wheel, Pop Balloon & score rules.
-              </Text>
-              <View style={styles.dashboardHeroFooter}>
-                <Text style={[styles.dashboardHeroAction, { color: '#DB2777' }]}>Open Mini-Games →</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Section: 11 Summary Cards */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
-            <Ionicons name="stats-chart" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Class Overview & Metrics</Text>
-          </View>
-
-          {/* Grid of 11 Cards */}
+          {/* Grid of Only 3 Cards: Total Students, Currently Online, Recently Active */}
           <View style={styles.statsGrid}>
             <MetricCard
               icon="people"
@@ -318,144 +241,10 @@ export default function TeacherDashboardScreen() {
               color={Colors.skyBlueDark}
               sub="Past 15 minutes"
             />
-            <MetricCard
-              icon="newspaper"
-              value={stats.total_quiz_attempts}
-              label="Quizzes Taken"
-              color="#6366F1"
-              sub={`Avg: ${stats.average_quiz_score} pts`}
-            />
-            <MetricCard
-              icon="game-controller"
-              value={stats.completed_minigames}
-              label="Mini-Games Completed"
-              color="#EC4899"
-              sub="All 5 games"
-            />
-            <MetricCard
-              icon="shield-checkmark"
-              value={`${stats.average_accuracy}%`}
-              label="Average Accuracy"
-              color={Colors.grassGreenDark}
-              sub="Correct answers"
-            />
-            <MetricCard
-              icon="trending-up"
-              value={`${stats.average_progress}%`}
-              label="Average Progress"
-              color="#F59E0B"
-              sub="Toward 480 milestone"
-            />
-            <MetricCard
-              icon="star"
-              value={stats.total_stars_earned.toLocaleString()}
-              label="Total Stars (Lifetime)"
-              color={Colors.sunYellowDark}
-              sub="All cumulative stars"
-            />
-            <MetricCard
-              icon="wallet"
-              value={stats.total_stars_available.toLocaleString()}
-              label="Spendable Stars"
-              color="#10B981"
-              sub="Active student balance"
-            />
-            <MetricCard
-              icon="ribbon"
-              value={stats.total_badges_earned}
-              label="Badges Claimed"
-              color="#8B5CF6"
-              sub="Milestone awards"
-            />
-            <MetricCard
-              icon="albums"
-              value={stats.total_collectibles_claimed}
-              label="Collectibles Unlocked"
-              color="#F97316"
-              sub="Collection cards (151 items)"
-            />
           </View>
-
-          {/* Quick Notice on Star Balance (No 480 Cap) */}
-          <View style={[styles.infoBanner, Shadows.subtle]}>
-            <Ionicons name="information-circle" size={20} color={Colors.teacherPurple} />
-            <Text style={styles.infoBannerText}>
-              <Text style={{ fontWeight: 'bold' }}>Star Policy:</Text> There is no 480-star cap on total student stars. 480 is simply a milestone for the &ldquo;Ultimate Learner&rdquo; badge. Students can continue earning unlimited stars.
-            </Text>
-          </View>
-
-          {/* Mini-Games Overview Row */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
-            <Ionicons name="game-controller" size={18} color="#EC4899" />
-            <Text style={styles.sectionTitle}>WikaPlay 5 Mini-Games</Text>
-          </View>
-
-          <View style={styles.miniGamesRow}>
-            {[
-              { name: 'Memory Match', tag: '20 Levels', color: '#10B981' },
-              { name: 'Picture Search', tag: 'Listening', color: '#F59E0B' },
-              { name: 'Word Guess', tag: 'Vocabulary', color: '#3B82F6' },
-              { name: 'Letter Wheel', tag: 'Spelling', color: '#8B5CF6' },
-              { name: 'Pop Balloon', tag: 'Speed', color: '#EC4899' },
-            ].map((g, i) => (
-              <View key={i} style={[styles.gameMiniChip, { borderColor: g.color + '40' }]}>
-                <View style={[styles.gameMiniDot, { backgroundColor: g.color }]} />
-                <Text style={styles.gameMiniName}>{g.name}</Text>
-                <Text style={[styles.gameMiniTag, { color: g.color }]}>{g.tag}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Recent Quiz Results */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
-            <Ionicons name="newspaper-outline" size={18} color={Colors.teacherPurple} />
-            <Text style={styles.sectionTitle}>Recent Quiz Results</Text>
-          </View>
-
-          {recentQuizResults.length > 0 ? (
-            recentQuizResults.slice(0, 5).map((result, idx) => (
-              <View key={result.id || idx} style={[styles.resultCard, Shadows.soft]}>
-                <View
-                  style={[
-                    styles.resultBadge,
-                    { backgroundColor: result.passed ? '#DCFCE7' : '#FEE2E2' },
-                  ]}
-                >
-                  <Ionicons
-                    name={result.passed ? 'checkmark-circle' : 'close-circle'}
-                    size={20}
-                    color={result.passed ? Colors.grassGreenDark : Colors.coralPinkDark}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.resultStudentName}>
-                    {result.user?.name || 'Student'}
-                  </Text>
-                  <Text style={styles.resultMeta}>
-                    {result.category?.name || 'Lesson'} · {result.difficulty ? result.difficulty.toUpperCase() : 'EASY'}
-                  </Text>
-                </View>
-                <View style={styles.resultScoreCol}>
-                  <Text
-                    style={[
-                      styles.resultScoreText,
-                      { color: result.passed ? Colors.grassGreenDark : Colors.coralPinkDark },
-                    ]}
-                  >
-                    {result.score} pts
-                  </Text>
-                  <Text style={styles.resultStarsText}>+{result.stars_awarded ?? 0} ⭐</Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No quiz results recorded yet.</Text>
-            </View>
-          )}
 
           {/* Top Performers by Lifetime Stars */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
+          <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
             <Ionicons name="trophy" size={18} color={Colors.sunYellowDark} />
             <Text style={styles.sectionTitle}>Top Performers (Stars)</Text>
           </View>
@@ -464,7 +253,12 @@ export default function TeacherDashboardScreen() {
             .sort((a, b) => (b.lifetime_stars ?? b.stars_balance) - (a.lifetime_stars ?? a.stars_balance))
             .slice(0, 5)
             .map((student, idx) => (
-              <View key={student.id} style={[styles.leaderboardCard, Shadows.soft]}>
+              <TouchableOpacity
+                key={student.id}
+                style={[styles.leaderboardCard, Shadows.soft]}
+                activeOpacity={0.8}
+                onPress={() => router.push('/(teacher)/students' as any)}
+              >
                 <View style={styles.rankCircle}>
                   <Text style={styles.rankNum}>{idx + 1}</Text>
                 </View>
@@ -480,7 +274,7 @@ export default function TeacherDashboardScreen() {
                     {(student.lifetime_stars ?? student.stars_balance).toLocaleString()} ⭐
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
         </>
       )}

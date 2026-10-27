@@ -12,6 +12,7 @@ import {
   Baloo2_700Bold,
   Baloo2_800ExtraBold,
 } from '@expo-google-fonts/baloo-2';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Platform } from 'react-native';
 
@@ -22,6 +23,7 @@ export default function RootLayout() {
     Baloo2_600SemiBold,
     Baloo2_700Bold,
     Baloo2_800ExtraBold,
+    ...Ionicons.font,
   });
 
   useEffect(() => {

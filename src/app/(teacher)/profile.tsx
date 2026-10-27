@@ -26,6 +26,7 @@ import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { VolumeSettingsCard } from '../../components/VolumeButton';
 import { useAuth } from '../../hooks/use-auth';
 import { authService, teacherService } from '../../services/api';
+import { downloadAndShareCsv } from '@/utils/csv-exporter';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 
 const TEACHER_PRESET_AVATARS = [
@@ -51,6 +52,27 @@ export default function TeacherProfileScreen() {
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [exportingType, setExportingType] = useState<string | null>(null);
+
+  const handleExportCsv = async (type: 'quizzes' | 'minigames' | 'stars' | 'students', title: string) => {
+    if (exportingType) return;
+    setExportingType(type);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const res = await teacherService.exportReportsCsv(type);
+      await downloadAndShareCsv(res.filename, res.csv);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert(
+        `${title} Exported! 📄`,
+        `"${res.filename}" is ready with ${res.total_records} records. You can save, open in Excel, or share it.`
+      );
+    } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Export Failed', e?.message || 'Could not export CSV report.');
+    } finally {
+      setExportingType(null);
+    }
+  };
 
   useEffect(() => {
     authService.getMe()
@@ -271,21 +293,17 @@ export default function TeacherProfileScreen() {
 
         <View style={styles.exportList}>
           <TouchableOpacity
-            style={styles.exportItemBtn}
-            onPress={async () => {
-              try {
-                const res = await teacherService.exportReportsCsv('quizzes');
-                Alert.alert(
-                  'Quiz Report (CSV)',
-                  `"${res.filename}" prepared successfully with ${res.total_records} quiz records.`
-                );
-              } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Failed to export report.');
-              }
-            }}
+            style={[styles.exportItemBtn, exportingType === 'quizzes' && { opacity: 0.6 }]}
+            onPress={() => handleExportCsv('quizzes', 'Quiz Report')}
+            disabled={!!exportingType}
+            activeOpacity={0.75}
           >
             <View style={[styles.exportIconCircle, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="newspaper" size={18} color={Colors.teacherPurple} />
+              {exportingType === 'quizzes' ? (
+                <ActivityIndicator size="small" color={Colors.teacherPurple} />
+              ) : (
+                <Ionicons name="newspaper" size={18} color={Colors.teacherPurple} />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.exportItemTitle}>Quiz Report (Quiz Records)</Text>
@@ -295,21 +313,17 @@ export default function TeacherProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.exportItemBtn}
-            onPress={async () => {
-              try {
-                const res = await teacherService.exportReportsCsv('minigames');
-                Alert.alert(
-                  'Mini-Games Report (CSV)',
-                  `"${res.filename}" prepared successfully with ${res.total_records} game sessions.`
-                );
-              } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Failed to export report.');
-              }
-            }}
+            style={[styles.exportItemBtn, exportingType === 'minigames' && { opacity: 0.6 }]}
+            onPress={() => handleExportCsv('minigames', 'Mini-Games Report')}
+            disabled={!!exportingType}
+            activeOpacity={0.75}
           >
             <View style={[styles.exportIconCircle, { backgroundColor: '#FCE7F3' }]}>
-              <Ionicons name="game-controller" size={18} color="#DB2777" />
+              {exportingType === 'minigames' ? (
+                <ActivityIndicator size="small" color="#DB2777" />
+              ) : (
+                <Ionicons name="game-controller" size={18} color="#DB2777" />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.exportItemTitle}>Mini-Games Report</Text>
@@ -319,21 +333,17 @@ export default function TeacherProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.exportItemBtn}
-            onPress={async () => {
-              try {
-                const res = await teacherService.exportReportsCsv('stars');
-                Alert.alert(
-                  'Star Ledger (CSV)',
-                  `"${res.filename}" prepared successfully with ${res.total_records} transactions.`
-                );
-              } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Failed to export report.');
-              }
-            }}
+            style={[styles.exportItemBtn, exportingType === 'stars' && { opacity: 0.6 }]}
+            onPress={() => handleExportCsv('stars', 'Star Ledger')}
+            disabled={!!exportingType}
+            activeOpacity={0.75}
           >
             <View style={[styles.exportIconCircle, { backgroundColor: '#FEF08A' }]}>
-              <Ionicons name="star" size={18} color={Colors.sunYellowDark} />
+              {exportingType === 'stars' ? (
+                <ActivityIndicator size="small" color={Colors.sunYellowDark} />
+              ) : (
+                <Ionicons name="star" size={18} color={Colors.sunYellowDark} />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.exportItemTitle}>Star Ledger (Star Audit)</Text>
@@ -343,21 +353,17 @@ export default function TeacherProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.exportItemBtn}
-            onPress={async () => {
-              try {
-                const res = await teacherService.exportReportsCsv('students');
-                Alert.alert(
-                  'Student Roster (CSV)',
-                  `"${res.filename}" prepared successfully with ${res.total_records} students.`
-                );
-              } catch (e: any) {
-                Alert.alert('Error', e?.message || 'Failed to export report.');
-              }
-            }}
+            style={[styles.exportItemBtn, exportingType === 'students' && { opacity: 0.6 }]}
+            onPress={() => handleExportCsv('students', 'Student Roster')}
+            disabled={!!exportingType}
+            activeOpacity={0.75}
           >
             <View style={[styles.exportIconCircle, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="people" size={18} color={Colors.grassGreenDark} />
+              {exportingType === 'students' ? (
+                <ActivityIndicator size="small" color={Colors.grassGreenDark} />
+              ) : (
+                <Ionicons name="people" size={18} color={Colors.grassGreenDark} />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.exportItemTitle}>Student Roster</Text>

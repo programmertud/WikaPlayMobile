@@ -12,22 +12,24 @@ interface WebStorageData {
   pending_sessions: any[];
   cached_users: any[];
   cached_collectibles?: any[];
+  cached_badges?: any[];
 }
 
 const STORAGE_KEY = 'wikaplay_offline_web_db';
 
 function loadStorage(): WebStorageData {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [] };
+    return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [], cached_badges: [] };
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [] };
+    if (!raw) return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [], cached_badges: [] };
     const parsed = JSON.parse(raw);
     if (!parsed.cached_collectibles) parsed.cached_collectibles = [];
+    if (!parsed.cached_badges) parsed.cached_badges = [];
     return parsed;
   } catch {
-    return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [] };
+    return { schema_version: 1, pending_sessions: [], cached_users: [], cached_collectibles: [], cached_badges: [] };
   }
 }
 
@@ -100,6 +102,24 @@ class WebSQLiteShim {
         data.cached_collectibles[existingIdx] = row;
       } else {
         data.cached_collectibles.push(row);
+      }
+      saveStorage(data);
+      return { lastInsertRowId: 1, changes: 1 };
+    }
+
+    if (cleanSql.startsWith('INSERT OR REPLACE INTO CACHED_BADGES')) {
+      const badgeKey = params[0];
+      const studentId = params[1] || 0;
+      const cost = params[2] || 0;
+      const claimedAt = params[3] || new Date().toISOString();
+      const syncStatus = params[4] || 'pending';
+      if (!data.cached_badges) data.cached_badges = [];
+      const existingIdx = data.cached_badges.findIndex((b) => b.badge_key === badgeKey);
+      const row = { badge_key: badgeKey, student_id: studentId, cost, claimed_at: claimedAt, sync_status: syncStatus };
+      if (existingIdx >= 0) {
+        data.cached_badges[existingIdx] = row;
+      } else {
+        data.cached_badges.push(row);
       }
       saveStorage(data);
       return { lastInsertRowId: 1, changes: 1 };
@@ -201,6 +221,10 @@ class WebSQLiteShim {
 
     if (cleanSql.includes('FROM CACHED_COLLECTIBLES')) {
       return (data.cached_collectibles || []) as unknown as T[];
+    }
+
+    if (cleanSql.includes('FROM CACHED_BADGES')) {
+      return (data.cached_badges || []) as unknown as T[];
     }
 
     return [];

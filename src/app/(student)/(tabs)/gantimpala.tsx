@@ -35,6 +35,11 @@ import {
   AchievementBadge,
   LearningMission,
 } from '../../../services/api';
+import {
+  saveOfflineClaimedBadge,
+  updateCachedUserStars,
+} from '../../../services/offline/offline-session-store';
+import { getOfflineAchievements } from '../../../data/badges';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 
 export default function GantimpalaScreen() {
@@ -69,13 +74,19 @@ export default function GantimpalaScreen() {
         withTiming(1.15, { duration: 250 }),
         withSpring(1, { damping: 6, stiffness: 120 })
       );
-    } catch (err: any) {
-      setError(err?.message || 'Nabigong kunin ang mga gantimpala.');
+    } catch {
+      // Offline fallback: load locally cached achievements and badges
+      try {
+        const offlineRes = await getOfflineAchievements(user?.id);
+        setData(offlineRes);
+      } catch (offlineErr: any) {
+        setError(offlineErr?.message || 'Nabigong kunin ang mga gantimpala.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [starScale]);
+  }, [starScale, user?.id]);
 
   useEffect(() => {
     loadData();
@@ -88,16 +99,55 @@ export default function GantimpalaScreen() {
 
   const handleClaimBadge = async (badge: AchievementBadge) => {
     if (badge.status !== 'unlocked') return;
+
+    const currentSpendable = data?.stars_balance ?? user?.stars_balance ?? 0;
+    if (currentSpendable < badge.threshold) {
+      setError(`Kailangan mo ng ${badge.threshold} spendable na bituin upang i-claim ang badge na ito.`);
+      return;
+    }
+
     setClaimingKey(badge.key);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
     try {
-      await rewardService.claimBadge(badge.key);
+      const res = await rewardService.claimBadge(badge.key);
       setClaimedModalBadge(badge);
-      // Reload updated status from backend
+
+      const newSpendable = res.stars_balance ?? Math.max(0, currentSpendable - badge.threshold);
+      const newSpent = res.stars_spent ?? ((data?.spent_stars ?? 0) + badge.threshold);
+
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          stars_balance: newSpendable,
+          spent_stars: newSpent,
+          badges: prev.badges.map((b) => (b.key === badge.key ? { ...b, status: 'claimed' as const } : b)),
+        };
+      });
+
+      if (user?.id) {
+        updateCachedUserStars(user.id, newSpendable).catch(() => {});
+      }
       loadData();
-    } catch (err: any) {
-      setError(err?.message || 'Hindi na-claim ang badge.');
+    } catch {
+      // Offline fallback: record claim locally, deduct spendable stars, and increment spent stars
+      try {
+        const offlineResult = await saveOfflineClaimedBadge(badge.key, badge.threshold, user?.id);
+        setClaimedModalBadge(badge);
+
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            stars_balance: offlineResult.newBalance,
+            spent_stars: offlineResult.spentStars,
+            badges: prev.badges.map((b) => (b.key === badge.key ? { ...b, status: 'claimed' as const } : b)),
+          };
+        });
+      } catch (err: any) {
+        setError(err?.message || 'Hindi na-claim ang badge.');
+      }
     } finally {
       setClaimingKey(null);
     }

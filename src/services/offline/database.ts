@@ -65,6 +65,14 @@ async function initSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       data TEXT NOT NULL,
       unlocked_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS cached_badges (
+      badge_key TEXT PRIMARY KEY NOT NULL,
+      student_id INTEGER NOT NULL,
+      cost INTEGER NOT NULL DEFAULT 0,
+      claimed_at TEXT NOT NULL,
+      sync_status TEXT NOT NULL DEFAULT 'pending'
+    );
   `);
 
   // Insert or verify schema version

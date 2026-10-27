@@ -433,6 +433,88 @@ export default function StudentsMonitoringScreen() {
                 </TouchableOpacity>
               </LinearGradient>
 
+              {/* Student Learning Dashboard Metrics Grid */}
+              <View style={[styles.sectionBox, Shadows.soft]}>
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="speedometer" size={18} color={Colors.teacherPurple} />
+                  <Text style={styles.sectionBoxTitle}>Student Dashboard & Metrics</Text>
+                </View>
+
+                <View style={styles.metricsGrid}>
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#EDE9FE' }]}>
+                    <Ionicons name="newspaper" size={18} color={Colors.teacherPurple} />
+                    <Text style={styles.studentMetricVal}>
+                      {studentDetails?.student?.quizzes_count ?? selectedStudent.quizzes_passed}
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Quiz Taken</Text>
+                    <Text style={styles.studentMetricSub}>{selectedStudent.quizzes_passed} passed</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#FCE7F3' }]}>
+                    <Ionicons name="game-controller" size={18} color="#DB2777" />
+                    <Text style={styles.studentMetricVal}>
+                      {studentDetails?.student?.games_count ?? selectedStudent.games_played}
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Mini-Games</Text>
+                    <Text style={styles.studentMetricSub}>Completed sessions</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#DCFCE7' }]}>
+                    <Ionicons name="shield-checkmark" size={18} color={Colors.grassGreenDark} />
+                    <Text style={styles.studentMetricVal}>
+                      {studentDetails?.student?.accuracy ?? 0}%
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Average Accuracy</Text>
+                    <Text style={styles.studentMetricSub}>Correct answers</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="trending-up" size={18} color="#D97706" />
+                    <Text style={styles.studentMetricVal}>
+                      {Math.min(100, Math.round(((studentDetails?.student?.lifetime_stars ?? selectedStudent.lifetime_stars ?? selectedStudent.stars_balance) / 480) * 100))}%
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Average Progress</Text>
+                    <Text style={styles.studentMetricSub}>Milestone completion</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#FEF08A' }]}>
+                    <Ionicons name="star" size={18} color={Colors.sunYellowDark} />
+                    <Text style={styles.studentMetricVal}>
+                      {(studentDetails?.student?.lifetime_stars ?? selectedStudent.lifetime_stars ?? selectedStudent.stars_balance).toLocaleString()}
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Total Stars</Text>
+                    <Text style={styles.studentMetricSub}>Lifetime earned</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#E0F2FE' }]}>
+                    <Ionicons name="wallet" size={18} color="#0284C7" />
+                    <Text style={styles.studentMetricVal}>
+                      {selectedStudent.stars_balance.toLocaleString()}
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Spendable Stars</Text>
+                    <Text style={styles.studentMetricSub}>Nakolekta balance</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#EDE9FE' }]}>
+                    <Ionicons name="ribbon" size={18} color="#8B5CF6" />
+                    <Text style={styles.studentMetricVal}>
+                      {studentDetails?.badges?.length ?? selectedStudent.badges_count ?? 0}
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Badges Earned</Text>
+                    <Text style={styles.studentMetricSub}>Milestones unlocked</Text>
+                  </View>
+
+                  <View style={[styles.studentMetricCard, { backgroundColor: '#FFEDD5' }]}>
+                    <Ionicons name="albums" size={18} color="#EA580C" />
+                    <Text style={styles.studentMetricVal}>
+                      {studentDetails?.collectibles?.length ?? selectedStudent.collectibles_count ?? 0} / 151
+                    </Text>
+                    <Text style={styles.studentMetricLbl}>Collectibles</Text>
+                    <Text style={styles.studentMetricSub}>Cards unlocked</Text>
+                  </View>
+                </View>
+              </View>
+
               {/* Status and Authorization Management */}
               <View style={[styles.sectionBox, Shadows.soft]}>
                 <Text style={styles.sectionBoxTitle}>Account Access & Status</Text>
@@ -507,11 +589,47 @@ export default function StudentsMonitoringScreen() {
                 </View>
               </View>
 
+              {/* Collectibles Unlocked Gallery */}
+              <View style={[styles.sectionBox, Shadows.soft]}>
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="albums-outline" size={18} color="#EA580C" />
+                  <Text style={styles.sectionBoxTitle}>Collectibles Unlocked</Text>
+                  <Text style={{ marginLeft: 'auto', fontSize: 11, color: Colors.textMuted }}>
+                    {studentDetails?.collectibles?.length ?? 0} / 151
+                  </Text>
+                </View>
+
+                {studentDetails?.collectibles && studentDetails.collectibles.length > 0 ? (
+                  <View style={styles.collectiblesGrid}>
+                    {studentDetails.collectibles.map((item: any) => {
+                      const c = item.collectible || item;
+                      return (
+                        <View key={item.id} style={styles.collectibleChip}>
+                          <Ionicons name="checkmark-circle" size={14} color={Colors.grassGreenDark} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.collectibleName} numberOfLines={1}>
+                              {c.filipino_name || c.name}
+                            </Text>
+                            <Text style={styles.collectibleMeta} numberOfLines={1}>
+                              {c.category || 'Collection'} • {c.rarity || 'common'}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.emptyHistoryText}>
+                    {loadingDetails ? 'Loading collectibles...' : 'No collectibles unlocked yet.'}
+                  </Text>
+                )}
+              </View>
+
               {/* Quiz History */}
               <View style={[styles.sectionBox, Shadows.soft]}>
                 <View style={styles.sectionHeaderRow}>
                   <Ionicons name="newspaper-outline" size={18} color={Colors.teacherPurple} />
-                  <Text style={styles.sectionBoxTitle}>Quiz Attempt History</Text>
+                  <Text style={styles.sectionBoxTitle}>Quiz Attempt History (Recent)</Text>
                 </View>
 
                 {studentDetails?.quiz_history && studentDetails.quiz_history.length > 0 ? (
@@ -1236,5 +1354,65 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.heavy,
     color: Colors.teacherPurple,
     marginTop: 1,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  studentMetricCard: {
+    width: '48.5%',
+    borderRadius: Radius.md,
+    padding: 12,
+  },
+  studentMetricVal: {
+    fontSize: Typography.sizes.md,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginTop: 4,
+  },
+  studentMetricLbl: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+    marginTop: 2,
+  },
+  studentMetricSub: {
+    fontSize: 10,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
+    marginTop: 1,
+  },
+  collectiblesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  collectibleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    width: '48.5%',
+  },
+  collectibleName: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.family.display,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  collectibleMeta: {
+    fontSize: 9,
+    fontFamily: Typography.family.body,
+    color: Colors.textLight,
   },
 });

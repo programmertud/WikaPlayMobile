@@ -35,13 +35,16 @@ export default function StudentTabsLayout() {
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: styles.tabBar,
-        tabBarBackground: () => (
-          <BlurView
-            intensity={Platform.OS === 'ios' ? 80 : 100}
-            tint="light"
-            style={StyleSheet.absoluteFill}
-          />
-        ),
+        tabBarBackground:
+          Platform.OS === 'ios'
+            ? () => (
+                <BlurView
+                  intensity={80}
+                  tint="light"
+                  style={StyleSheet.absoluteFill}
+                />
+              )
+            : undefined,
       }}
       screenListeners={{
         tabPress: () => {
@@ -138,11 +141,13 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.bold,
   },
   iconContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 30,
+    minWidth: 44,
   },
   activeIconContainer: {
     backgroundColor: Colors.skyBlueLight,

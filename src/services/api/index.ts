@@ -218,6 +218,9 @@ export const rewardService = {
     return ApiClient.post<{
       message: string;
       badge: any;
+      stars_balance?: number;
+      lifetime_stars?: number;
+      stars_spent?: number;
     }>('rewards/claim-badge', { badge_key: badgeKey });
   },
 };

@@ -445,6 +445,77 @@ export async function getOfflineCollectiblesCatalog(starsBalance = 0): Promise<{
   };
 }
 
+// ── Cached Badges (Offline Badge Claims) ───────────────────────────────────
+
+/**
+ * Record an offline claimed badge in local storage and deduct spendable stars immediately.
+ */
+export async function saveOfflineClaimedBadge(
+  badgeKey: string,
+  cost: number,
+  studentId?: number
+): Promise<{ newBalance: number; spentStars: number }> {
+  const db = await getDatabase();
+  const latestUser = await getLatestCachedUser().catch(() => null);
+  const effectiveId = studentId || latestUser?.student_id || 1;
+  const now = new Date().toISOString();
+
+  await db.runAsync(
+    `INSERT OR REPLACE INTO cached_badges (badge_key, student_id, cost, claimed_at, sync_status)
+     VALUES (?, ?, ?, ?, ?)`,
+    [badgeKey, effectiveId, cost, now, 'pending']
+  );
+
+  // Deduct stars from cached user
+  const currentBalance = latestUser?.stars_balance_last_known || 0;
+  const newBalance = Math.max(0, currentBalance - cost);
+  await updateCachedUserStars(effectiveId, newBalance);
+
+  // Calculate total spent from cached badges
+  const allBadges = await getCachedClaimedBadges(effectiveId);
+  const totalSpent = allBadges.reduce((sum, b) => sum + (b.cost || 0), 0);
+
+  return { newBalance, spentStars: totalSpent };
+}
+
+/**
+ * Retrieve all locally cached badges for a student.
+ */
+export async function getCachedClaimedBadges(
+  studentId?: number
+): Promise<{ badge_key: string; cost: number; claimed_at: string; sync_status: string }[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ badge_key: string; cost: number; claimed_at: string; sync_status: string }>(
+    studentId
+      ? `SELECT * FROM cached_badges WHERE student_id = ?`
+      : `SELECT * FROM cached_badges`,
+    studentId ? [studentId] : []
+  );
+  return rows || [];
+}
+
+/**
+ * Get pending badge claims that need to be synchronized with the backend.
+ */
+export async function getPendingBadgesToSync(): Promise<{ badge_key: string; student_id: number; cost: number }[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ badge_key: string; student_id: number; cost: number }>(
+    `SELECT badge_key, student_id, cost FROM cached_badges WHERE sync_status = 'pending'`
+  );
+  return rows || [];
+}
+
+/**
+ * Mark a badge as successfully synced to the server.
+ */
+export async function markBadgeSynced(badgeKey: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE cached_badges SET sync_status = 'synced' WHERE badge_key = ?`,
+    [badgeKey]
+  );
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function deserializeSession(row: any): PendingSession {

@@ -331,31 +331,91 @@ class RewardController extends Controller
             return response()->json(['message' => 'Hindi kilalang badge.'], 404);
         }
 
-        $lifetimeStars = (int) StarTransaction::where('user_id', $user->id)->where('amount', '>', 0)->sum('amount');
-        if ($lifetimeStars < $catalogItem['threshold']) {
+        $cost = (int)$catalogItem['threshold'];
+
+        // Prevent double claiming — only if there's a confirmed StarTransaction deduction for this badge
+        $existingClaim = \App\Models\StudentBadge::where('user_id', $user->id)
+            ->where('badge_key', $badgeKey)
+            ->whereNotNull('claimed_at')
+            ->first();
+
+        if ($existingClaim) {
+            // Check if stars were actually deducted (prevents phantom-claims from old code or bad state)
+            $deductionTxn = StarTransaction::where('user_id', $user->id)
+                ->where('source_type', 'badge_claim')
+                ->where('amount', -$cost)
+                ->where('created_at', '>=', $existingClaim->claimed_at)
+                ->first();
+
+            if ($deductionTxn) {
+                // Stars were already deducted — genuinely already claimed
+                $lifetimeStars = (int) StarTransaction::where('user_id', $user->id)->where('amount', '>', 0)->sum('amount');
+                $starsSpent = abs((int) StarTransaction::where('user_id', $user->id)->where('amount', '<', 0)->sum('amount'));
+
+                return response()->json([
+                    'message' => "Na-claim mo na ang '{$catalogItem['filipino_title']}'! ⭐",
+                    'badge' => [
+                        'key' => $existingClaim->badge_key,
+                        'title' => $catalogItem['title'],
+                        'filipino_title' => $catalogItem['filipino_title'],
+                        'status' => 'claimed',
+                        'claimed_at' => $existingClaim->claimed_at->toISOString(),
+                    ],
+                    'stars_balance' => (int)$user->stars_balance,
+                    'lifetime_stars' => $lifetimeStars,
+                    'stars_spent' => $starsSpent,
+                ]);
+            }
+            // else: phantom claim (no deduction txn) — fall through to deduct now
+        }
+
+        // Check if spendable stars are sufficient
+        if ((int)$user->stars_balance < $cost) {
             return response()->json([
-                'message' => "Kailangan mo ng {$catalogItem['threshold']} na bituin upang makuha ang badge na ito.",
+                'message' => "Kailangan mo ng {$cost} spendable na bituin upang i-claim ang badge na ito. (Kasalukuyang bituin: {$user->stars_balance})",
             ], 422);
         }
 
-        $badge = \App\Models\StudentBadge::updateOrCreate(
-            ['user_id' => $user->id, 'badge_key' => $badgeKey],
-            [
-                'threshold' => $catalogItem['threshold'],
-                'unlocked_at' => now(),
-                'claimed_at' => now(),
-            ]
-        );
+        return DB::transaction(function () use ($user, $badgeKey, $catalogItem, $cost) {
+            // Deduct spendable stars atomically (same pattern as unlockMystery)
+            $user->decrement('stars_balance', $cost);
+            $newBalance = $user->fresh()->stars_balance;
 
-        return response()->json([
-            'message' => "Binabati kita! Matagumpay mong na-claim ang '{$catalogItem['filipino_title']}'! 🎉",
-            'badge' => [
-                'key' => $badge->badge_key,
-                'title' => $catalogItem['title'],
-                'filipino_title' => $catalogItem['filipino_title'],
-                'status' => 'claimed',
-                'claimed_at' => $badge->claimed_at->toISOString(),
-            ],
-        ]);
+            // Record negative StarTransaction so spent amount increases in audit ledger
+            StarTransaction::create([
+                'user_id' => $user->id,
+                'amount' => -$cost,
+                'balance_after' => $newBalance,
+                'source_type' => 'badge_claim',
+                'description' => "Na-claim ang badge: {$catalogItem['filipino_title']}",
+            ]);
+
+            // Save claimed badge record
+            $badge = \App\Models\StudentBadge::updateOrCreate(
+                ['user_id' => $user->id, 'badge_key' => $badgeKey],
+                [
+                    'threshold' => $cost,
+                    'unlocked_at' => now(),
+                    'claimed_at' => now(),
+                ]
+            );
+
+            $lifetimeStars = (int) StarTransaction::where('user_id', $user->id)->where('amount', '>', 0)->sum('amount');
+            $starsSpent = abs((int) StarTransaction::where('user_id', $user->id)->where('amount', '<', 0)->sum('amount'));
+
+            return response()->json([
+                'message' => "Binabati kita! Matagumpay mong na-claim ang '{$catalogItem['filipino_title']}'! Nagamit: {$cost} ⭐",
+                'badge' => [
+                    'key' => $badge->badge_key,
+                    'title' => $catalogItem['title'],
+                    'filipino_title' => $catalogItem['filipino_title'],
+                    'status' => 'claimed',
+                    'claimed_at' => $badge->claimed_at->toISOString(),
+                ],
+                'stars_balance' => (int)$newBalance,
+                'lifetime_stars' => $lifetimeStars,
+                'stars_spent' => $starsSpent,
+            ]);
+        });
     }
 }

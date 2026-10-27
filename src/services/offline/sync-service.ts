@@ -12,7 +12,7 @@
  * - Never discards a pending result just because a network request failed
  */
 import { ApiClient } from '../api/client';
-import { authService } from '../api';
+import { authService, rewardService } from '../api';
 import {
   getPendingSessions,
   getPendingSessionCount,
@@ -24,6 +24,8 @@ import {
   updateCachedUserStars,
   saveOfflineCollectible,
   reassignPendingSessionsToStudent,
+  getPendingBadgesToSync,
+  markBadgeSynced,
   PendingSession,
 } from './offline-session-store';
 import { checkApiReachability } from './connectivity-service';
@@ -187,6 +189,23 @@ export async function syncPendingSessions(studentId?: number | null): Promise<vo
       // Small delay between submissions to avoid hammering the server
       await sleep(300);
     }
+
+    // Sync pending offline badge claims
+    try {
+      const pendingBadges = await getPendingBadgesToSync();
+      for (const pb of pendingBadges) {
+        try {
+          await rewardService.claimBadge(pb.badge_key);
+          await markBadgeSynced(pb.badge_key);
+          anySucceeded = true;
+        } catch (err: any) {
+          const msg = err?.message || '';
+          if (msg.includes('Na-claim mo na') || err?.status === 409) {
+            await markBadgeSynced(pb.badge_key);
+          }
+        }
+      }
+    } catch {}
 
     if (anySucceeded || _pendingCount === 0) {
       _lastSyncTime = new Date();
