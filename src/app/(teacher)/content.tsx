@@ -578,15 +578,27 @@ export default function ContentManagementScreen({
           }
 
           // diff === 'madali'
+          // Use the local quiz bank to get authoritative question type and text,
+          // since the server may have stored wrong question_text (e.g. "larawan") for all 20.
+          const localBankQuestions = getMadaliQuestionsBySlug(catSlug);
+          const localQ = localBankQuestions[idx];
+          // Only trust the local bank's type field to decide isPicQ — never trust server question_text
           const isPicQ =
+            (localQ ? localQ.type === 'picture-id' : idx >= 10) ||
             Boolean((q as any).is_picture_question) ||
-            Boolean(q.question_text && /larawan|litrato/i.test(q.question_text)) ||
-            Boolean(q.target_image_url && q.target_image_url.trim().length > 0) ||
-            idx >= 10;
+            Boolean(q.target_image_url && q.target_image_url.trim().length > 0);
+
+          // Always use local bank's question text — it is always correct
+          const correctQuestionText = localQ
+            ? (localQ.questionFil || localQ.questionEn)
+            : (isPicQ ? 'Ano ang nasa larawan?' : (q.question_text || `Question #${idx + 1}`));
 
           let target: any;
           if (isPicQ) {
             target = findTargetVocabItem(q, catObj.items);
+            if (!target && localQ?.correctVocabId) {
+              target = catObj.items.find((it) => it.id === localQ.correctVocabId);
+            }
           }
 
           const enrichedChoices = (q.choices || []).map((ch: any, cIdx: number) => {
@@ -598,14 +610,29 @@ export default function ContentManagementScreen({
             };
           });
 
+          // For text questions with no choices from server, fall back to local bank choices
+          const localChoices = (!isPicQ && localQ?.textChoices)
+            ? localQ.textChoices.map((c, cIdx) => ({
+                id: String(c.id || cIdx + 1),
+                text: c.text,
+                image_url: '',
+              }))
+            : null;
+
+          const finalChoices = enrichedChoices.length > 0 ? enrichedChoices : (localChoices || enrichedChoices);
+          const finalCorrectAnswer = q.correct_answer ||
+            (localQ ? (localQ.textChoices?.find((c) => c.id === localQ.correctTextId)?.text || localQ.correctTextId || '') : '');
+
           return {
             ...q,
+            question_text: correctQuestionText,
             targetItem: target ?? q.targetItem,
             target_item_name: isPicQ ? (q.target_item_name || target?.filipino || q.correct_answer) : '',
             target_image_url: isPicQ ? (q.target_image_url || target?.imageUri || '') : '',
             localImageSource: isPicQ ? ((q as any).localImageSource || target?.image) : undefined,
             is_picture_question: isPicQ,
-            choices: enrichedChoices,
+            choices: finalChoices,
+            correct_answer: finalCorrectAnswer,
           };
         });
       }
