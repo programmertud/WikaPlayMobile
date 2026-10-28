@@ -1,5 +1,7 @@
+import { Platform } from 'react-native';
 import { LEARNING_CATEGORIES } from '../data/categories';
 import { VocabularyItem } from '../types';
+import { COLLECTIBLE_NARRATION_AUDIO, COLLECTIBLE_NARRATION_WEB_PATHS } from '../data/collectible-audio';
 
 /**
  * Maps a Collectible (from backend API or session) to its corresponding
@@ -61,8 +63,6 @@ export function getCollectibleImageSource(item?: {
   return null;
 }
 
-import { COLLECTIBLE_NARRATION_AUDIO } from '../data/collectible-audio';
-
 /**
  * Returns the resolved Audio source for a Collectible:
  * 1. Prefers bundled description narration (.m4a) asset,
@@ -77,16 +77,30 @@ export function getCollectibleAudioSource(item?: {
 } | null): any {
   if (!item) return null;
 
-  // 1. Prefer full description voice narration audio
   const normF = (item.filipino_name || '').toLowerCase().trim();
   const rawSlug = (item.slug || '').toLowerCase().replace(/_/g, '-');
+  const cleanKey = rawSlug.replace(/^hayop-|^prutas-|^gulay-|^kulay-|^katawan-|^hugis-|^bilang-|^pagbati-/, '');
+
+  // 1. On Web, prefer direct web paths from public/audio to guarantee .m4a narration playback
+  if (Platform.OS === 'web') {
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[rawSlug]) {
+      return COLLECTIBLE_NARRATION_WEB_PATHS[rawSlug];
+    }
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[normF]) {
+      return COLLECTIBLE_NARRATION_WEB_PATHS[normF];
+    }
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[cleanKey]) {
+      return COLLECTIBLE_NARRATION_WEB_PATHS[cleanKey];
+    }
+  }
+
+  // 2. Prefer full description voice narration audio (.m4a) for Native Android APK / iOS
   if (COLLECTIBLE_NARRATION_AUDIO[rawSlug]) {
     return COLLECTIBLE_NARRATION_AUDIO[rawSlug];
   }
   if (COLLECTIBLE_NARRATION_AUDIO[normF]) {
     return COLLECTIBLE_NARRATION_AUDIO[normF];
   }
-  const cleanKey = rawSlug.replace(/^hayop-|^prutas-|^gulay-|^kulay-|^katawan-|^hugis-|^bilang-|^pagbati-/, '');
   if (COLLECTIBLE_NARRATION_AUDIO[cleanKey]) {
     return COLLECTIBLE_NARRATION_AUDIO[cleanKey];
   }

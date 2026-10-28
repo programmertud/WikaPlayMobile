@@ -4,6 +4,7 @@ import { Image, Platform } from 'react-native';
 import { bgm, useBgmDuck } from './bgm-service';
 import { LEARNING_CATEGORIES } from '../../data/categories';
 import { ALL_MADALI_AUDIO, ALL_MADALI_WEB_PATHS } from '../../utils/quiz-madali-audio';
+import { COLLECTIBLE_NARRATION_AUDIO, COLLECTIBLE_NARRATION_WEB_PATHS } from '../../data/collectible-audio';
 
 export { bgm, useBgmDuck };
 
@@ -204,10 +205,26 @@ export const VOICE_OVER_WEB_PATHS: Record<string, string> = {
 export function resolveAudioSource(source: string | any): any {
   if (!source) return null;
 
+  // If it's already a valid remote or relative web URL, return it directly
+  if (typeof source === 'string') {
+    if (
+      source.startsWith('/') ||
+      source.startsWith('./') ||
+      source.startsWith('http://') ||
+      source.startsWith('https://') ||
+      source.startsWith('data:') ||
+      source.startsWith('blob:')
+    ) {
+      return source;
+    }
+  }
+
   // On Web, prefer direct web paths from public/audio if matching ID or key
   if (Platform.OS === 'web' && typeof source === 'string') {
     const rawTrim = source.trim();
     const cleanKey = rawTrim.split('/').pop()?.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase() || rawTrim;
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim]) return COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim];
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[cleanKey]) return COLLECTIBLE_NARRATION_WEB_PATHS[cleanKey];
     if (ALL_MADALI_WEB_PATHS[rawTrim]) return ALL_MADALI_WEB_PATHS[rawTrim];
     if (ALL_MADALI_WEB_PATHS[cleanKey]) return ALL_MADALI_WEB_PATHS[cleanKey];
     if (VOICE_OVER_WEB_PATHS[cleanKey]) return VOICE_OVER_WEB_PATHS[cleanKey];
@@ -218,6 +235,14 @@ export function resolveAudioSource(source: string | any): any {
   // Extract base filename if it has path elements (e.g. "audio/mga-gulay_ampalaya.mp3" -> "mga-gulay_ampalaya.mp3")
   const filename = source.split('/').pop() || source;
   const noExt = filename.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase().trim();
+
+  // Prefer collectible narration audio if present
+  if (COLLECTIBLE_NARRATION_AUDIO[filename]) {
+    return COLLECTIBLE_NARRATION_AUDIO[filename];
+  }
+  if (COLLECTIBLE_NARRATION_AUDIO[noExt]) {
+    return COLLECTIBLE_NARRATION_AUDIO[noExt];
+  }
 
   if (LOCAL_AUDIO_ASSETS[filename]) {
     return LOCAL_AUDIO_ASSETS[filename];
@@ -388,6 +413,16 @@ export async function playSound(
         webUri = ALL_MADALI_WEB_PATHS[clean] || VOICE_OVER_WEB_PATHS[clean] || '';
       }
 
+      // Check COLLECTIBLE_NARRATION_AUDIO if source is a number, find its key and use web path
+      if (!webUri && typeof source === 'number') {
+        for (const [key, asset] of Object.entries(COLLECTIBLE_NARRATION_AUDIO)) {
+          if (asset === source) {
+            webUri = COLLECTIBLE_NARRATION_WEB_PATHS[key] || '';
+            break;
+          }
+        }
+      }
+
       // Last resort: if source is a number, find its key in ALL_MADALI_AUDIO and use web path
       if (!webUri && typeof source === 'number') {
         for (const [key, asset] of Object.entries(ALL_MADALI_AUDIO)) {
@@ -399,7 +434,7 @@ export async function playSound(
       }
 
       if (webUri) {
-        const audio = new Audio(webUri);
+        const audio = new Audio(encodeURI(webUri));
         player = audio;
         currentActivePlayer = audio;
         audio.volume = 1.0;
