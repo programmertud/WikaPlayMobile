@@ -43,7 +43,7 @@ import { getOfflineAchievements } from '../../../data/badges';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 
 export default function GantimpalaScreen() {
-  const { user } = useAuth();
+  const { user, updateUserStars } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [data, setData] = useState<AchievementsResponse | null>(null);
@@ -68,6 +68,9 @@ export default function GantimpalaScreen() {
       setError(null);
       const res = await rewardService.getAchievements();
       setData(res);
+      if (res?.stars_balance !== undefined) {
+        updateUserStars(res.stars_balance);
+      }
 
       // Pulse star balance animation on load
       starScale.value = withSequence(
@@ -129,6 +132,7 @@ export default function GantimpalaScreen() {
       if (user?.id) {
         updateCachedUserStars(user.id, newSpendable).catch(() => {});
       }
+      updateUserStars(newSpendable);
       loadData();
     } catch {
       // Offline fallback: record claim locally, deduct spendable stars, and increment spent stars
@@ -145,6 +149,7 @@ export default function GantimpalaScreen() {
             badges: prev.badges.map((b) => (b.key === badge.key ? { ...b, status: 'claimed' as const } : b)),
           };
         });
+        updateUserStars(offlineResult.newBalance);
       } catch (err: any) {
         setError(err?.message || 'Hindi na-claim ang badge.');
       }

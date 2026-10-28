@@ -35,6 +35,7 @@ import {
   CategoryProgressItem,
 } from '../../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
+import { storage } from '../../../utils/storage';
 
 // Child-friendly preset avatars
 const PRESET_AVATARS = [
@@ -114,6 +115,12 @@ export default function ProfileScreen() {
     setShowAvatarPicker(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     try {
+      if (user?.id) {
+        storage.setItem(`@wikaplay_student_avatar_${user.id}`, preset.emoji).catch(() => {});
+      }
+      if (user?.name) {
+        storage.setItem(`@wikaplay_student_avatar_${user.name.toLowerCase().trim()}`, preset.emoji).catch(() => {});
+      }
       await updateProfile({ avatar: preset.emoji });
       loadProfile();
     } catch (e: any) {
@@ -193,6 +200,12 @@ export default function ProfileScreen() {
         avatarUrl = res.avatar;
       }
 
+      if (user?.id) {
+        storage.setItem(`@wikaplay_student_avatar_${user.id}`, avatarUrl).catch(() => {});
+      }
+      if (user?.name) {
+        storage.setItem(`@wikaplay_student_avatar_${user.name.toLowerCase().trim()}`, avatarUrl).catch(() => {});
+      }
       await updateProfile({ avatar: avatarUrl });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setShowAvatarPicker(false);

@@ -40,11 +40,15 @@ export const isImageAvatar = (avatar?: string | null): boolean => {
 export const resolveAvatarUrl = (avatar?: string | null): string => {
   if (!avatar) return '';
   const trimmed = avatar.trim();
+  const baseUrl = ApiClient.getBaseUrl();
+  const origin = baseUrl.replace(/\/api\/?$/, '');
+
   if (trimmed.startsWith('/storage/')) {
-    // Base URL might be http://.../api, so take origin
-    const baseUrl = ApiClient.getBaseUrl();
-    const origin = baseUrl.replace(/\/api\/?$/, '');
     return `${origin}${trimmed}`;
+  }
+  if (trimmed.includes('localhost/storage/') || trimmed.includes('127.0.0.1/storage/')) {
+    const relativePath = trimmed.replace(/^https?:\/\/[^/]+/, '');
+    return `${origin}${relativePath}`;
   }
   return trimmed;
 };

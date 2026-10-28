@@ -1717,10 +1717,10 @@ const pagbatiQuestions: MadaliQuestion[] = [
     "pagbati-04",
     "cat_pagbati",
     "mga-pagbati-at-parirala",
-    'Ano sa Ingles ang "Kumusta"?',
-    'What is the English expression for "Kumusta"?',
-    ["Good Morning", "Goodbye", "Hello / How are you?", "Thank You"],
-    2,
+    'Ano sa tagalog ang"Hello"?',
+    'What is the tagalog expression for "hello"?',
+    ["kumusta", "Paalam", "Ingat Ka", "Salamat"],
+    0,
   ),
 
   mc(
@@ -1798,7 +1798,7 @@ const pagbatiQuestions: MadaliQuestion[] = [
     "pagbati-12",
     "cat_pagbati",
     "mga-pagbati-at-parirala",
-    "Tinanong ka ng kaibigan mo kung paano ka. Anong tamang sagot?",
+    "Tinanong ka ng iyong kaibigan kung ayos ka lang. Ano maaari mong sabihin?",
     "Your friend asked how you are. What is the correct answer?",
     ["Paalam", "Salamat", "Mabuti Ako", "Mahal Kita"],
     2,

@@ -23,7 +23,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -37,9 +36,9 @@ import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { VolumeButton } from '../../components/VolumeButton';
 import { teacherService } from '../../services/api';
 import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
-import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
+import { Colors, Shadows, Typography, Radius } from '../../theme';
 import type { Category, Flashcard, QuizDifficulty, QuizQuestion } from '../../types';
-import { LEARNING_CATEGORIES, overrideVocabularyItem } from '../../data/categories';
+import { LEARNING_CATEGORIES, overrideVocabularyItem, getRandomVocabularyChoices } from '../../data/categories';
 import { getMadaliQuestionsBySlug } from '../../data/quiz-bank-madali';
 import { storage } from '../../utils/storage';
 
@@ -125,6 +124,117 @@ function getFlashcardImageSource(card?: Partial<Flashcard & { localImageSource?:
   return null;
 }
 
+// Unified image resolver for quiz question target items and choices
+function getQuestionVisualSource(
+  imgUrl?: any,
+  localSource?: any,
+  wordOrVocabId?: string,
+  catSlug?: string,
+  flashcardsList?: Flashcard[]
+) {
+  // 1. Explicitly uploaded custom image (file://, data:, http(s)://):
+  if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0 && !imgUrl.includes('images.unsplash.com')) {
+    return { uri: imgUrl };
+  }
+  // 2. Bundled local image source (require asset or object with uri)
+  if (localSource) {
+    return typeof localSource === 'object' && localSource.uri ? localSource : localSource;
+  }
+  // 3. Match from LEARNING_CATEGORIES by word name, id, or translation:
+  const query = (wordOrVocabId || '').toLowerCase().trim();
+  if (query) {
+    const targetCats = catSlug
+      ? [LEARNING_CATEGORIES.find((c) => c.slug === catSlug), ...LEARNING_CATEGORIES.filter((c) => c.slug !== catSlug)]
+      : LEARNING_CATEGORIES;
+
+    for (const cat of targetCats) {
+      if (!cat?.items) continue;
+      const found = cat.items.find(
+        (item) =>
+          item.id.toLowerCase() === query ||
+          item.filipino.toLowerCase().trim() === query ||
+          item.english.toLowerCase().trim() === query ||
+          (query.length > 2 && item.filipino.toLowerCase().includes(query))
+      );
+      if (found) {
+        if (found.imageUri) return { uri: found.imageUri };
+        if (found.image) return found.image;
+      }
+    }
+  }
+  // 4. Match from flashcards list
+  if (query && flashcardsList && flashcardsList.length > 0) {
+    const matchedFc = flashcardsList.find(
+      (f) =>
+        String(f.id) === query ||
+        (f.filipino_name && f.filipino_name.toLowerCase().trim() === query) ||
+        (f.name && f.name.toLowerCase().trim() === query)
+    );
+    if (matchedFc) {
+      if (matchedFc.image_url && !matchedFc.image_url.includes('images.unsplash.com')) {
+        return { uri: matchedFc.image_url };
+      }
+      if ((matchedFc as any).localImageSource) {
+        return (matchedFc as any).localImageSource;
+      }
+    }
+  }
+  // 5. Fallback to server URL if valid and not empty
+  if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0) {
+    return { uri: imgUrl };
+  }
+  return null;
+}
+
+// Helper to reliably find a matching VocabularyItem from question data
+function findTargetVocabItem(q: any, items: any[]): any | undefined {
+  if (!items || items.length === 0 || !q) return undefined;
+
+  // 1. Match by target_item_name
+  if (q.target_item_name && typeof q.target_item_name === 'string' && q.target_item_name.trim().length > 0) {
+    const norm = q.target_item_name.toLowerCase().trim();
+    const found = items.find(
+      (it) => it.filipino?.toLowerCase().trim() === norm || it.id?.toLowerCase() === norm || it.english?.toLowerCase().trim() === norm
+    );
+    if (found) return found;
+  }
+
+  // 2. Match by correct_answer
+  if (q.correct_answer && typeof q.correct_answer === 'string' && q.correct_answer.trim().length > 0) {
+    const norm = q.correct_answer.toLowerCase().trim();
+    const found = items.find(
+      (it) => it.filipino?.toLowerCase().trim() === norm || it.id?.toLowerCase() === norm || it.english?.toLowerCase().trim() === norm
+    );
+    if (found) return found;
+  }
+
+  // 3. Match from audio_url (e.g. 'mga-hayop_aso.mp3' -> 'aso', or 'hayop_aso')
+  if (q.audio_url && typeof q.audio_url === 'string') {
+    const clean = q.audio_url.split('/').pop()?.replace(/\.[^/.]+$/, '').toLowerCase().trim() || '';
+    const parts = clean.split('_');
+    const lastPart = parts[parts.length - 1];
+    const found = items.find(
+      (it) =>
+        it.id?.toLowerCase() === clean ||
+        it.filipino?.toLowerCase().trim() === lastPart ||
+        it.english?.toLowerCase().trim() === lastPart ||
+        it.id?.toLowerCase().endsWith(lastPart)
+    );
+    if (found) return found;
+  }
+
+  // 4. Match from question_text (e.g. 'Nasaan ang aso?' or 'para sa "Aso"')
+  if (q.question_text && typeof q.question_text === 'string') {
+    for (const it of items) {
+      if (it.filipino && q.question_text.toLowerCase().includes(it.filipino.toLowerCase().trim())) {
+        return it;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 export default function ContentManagementScreen({
   initialMode,
   showBackToDashboard,
@@ -187,10 +297,14 @@ export default function ContentManagementScreen({
   const [questionModal, setQuestionModal] = useState<{
     open: boolean;
     question: any;
+    isEditing?: boolean;
   }>({
     open: false,
     question: {},
+    isEditing: false,
   });
+  const [isUploadingQImage, setIsUploadingQImage] = useState(false);
+  const [isUploadingQAudio, setIsUploadingQAudio] = useState(false);
 
   // ── Mini-Games Management State ─────────────────────────────────────────
   const [minigamesData, setMinigamesData] = useState<{
@@ -308,20 +422,192 @@ export default function ContentManagementScreen({
       let questions = Array.isArray(res?.questions) ? res.questions : [];
       if (questions.length < 10) {
         if (diff === 'madali') {
-          questions = getMadaliQuestionsBySlug(catSlug).map((q, idx) => ({
-            id: idx + 1, category_id: catId, flashcard_id: null,
-            question_text: q.questionFil || q.questionEn, target_image_url: '', target_item_name: '',
-            choices: q.textChoices?.map((choice) => ({ id: choice.id, text: choice.text, image_url: '' })) || [],
-            correct_answer: q.correctTextId || q.correctVocabId || 'A', points: 1, difficulty: diff,
-          })) as QuizQuestion[];
+          questions = getMadaliQuestionsBySlug(catSlug).map((q, idx) => {
+            const isPictureQuestion =
+              q.type === 'picture-id' ||
+              Boolean(q.questionFil && /larawan|litrato/i.test(q.questionFil)) ||
+              idx >= 10;
+
+            let matchedItem: any;
+            if (isPictureQuestion) {
+              matchedItem = catObj.items.find(
+                (it) => it.id === q.correctVocabId || it.filipino.toLowerCase() === (q.correctTextId || '').toLowerCase()
+              );
+              if (!matchedItem && q.correctVocabId) {
+                matchedItem = catObj.items.find((it) => it.id.includes(q.correctVocabId!));
+              }
+              if (!matchedItem) {
+                const correctChoiceText = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
+                if (correctChoiceText) {
+                  matchedItem = catObj.items.find((it) => it.filipino.toLowerCase() === correctChoiceText.toLowerCase());
+                }
+              }
+            }
+
+            const targetName = isPictureQuestion ? (matchedItem?.filipino || '') : '';
+            const targetImg = isPictureQuestion ? (matchedItem?.imageUri || '') : '';
+            const localImg = isPictureQuestion ? matchedItem?.image : undefined;
+
+            return {
+              id: idx + 1,
+              category_id: catId,
+              flashcard_id: null,
+              question_text: q.questionFil || q.questionEn,
+              target_image_url: targetImg,
+              target_item_name: targetName,
+              targetItem: matchedItem,
+              localImageSource: localImg,
+              choices: q.textChoices?.map((choice) => ({ id: choice.id, text: choice.text, image_url: '' })) || [],
+              correct_answer: q.textChoices?.find((c) => c.id === q.correctTextId)?.text || q.correctTextId || 'A',
+              points: 1,
+              difficulty: diff,
+              is_picture_question: isPictureQuestion,
+            } as any;
+          });
+        } else if (diff === 'katamtaman') {
+          questions = catObj.items.map((item, idx) => {
+            const choices = getRandomVocabularyChoices(catSlug, item, 4);
+            const mappedChoices = choices.map((c, cIdx) => ({
+              id: String(c.id || cIdx + 1),
+              image_url: c.imageUri || '',
+              text: c.filipino,
+              vocabularyItem: c,
+              localImageSource: c.image,
+            }));
+
+            return {
+              id: idx + 1,
+              category_id: catId,
+              flashcard_id: null,
+              question_text: `Pakinggan ang audio at piliin ang tamang larawan para sa "${item.filipino}":`,
+              target_image_url: item.imageUri || '',
+              target_item_name: item.filipino,
+              targetItem: item,
+              localImageSource: item.image,
+              audio_url: item.audioUri || (typeof item.audio === 'string' ? item.audio : `${item.id}.mp3`),
+              choices: mappedChoices,
+              correct_answer: item.filipino,
+              points: 2,
+              difficulty: diff,
+            } as any;
+          });
         } else {
+          // mahirap
           questions = catObj.items.map((item, idx) => ({
-            id: idx + 1, category_id: catId, flashcard_id: null,
-            question_text: diff === 'katamtaman' ? `Listen to the sound and choose the correct picture for "${item.filipino}":` : 'What is the correct spelling or word for the picture shown?',
-            target_image_url: typeof item.image === 'string' ? item.image : '', target_item_name: item.filipino,
-            choices: [], correct_answer: item.filipino, points: diff === 'katamtaman' ? 2 : 3, difficulty: diff,
-          })) as QuizQuestion[];
+            id: idx + 1,
+            category_id: catId,
+            flashcard_id: null,
+            question_text: 'Ayusin ang mga letra upang mabuo ang tamang salita.',
+            target_image_url: item.imageUri || '',
+            target_item_name: item.filipino.toUpperCase(),
+            targetItem: item,
+            localImageSource: item.image,
+            choices: [],
+            correct_answer: item.filipino.toUpperCase(),
+            points: 3,
+            difficulty: diff,
+          })) as any;
         }
+      } else {
+        // Enrich questions returned from server so local assets and images are linked
+        questions = questions.map((q: any, idx: number) => {
+          if (diff === 'katamtaman') {
+            const target = findTargetVocabItem(q, catObj.items) || catObj.items[idx % catObj.items.length];
+            const targetWord = target?.filipino || q.target_item_name || q.correct_answer || '';
+
+            // Check if choices are empty or missing text
+            const needsChoices =
+              !Array.isArray(q.choices) ||
+              q.choices.length < 4 ||
+              q.choices.every((c: any) => !(c?.text || c?.filipino_name)?.trim());
+
+            let finalChoices: any[] = [];
+            if (needsChoices && target) {
+              const gen = getRandomVocabularyChoices(catSlug, target, 4);
+              finalChoices = gen.map((c, cIdx) => ({
+                id: String(c.id || cIdx + 1),
+                text: c.filipino,
+                image_url: c.imageUri || '',
+                vocabularyItem: c,
+                localImageSource: c.image,
+              }));
+            } else {
+              finalChoices = (q.choices || []).map((ch: any, cIdx: number) => {
+                const chText = typeof ch === 'string' ? ch : (ch.text || ch.filipino_name || '');
+                const chImg = typeof ch === 'object' ? ch.image_url : '';
+                const vocab =
+                  ch.vocabularyItem ||
+                  catObj.items.find(
+                    (it) => it.id === ch.id || it.filipino.toLowerCase().trim() === chText.toLowerCase().trim()
+                  );
+                return {
+                  id: String(ch.id || cIdx + 1),
+                  text: chText || vocab?.filipino || `Choice #${cIdx + 1}`,
+                  image_url: chImg || vocab?.imageUri || '',
+                  vocabularyItem: vocab,
+                  localImageSource: ch.localImageSource || vocab?.image,
+                };
+              });
+            }
+
+            return {
+              ...q,
+              targetItem: target ?? q.targetItem,
+              target_item_name: targetWord,
+              correct_answer: q.correct_answer || targetWord,
+              localImageSource: (q as any).localImageSource || target?.image,
+              audio_url:
+                q.audio_url ||
+                target?.audioUri ||
+                (typeof target?.audio === 'string' ? target.audio : `${target?.id || 'audio'}.mp3`),
+              choices: finalChoices,
+            };
+          }
+
+          if (diff === 'mahirap') {
+            const target = findTargetVocabItem(q, catObj.items) || catObj.items[idx % catObj.items.length];
+            const targetWord = (target?.filipino || q.target_item_name || q.correct_answer || '').toUpperCase();
+            return {
+              ...q,
+              targetItem: target ?? q.targetItem,
+              target_item_name: targetWord,
+              correct_answer: targetWord,
+              target_image_url: q.target_image_url || target?.imageUri || '',
+              localImageSource: (q as any).localImageSource || target?.image,
+            };
+          }
+
+          // diff === 'madali'
+          const isPicQ =
+            Boolean((q as any).is_picture_question) ||
+            Boolean(q.question_text && /larawan|litrato/i.test(q.question_text)) ||
+            Boolean(q.target_image_url && q.target_image_url.trim().length > 0) ||
+            idx >= 10;
+
+          let target: any;
+          if (isPicQ) {
+            target = findTargetVocabItem(q, catObj.items);
+          }
+
+          const enrichedChoices = (q.choices || []).map((ch: any, cIdx: number) => {
+            const chText = typeof ch === 'string' ? ch : (ch.text || ch.filipino_name || '');
+            return {
+              id: String(ch.id || cIdx + 1),
+              text: chText,
+              image_url: typeof ch === 'object' ? ch.image_url || '' : '',
+            };
+          });
+
+          return {
+            ...q,
+            targetItem: target ?? q.targetItem,
+            target_item_name: isPicQ ? (q.target_item_name || target?.filipino || q.correct_answer) : '',
+            target_image_url: isPicQ ? (q.target_image_url || target?.imageUri || '') : '',
+            localImageSource: isPicQ ? ((q as any).localImageSource || target?.image) : undefined,
+            is_picture_question: isPicQ,
+            choices: enrichedChoices,
+          };
+        });
       }
       setQuizData({
         availability,
@@ -680,28 +966,363 @@ export default function ContentManagementScreen({
   };
 
   // ── Quiz Question Actions ───────────────────────────────────────────────
+  const handlePickQuizChoiceImage = async (choiceIndex: number) => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Required', 'Permission is required to access your gallery.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setIsUploadingQImage(true);
+      try {
+        const form = new FormData();
+        if (Platform.OS === 'web') {
+          const resp = await fetch(asset.uri);
+          const blob = await resp.blob();
+          const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
+          const file = new File([blob], asset.fileName || `choice_${Date.now()}.${ext}`, {
+            type: blob.type || asset.mimeType || 'image/jpeg',
+          });
+          form.append('image', file);
+        } else {
+          form.append('image', {
+            uri: asset.uri,
+            name: asset.fileName || 'choice.jpg',
+            type: asset.mimeType || 'image/jpeg',
+          } as any);
+        }
+        const res = await teacherService.uploadImage(form);
+        setQuestionModal((prev) => {
+          const choices = [...(prev.question.choices || [{}, {}, {}, {}])];
+          const curr = typeof choices[choiceIndex] === 'object' ? choices[choiceIndex] : { text: choices[choiceIndex] || '' };
+          choices[choiceIndex] = { ...curr, image_url: res.url, localImageSource: { uri: res.url } };
+          return { ...prev, question: { ...prev.question, choices } };
+        });
+      } catch {
+        setQuestionModal((prev) => {
+          const choices = [...(prev.question.choices || [{}, {}, {}, {}])];
+          const curr = typeof choices[choiceIndex] === 'object' ? choices[choiceIndex] : { text: choices[choiceIndex] || '' };
+          choices[choiceIndex] = { ...curr, image_url: asset.uri, localImageSource: { uri: asset.uri } };
+          return { ...prev, question: { ...prev.question, choices } };
+        });
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to select image.');
+    } finally {
+      setIsUploadingQImage(false);
+    }
+  };
+
+  const handlePickQuizAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setIsUploadingQAudio(true);
+      try {
+        const form = new FormData();
+        if (Platform.OS === 'web') {
+          const resp = await fetch(asset.uri);
+          const blob = await resp.blob();
+          const ext = (asset.mimeType || blob.type || 'audio/mpeg').split('/')[1] || 'mp3';
+          const file = new File([blob], asset.name || `quiz_voice_${Date.now()}.${ext}`, {
+            type: blob.type || asset.mimeType || 'audio/mpeg',
+          });
+          form.append('audio', file);
+        } else {
+          form.append('audio', {
+            uri: asset.uri,
+            name: asset.name,
+            type: asset.mimeType || 'audio/mpeg',
+          } as any);
+        }
+        const res = await teacherService.uploadAudio(form);
+        setQuestionModal((prev) => ({
+          ...prev,
+          question: { ...prev.question, audio_url: res.url },
+        }));
+      } catch {
+        setQuestionModal((prev) => ({
+          ...prev,
+          question: { ...prev.question, audio_url: asset.uri },
+        }));
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to select audio.');
+    } finally {
+      setIsUploadingQAudio(false);
+    }
+  };
+
+  const handlePickQuizTargetImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Required', 'Permission is required to access your gallery.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setIsUploadingQImage(true);
+      try {
+        const form = new FormData();
+        if (Platform.OS === 'web') {
+          const resp = await fetch(asset.uri);
+          const blob = await resp.blob();
+          const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
+          const file = new File([blob], asset.fileName || `target_${Date.now()}.${ext}`, {
+            type: blob.type || asset.mimeType || 'image/jpeg',
+          });
+          form.append('image', file);
+        } else {
+          form.append('image', {
+            uri: asset.uri,
+            name: asset.fileName || 'target.jpg',
+            type: asset.mimeType || 'image/jpeg',
+          } as any);
+        }
+        const res = await teacherService.uploadImage(form);
+        setQuestionModal((prev) => ({
+          ...prev,
+          question: {
+            ...prev.question,
+            target_image_url: res.url,
+            localImageSource: { uri: res.url },
+          },
+        }));
+      } catch {
+        setQuestionModal((prev) => ({
+          ...prev,
+          question: {
+            ...prev.question,
+            target_image_url: asset.uri,
+            localImageSource: { uri: asset.uri },
+          },
+        }));
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to select image.');
+    } finally {
+      setIsUploadingQImage(false);
+    }
+  };
+
   const handleOpenQuestionModal = (question?: Partial<QuizQuestion>) => {
     if (!selectedCategory) return;
-    setQuestionModal({
-      open: true,
-      question: (question ?? {
-        category_id: selectedCategory.id,
-        difficulty: selectedDiff,
-        points: 1,
-        question_text: `Alin sa mga sumusunod ang ${selectedCategory.name.toLowerCase()}?`,
-        target_item_name: '',
-        target_image_url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&q=80',
-        choices: ['', '', '', ''],
-        correct_answer: '',
-      }) as any,
-    });
+    const isEdit = !!question?.id;
+
+    const cat = categories.find((c) => c.id === selectedCategory.id) || DEFAULT_STUDENT_CATEGORIES.find((c) => c.id === selectedCategory.id);
+    const catSlug = cat?.slug || 'mga-hayop';
+    const catObj = LEARNING_CATEGORIES.find((c) => c.slug === catSlug || c.name === cat?.name) || LEARNING_CATEGORIES[0];
+
+    if (question) {
+      let normChoices: any[] = question.choices || [];
+
+      if (selectedDiff === 'katamtaman') {
+        // Always resolve choices with images for Katamtaman edit:
+        // - If choices from DB already have text, match them to vocab items for images
+        // - If choices are empty/missing, generate from vocabulary
+        const choicesHaveContent =
+          Array.isArray(normChoices) &&
+          normChoices.length >= 4 &&
+          normChoices.some((c: any) => (c?.text || c?.filipino_name || '').trim().length > 0);
+
+        if (choicesHaveContent) {
+          // Re-enrich existing choices with localImageSource from vocab
+          normChoices = normChoices.map((c: any, idx: number) => {
+            if (typeof c === 'string') {
+              const vocab = catObj.items.find((it) => it.filipino.toLowerCase().trim() === c.toLowerCase().trim());
+              return { id: String(idx + 1), text: c, image_url: vocab?.imageUri || '', localImageSource: vocab?.image, vocabularyItem: vocab };
+            }
+            const chText = c.text || c.filipino_name || '';
+            // Try to find vocab by text, id, or audio match
+            const vocab =
+              c.vocabularyItem ||
+              catObj.items.find(
+                (it) =>
+                  it.id === c.id ||
+                  it.filipino.toLowerCase().trim() === chText.toLowerCase().trim()
+              );
+            return {
+              id: String(c.id || idx + 1),
+              text: chText || vocab?.filipino || '',
+              image_url: c.image_url || vocab?.imageUri || '',
+              localImageSource: c.localImageSource || vocab?.image,
+              vocabularyItem: c.vocabularyItem || vocab,
+            };
+          });
+
+          // If after enrichment still no images, generate fresh choices from vocab
+          const stillNoImages = normChoices.every((c: any) => !c.localImageSource && !c.image_url);
+          if (stillNoImages) {
+            const targetVocab = findTargetVocabItem(question, catObj.items) || catObj.items[0];
+            const gen = getRandomVocabularyChoices(catSlug, targetVocab, 4);
+            normChoices = gen.map((c, idx) => ({
+              id: String(c.id || idx + 1),
+              text: c.filipino,
+              image_url: c.imageUri || '',
+              localImageSource: c.image,
+              vocabularyItem: c,
+            }));
+          }
+        } else {
+          // Generate fresh choices from vocabulary
+          const targetVocab =
+            findTargetVocabItem(question, catObj.items) || catObj.items[0];
+          const gen = getRandomVocabularyChoices(catSlug, targetVocab, 4);
+          normChoices = gen.map((c, idx) => ({
+            id: String(c.id || idx + 1),
+            text: c.filipino,
+            image_url: c.imageUri || '',
+            localImageSource: c.image,
+            vocabularyItem: c,
+          }));
+        }
+      } else if (selectedDiff === 'mahirap') {
+        // mahirap doesn't use choices
+        normChoices = [];
+      } else {
+        // madali: text choices
+        if (!Array.isArray(normChoices) || normChoices.length === 0) {
+          normChoices = [
+            { id: '1', text: '', image_url: '' },
+            { id: '2', text: '', image_url: '' },
+            { id: '3', text: '', image_url: '' },
+            { id: '4', text: '', image_url: '' },
+          ];
+        } else {
+          normChoices = normChoices.map((c: any, idx: number) =>
+            typeof c === 'string'
+              ? { id: String(idx + 1), text: c, image_url: '' }
+              : { id: String(c.id || idx + 1), text: c.text || c.filipino_name || '', image_url: c.image_url || '' }
+          );
+        }
+      }
+
+      // Re-attach targetItem & localImageSource for the question itself
+      const enrichedTargetItem =
+        (question as any).targetItem ||
+        findTargetVocabItem(question, catObj.items);
+
+      setQuestionModal({
+        open: true,
+        question: {
+          ...question,
+          category_id: selectedCategory.id,
+          difficulty: selectedDiff,
+          choices: normChoices,
+          targetItem: enrichedTargetItem,
+          localImageSource: (question as any).localImageSource || enrichedTargetItem?.image,
+        },
+        isEditing: isEdit,
+      });
+    } else {
+      if (selectedDiff === 'katamtaman') {
+        setQuestionModal({
+          open: true,
+          question: {
+            category_id: selectedCategory.id,
+            difficulty: 'katamtaman',
+            points: 2,
+            question_text: `Pakinggan ang audio at piliin ang tamang larawan:`,
+            target_item_name: '',
+            audio_url: '',
+            choices: [
+              { id: '1', text: '', image_url: '' },
+              { id: '2', text: '', image_url: '' },
+              { id: '3', text: '', image_url: '' },
+              { id: '4', text: '', image_url: '' },
+            ],
+            correct_answer: '',
+          },
+          isEditing: false,
+        });
+      } else if (selectedDiff === 'mahirap') {
+        setQuestionModal({
+          open: true,
+          question: {
+            category_id: selectedCategory.id,
+            difficulty: 'mahirap',
+            points: 3,
+            question_text: 'Ayusin ang mga letra upang mabuo ang tamang salita.',
+            target_item_name: '',
+            target_image_url: '',
+            correct_answer: '',
+            choices: [],
+          },
+          isEditing: false,
+        });
+      } else {
+        setQuestionModal({
+          open: true,
+          question: {
+            category_id: selectedCategory.id,
+            difficulty: 'madali',
+            points: 1,
+            question_text: `Alin sa mga sumusunod ang ${selectedCategory.name.toLowerCase()}?`,
+            target_item_name: '',
+            choices: [
+              { id: '1', text: '', image_url: '' },
+              { id: '2', text: '', image_url: '' },
+              { id: '3', text: '', image_url: '' },
+              { id: '4', text: '', image_url: '' },
+            ],
+            correct_answer: '',
+          },
+          isEditing: false,
+        });
+      }
+    }
   };
 
   const handleSaveQuestion = async () => {
-    const q = questionModal.question;
-    if (!q.correct_answer || !selectedCategory) {
-      Alert.alert('Notice', 'Please fill in the correct answer and category.');
-      return;
+    const q = { ...questionModal.question };
+    if (!selectedCategory) return;
+
+    if (selectedDiff === 'mahirap') {
+      const word = (q.target_item_name || q.correct_answer || '').trim().toUpperCase();
+      if (!word) {
+        Alert.alert('Notice', 'Please enter the Filipino word to jumble (e.g. ASO, PUSA, MANSANAS).');
+        return;
+      }
+      q.target_item_name = word;
+      q.correct_answer = word;
+      if (!q.question_text) {
+        q.question_text = 'Ayusin ang mga letra.';
+      }
+    } else if (selectedDiff === 'katamtaman') {
+      if (!q.correct_answer && !q.target_item_name) {
+        Alert.alert('Notice', 'Please specify the correct answer or target item.');
+        return;
+      }
+      if (!q.target_item_name && q.correct_answer) {
+        q.target_item_name = q.correct_answer;
+      }
+      if (!q.question_text) {
+        q.question_text = `Nasaan ang ${q.target_item_name || q.correct_answer}?`;
+      }
+    } else {
+      if (!q.correct_answer) {
+        Alert.alert('Notice', 'Please specify the correct answer.');
+        return;
+      }
     }
 
     try {
@@ -711,9 +1332,34 @@ export default function ContentManagementScreen({
         difficulty: selectedDiff,
       } as any);
 
-      setQuestionModal({ open: false, question: {} });
+      // Instantly update local state so changes reflect immediately without waiting
+      setQuizData((prev) => {
+        if (!prev) return prev;
+        const existingIdx = prev.questions.findIndex((item) => item.id === q.id);
+        const updated = [...prev.questions];
+        if (existingIdx >= 0) {
+          updated[existingIdx] = { ...updated[existingIdx], ...q };
+        } else {
+          updated.push({ ...q, id: q.id || Date.now() });
+        }
+        return { ...prev, questions: updated };
+      });
+
+      // Update in-memory vocabulary item overrides
+      if (q.target_image_url && (q.target_item_name || q.correct_answer)) {
+        overrideVocabularyItem(q.target_item_name || q.correct_answer, { imageUri: q.target_image_url });
+      }
+      if (Array.isArray(q.choices)) {
+        for (const ch of q.choices) {
+          if (ch?.text && ch?.image_url) {
+            overrideVocabularyItem(ch.text, { imageUri: ch.image_url });
+          }
+        }
+      }
+
+      setQuestionModal({ open: false, question: {}, isEditing: false });
       loadQuiz(selectedCategory.id, selectedDiff);
-      Alert.alert('Success', 'Quiz question saved successfully!');
+      Alert.alert('Success', `Quiz question ${questionModal.isEditing ? 'updated' : 'created'} successfully!`);
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to save question.');
     }
@@ -756,212 +1402,219 @@ export default function ContentManagementScreen({
 
   return (
     <AnimatedBackground>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: Math.max(insets.top, 16) + 10 },
-        ]}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            loadAllData();
-          }}
-          colors={[Colors.teacherPurple]}
-        />
-      }
-    >
-      {/* Back button if opened from dedicated Manage screen */}
-      {showBackToDashboard && (
-        <TouchableOpacity
-          style={styles.backToDashboardButton}
-          onPress={() => router.replace('/(teacher)' as any)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="arrow-back" size={20} color={Colors.teacherPurple} />
-          <Text style={styles.backToDashboardText}>Back to Dashboard</Text>
-        </TouchableOpacity>
-      )}
+      <View style={{ flex: 1, paddingTop: Math.max(insets.top, 16) + 10 }}>
+        {/* Fixed Header Row & Controls */}
+        <View style={{ paddingHorizontal: 16 }}>
+          {showBackToDashboard && (
+            <TouchableOpacity
+              style={styles.backToDashboardButton}
+              onPress={() => router.replace('/(teacher)' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-back" size={20} color={Colors.teacherPurple} />
+              <Text style={styles.backToDashboardText}>Back to Dashboard</Text>
+            </TouchableOpacity>
+          )}
 
-      {/* Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.topHeaderIcon}>
-          <Ionicons
-            name={
-              activeMode === 'flashcards'
-                ? 'albums'
-                : activeMode === 'quizzes'
-                ? 'newspaper'
-                : 'game-controller'
-            }
-            size={24}
-            color={Colors.teacherPurple}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>
-            {activeMode === 'flashcards'
-              ? 'Manage Flashcards'
-              : activeMode === 'quizzes'
-              ? 'Manage Quizzes'
-              : 'Manage Mini-Games'}
-          </Text>
-          <Text style={styles.pageSub}>
-            {activeMode === 'flashcards'
-              ? 'Manage 151 vocabulary words, pictures, audio recordings, and translations.'
-              : activeMode === 'quizzes'
-              ? 'Configure quiz questions and lock or unlock quizzes per category.'
-              : 'Manage 5 mini-games, scoring policies, and learning categories.'}
-          </Text>
-        </View>
-        <VolumeButton activeColor={Colors.teacherPurple} size={38} />
-      </View>
-
-      {/* Quick Mode Toggle Bar */}
-      <View style={styles.quickTabsRow}>
-        <TouchableOpacity
-          style={[
-            styles.quickTabBtn,
-            activeMode === 'flashcards' && styles.quickTabBtnActiveFlashcards,
-          ]}
-          onPress={() => setActiveMode('flashcards')}
-        >
-          <Ionicons
-            name="albums"
-            size={16}
-            color={activeMode === 'flashcards' ? Colors.white : Colors.teacherPurple}
-          />
-          <Text
-            style={[
-              styles.quickTabBtnText,
-              activeMode === 'flashcards' && styles.quickTabBtnTextActive,
-            ]}
-          >
-            Flashcards ({flashcards.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.quickTabBtn,
-            activeMode === 'quizzes' && styles.quickTabBtnActiveQuizzes,
-          ]}
-          onPress={() => setActiveMode('quizzes')}
-        >
-          <Ionicons
-            name="newspaper"
-            size={16}
-            color={activeMode === 'quizzes' ? Colors.white : '#0284C7'}
-          />
-          <Text
-            style={[
-              styles.quickTabBtnText,
-              activeMode === 'quizzes' && styles.quickTabBtnTextActive,
-            ]}
-          >
-            Quizzes
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.quickTabBtn,
-            activeMode === 'minigames' && styles.quickTabBtnActiveMinigames,
-          ]}
-          onPress={() => setActiveMode('minigames')}
-        >
-          <Ionicons
-            name="game-controller"
-            size={16}
-            color={activeMode === 'minigames' ? Colors.white : '#DB2777'}
-          />
-          <Text
-            style={[
-              styles.quickTabBtnText,
-              activeMode === 'minigames' && styles.quickTabBtnTextActive,
-            ]}
-          >
-            Mini-Games (5)
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── SECTION 1: MANAGE FLASHCARDS ─────────────────────────────────── */}
-      {activeMode === 'flashcards' && (
-        <View style={styles.sectionWrap}>
-          {/* Action Header */}
-          <View style={styles.sectionHeaderRow}>
+          {/* Header */}
+          <View style={styles.topHeader}>
+            <View style={styles.topHeaderIcon}>
+              <Ionicons
+                name={
+                  activeMode === 'flashcards'
+                    ? 'albums'
+                    : activeMode === 'quizzes'
+                    ? 'newspaper'
+                    : 'game-controller'
+                }
+                size={24}
+                color={Colors.teacherPurple}
+              />
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionHeading}>System Flashcards</Text>
-              <Text style={styles.sectionSubText}>
-                Total {flashcards.length} words across all {categories.length} categories
+              <Text style={styles.pageTitle}>
+                {activeMode === 'flashcards'
+                  ? 'Manage Flashcards'
+                  : activeMode === 'quizzes'
+                  ? 'Manage Quizzes'
+                  : 'Manage Mini-Games'}
+              </Text>
+              <Text style={styles.pageSub}>
+                {activeMode === 'flashcards'
+                  ? 'Manage 151 vocabulary words, pictures, audio recordings, and translations.'
+                  : activeMode === 'quizzes'
+                  ? 'Configure quiz questions and lock or unlock quizzes per category.'
+                  : 'Manage 5 mini-games, scoring policies, and learning categories.'}
               </Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.addBtnPrimary}
-              onPress={handleOpenAddFlashcard}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add-circle" size={18} color={Colors.white} />
-              <Text style={styles.addBtnText}>Add Card</Text>
-            </TouchableOpacity>
+            <VolumeButton activeColor={Colors.teacherPurple} size={38} />
           </View>
 
-          {/* Search Box */}
-          <View style={[styles.searchBox, Shadows.subtle]}>
-            <Ionicons name="search" size={16} color={Colors.textMuted} style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search Filipino or English word..."
-              value={flashcardSearch}
-              onChangeText={setFlashcardSearch}
-            />
-            {flashcardSearch.length > 0 && (
-              <TouchableOpacity onPress={() => setFlashcardSearch('')}>
-                <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Category Filter Pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+          {/* Quick Mode Toggle Bar */}
+          <View style={styles.quickTabsRow}>
             <TouchableOpacity
               style={[
-                styles.filterPill,
-                flashcardCategoryFilter === 'all' && styles.filterPillActive,
+                styles.quickTabBtn,
+                activeMode === 'flashcards' && styles.quickTabBtnActiveFlashcards,
               ]}
-              onPress={() => setFlashcardCategoryFilter('all')}
+              onPress={() => setActiveMode('flashcards')}
             >
+              <Ionicons
+                name="albums"
+                size={16}
+                color={activeMode === 'flashcards' ? Colors.white : Colors.teacherPurple}
+              />
               <Text
                 style={[
-                  styles.filterPillText,
-                  flashcardCategoryFilter === 'all' && styles.filterPillTextActive,
+                  styles.quickTabBtnText,
+                  activeMode === 'flashcards' && styles.quickTabBtnTextActive,
                 ]}
               >
-                All ({flashcards.length})
+                Flashcards ({flashcards.length})
               </Text>
             </TouchableOpacity>
 
-            {categories.map((cat, catIdx) => {
-              const count = flashcards.filter((fc) => fc.category_id === cat.id).length;
-              const isActive = flashcardCategoryFilter === cat.id;
-              return (
+            <TouchableOpacity
+              style={[
+                styles.quickTabBtn,
+                activeMode === 'quizzes' && styles.quickTabBtnActiveQuizzes,
+              ]}
+              onPress={() => setActiveMode('quizzes')}
+            >
+              <Ionicons
+                name="newspaper"
+                size={16}
+                color={activeMode === 'quizzes' ? Colors.white : '#0284C7'}
+              />
+              <Text
+                style={[
+                  styles.quickTabBtnText,
+                  activeMode === 'quizzes' && styles.quickTabBtnTextActive,
+                ]}
+              >
+                Quizzes
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.quickTabBtn,
+                activeMode === 'minigames' && styles.quickTabBtnActiveMinigames,
+              ]}
+              onPress={() => setActiveMode('minigames')}
+            >
+              <Ionicons
+                name="game-controller"
+                size={16}
+                color={activeMode === 'minigames' ? Colors.white : '#DB2777'}
+              />
+              <Text
+                style={[
+                  styles.quickTabBtnText,
+                  activeMode === 'minigames' && styles.quickTabBtnTextActive,
+                ]}
+              >
+                Mini-Games (5)
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Fixed Search Bar, Category Filter Pills, and Add Card for Manage Flashcards */}
+          {activeMode === 'flashcards' && (
+            <View>
+              {/* Action Header */}
+              <View style={[styles.sectionHeaderRow, { marginBottom: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionHeading}>System Flashcards</Text>
+                  <Text style={styles.sectionSubText}>
+                    Total {flashcards.length} words across all {categories.length} categories
+                  </Text>
+                </View>
+
                 <TouchableOpacity
-                  key={`filter_cat_${cat.id}_${cat.slug || catIdx}`}
-                  style={[styles.filterPill, isActive && styles.filterPillActive]}
-                  onPress={() => setFlashcardCategoryFilter(cat.id)}
+                  style={styles.addBtnPrimary}
+                  onPress={handleOpenAddFlashcard}
+                  activeOpacity={0.85}
                 >
-                  <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                    {cat.name} ({count})
+                  <Ionicons name="add-circle" size={18} color={Colors.white} />
+                  <Text style={styles.addBtnText}>Add Card</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Search Box */}
+              <View style={[styles.searchBox, Shadows.subtle, { marginBottom: 8 }]}>
+                <Ionicons name="search" size={16} color={Colors.textMuted} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search Filipino or English word..."
+                  value={flashcardSearch}
+                  onChangeText={setFlashcardSearch}
+                />
+                {flashcardSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setFlashcardSearch('')}>
+                    <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Category Filter Pills */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterScroll, { marginBottom: 6 }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterPill,
+                    flashcardCategoryFilter === 'all' && styles.filterPillActive,
+                  ]}
+                  onPress={() => setFlashcardCategoryFilter('all')}
+                >
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      flashcardCategoryFilter === 'all' && styles.filterPillTextActive,
+                    ]}
+                  >
+                    All ({flashcards.length})
                   </Text>
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+
+                {categories.map((cat, catIdx) => {
+                  const count = flashcards.filter((fc) => fc.category_id === cat.id).length;
+                  const isActive = flashcardCategoryFilter === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={`filter_cat_${cat.id}_${cat.slug || catIdx}`}
+                      style={[styles.filterPill, isActive && styles.filterPillActive]}
+                      onPress={() => setFlashcardCategoryFilter(cat.id)}
+                    >
+                      <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                        {cat.name} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        {/* Scrollable Content (Flashcards List, Quizzes, Mini-games) */}
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadAllData();
+              }}
+              colors={[Colors.teacherPurple]}
+            />
+          }
+        >
+          {/* ── SECTION 1: MANAGE FLASHCARDS ─────────────────────────────────── */}
+          {activeMode === 'flashcards' && (
+            <View style={styles.sectionWrap}>
 
           {/* Flashcards List */}
           {filteredFlashcards.length === 0 ? (
@@ -1252,9 +1905,15 @@ export default function ContentManagementScreen({
                           {q.question_text || `Question #${idx + 1}`}
                         </Text>
                         <Text style={styles.targetItemText}>
-                          Target: <Text style={{ fontWeight: 'bold' }}>{q.target_item_name}</Text>
+                          Target: <Text style={{ fontWeight: 'bold' }}>{q.target_item_name || q.correct_answer}</Text>
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        style={[styles.delQBtn, { backgroundColor: '#E0F2FE', marginRight: 6 }]}
+                        onPress={() => handleOpenQuestionModal(q)}
+                      >
+                        <Ionicons name="pencil" size={15} color="#0284C7" />
+                      </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.delQBtn}
                         onPress={() => handleDeleteQuestion(q.id)}
@@ -1263,32 +1922,155 @@ export default function ContentManagementScreen({
                       </TouchableOpacity>
                     </View>
 
-                    {/* Choices */}
-                    <View style={styles.choicesRow}>
-                      {q.choices?.map((choice: any, cIdx: number) => {
-                        const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
-                        const isCorrect =
-                          q.correct_answer && choiceText.toLowerCase().trim() === q.correct_answer.toLowerCase().trim();
-                        return (
-                          <View
-                            key={`choice_${q.id || idx}_${cIdx}`}
-                            style={[
-                              styles.choiceChip,
-                              isCorrect && styles.choiceChipCorrect,
-                            ]}
+                    {/* Katamtaman Audio / 4 Picture Choices */}
+                    {selectedDiff === 'katamtaman' && (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6, backgroundColor: '#F0F9FF', padding: 8, borderRadius: 8 }}>
+                          <Ionicons name="volume-medium" size={18} color="#0284C7" />
+                          <Text style={{ fontSize: 12, color: '#0369A1', flex: 1 }} numberOfLines={1}>
+                            {q.audio_url ? q.audio_url.split('/').pop() : `Voice: "${q.target_item_name || 'audio'}"`}
+                          </Text>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#0284C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}
+                            onPress={() => handlePlayAudioPreview(q.audio_url || q.target_item_name)}
                           >
-                            <Text
-                              style={[
-                                styles.choiceText,
-                                isCorrect && styles.choiceTextCorrect,
-                              ]}
-                            >
-                              {choiceText} {isCorrect ? '✓' : ''}
+                            <Ionicons name="play" size={12} color="#FFF" />
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* 4 Picture Choices Grid preview */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                          {q.choices?.map((choice: any, cIdx: number) => {
+                            const choiceImg = typeof choice === 'object' ? choice.image_url : '';
+                            const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
+                            const isCorrect = q.correct_answer && (
+                              choiceText.toLowerCase().trim() === q.correct_answer.toLowerCase().trim() ||
+                              String(cIdx) === String(q.correct_answer)
+                            );
+                            const choiceImgSource = getQuestionVisualSource(
+                              choiceImg,
+                              choice?.localImageSource || choice?.vocabularyItem?.image,
+                              choiceText || choice?.id,
+                              selectedCategory?.slug,
+                              quizData?.available_flashcards
+                            );
+                            return (
+                              <View
+                                key={`choice_${q.id || idx}_${cIdx}`}
+                                style={{
+                                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                                  paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+                                  borderWidth: 1.5, borderColor: isCorrect ? Colors.grassGreen : '#E2E8F0',
+                                  backgroundColor: isCorrect ? '#DCFCE7' : '#F8FAFC',
+                                }}
+                              >
+                                {choiceImgSource ? (
+                                  <Image source={choiceImgSource} style={{ width: 28, height: 28, borderRadius: 4 }} resizeMode="cover" />
+                                ) : (
+                                  <Text style={{ fontSize: 14 }}>🖼️</Text>
+                                )}
+                                <Text style={{ fontSize: 11, fontWeight: isCorrect ? 'bold' : 'normal', color: isCorrect ? Colors.grassGreenDark : Colors.text }}>
+                                  {choiceText || `Choice #${cIdx + 1}`} {isCorrect ? '✓' : ''}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
+
+                    {/* Mahirap Target Image & Word to Jumble */}
+                    {selectedDiff === 'mahirap' && (() => {
+                      const hardImgSource = getQuestionVisualSource(
+                        q.target_image_url,
+                        (q as any).localImageSource || q.targetItem?.image,
+                        q.target_item_name || q.correct_answer,
+                        selectedCategory?.slug,
+                        quizData?.available_flashcards
+                      );
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6, backgroundColor: '#FFFBEB', padding: 8, borderRadius: 8 }}>
+                          {hardImgSource ? (
+                            <Image source={hardImgSource} style={{ width: 50, height: 50, borderRadius: 8 }} resizeMode="cover" />
+                          ) : (
+                            <View style={{ width: 50, height: 50, borderRadius: 8, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 22 }}>🖼️</Text>
+                            </View>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#92400E' }}>
+                              Word to Jumble: {q.target_item_name || q.correct_answer}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#B45309', marginTop: 2 }}>
+                              Scrambled: {(q.target_item_name || q.correct_answer || '').split('').sort(() => 0.5 - Math.random()).join(' ')}
                             </Text>
                           </View>
-                        );
-                      })}
-                    </View>
+                        </View>
+                      );
+                    })()}
+
+                    {/* Madali: Target Picture if it's a picture-id question, then Choices */}
+                    {selectedDiff === 'madali' && (() => {
+                      const isPicQ =
+                        Boolean((q as any).is_picture_question) ||
+                        Boolean(q.target_image_url && q.target_image_url.trim().length > 0) ||
+                        Boolean((q as any).localImageSource) ||
+                        Boolean(q.targetItem?.image) ||
+                        Boolean(q.targetItem?.imageUri);
+
+                      const easyImgSource = isPicQ
+                        ? getQuestionVisualSource(
+                            q.target_image_url,
+                            (q as any).localImageSource || q.targetItem?.image,
+                            q.target_item_name || q.correct_answer,
+                            selectedCategory?.slug,
+                            quizData?.available_flashcards
+                          )
+                        : null;
+
+                      return (
+                        <>
+                          {isPicQ && easyImgSource && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6, backgroundColor: '#F0FDF4', padding: 8, borderRadius: 8 }}>
+                              <Image source={easyImgSource} style={{ width: 44, height: 44, borderRadius: 8 }} resizeMode="cover" />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 11, fontWeight: 'bold', color: Colors.grassGreenDark }}>
+                                  🖼️ Picture Prompt
+                                </Text>
+                                <Text style={{ fontSize: 12, color: Colors.text }}>
+                                  {q.target_item_name || q.correct_answer}
+                                </Text>
+                              </View>
+                            </View>
+                          )}
+                          <View style={styles.choicesRow}>
+                            {q.choices?.map((choice: any, cIdx: number) => {
+                              const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
+                              const isCorrect =
+                                q.correct_answer && choiceText.toLowerCase().trim() === q.correct_answer.toLowerCase().trim();
+                              return (
+                                <View
+                                  key={`choice_${q.id || idx}_${cIdx}`}
+                                  style={[
+                                    styles.choiceChip,
+                                    isCorrect && styles.choiceChipCorrect,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.choiceText,
+                                      isCorrect && styles.choiceTextCorrect,
+                                    ]}
+                                  >
+                                    {choiceText} {isCorrect ? '✓' : ''}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </>
+                      );
+                    })()}
                   </View>
                 ))
               ) : (
@@ -1636,95 +2418,540 @@ export default function ContentManagementScreen({
         visible={questionModal.open}
         transparent
         animationType="slide"
-        onRequestClose={() => setQuestionModal({ open: false, question: {} })}
+        onRequestClose={() => setQuestionModal({ open: false, question: {}, isEditing: false })}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, Shadows.card]}>
+          <View style={[styles.modalCard, Shadows.card, { maxHeight: Dimensions.get('window').height * 0.88 }]}>
             <View style={styles.modalHeadRow}>
-              <Text style={styles.modalTitle}>Quiz Question ({DIFF_LABELS[selectedDiff]})</Text>
-              <TouchableOpacity onPress={() => setQuestionModal({ open: false, question: {} })}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>
+                  {questionModal.isEditing ? 'Edit Quiz Question' : 'Add Quiz Question'}
+                </Text>
+                <Text style={{ fontSize: 12, color: DIFF_COLORS[selectedDiff], fontWeight: 'bold' }}>
+                  Antas: {DIFF_LABELS[selectedDiff]} ({selectedDiff === 'katamtaman' ? 'Voice Audio & Picture Choices' : selectedDiff === 'mahirap' ? 'Picture & Jumble Word' : 'Text Choices'})
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setQuestionModal({ open: false, question: {}, isEditing: false })}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              <Text style={styles.inputLabel}>Question Text:</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Which of the following is...?"
-                value={questionModal.question.question_text || ''}
-                onChangeText={(val) =>
-                  setQuestionModal((prev) => ({
-                    ...prev,
-                    question: { ...prev.question, question_text: val },
-                  }))
-                }
-              />
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* Difficulty Banner Guide */}
+              <View
+                style={{
+                  backgroundColor: DIFF_COLORS[selectedDiff] + '18',
+                  borderRadius: Radius.lg,
+                  padding: 10,
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <Ionicons
+                  name={
+                    selectedDiff === 'katamtaman'
+                      ? 'volume-high'
+                      : selectedDiff === 'mahirap'
+                      ? 'shuffle'
+                      : 'help-circle'
+                  }
+                  size={22}
+                  color={DIFF_COLORS[selectedDiff]}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: 'bold', color: DIFF_COLORS[selectedDiff], fontSize: 12 }}>
+                    {selectedDiff === 'katamtaman'
+                      ? 'Katamtaman (Medium) Quiz Mode'
+                      : selectedDiff === 'mahirap'
+                      ? 'Mahirap (Hard) Jumbled Word Mode'
+                      : 'Madali (Easy) Quiz Mode'}
+                  </Text>
+                  <Text style={{ color: Colors.text, fontSize: 11, marginTop: 2, lineHeight: 15 }}>
+                    {selectedDiff === 'katamtaman'
+                      ? 'Student hears a voice audio, then selects the matching picture from 4 choices (no text displayed beneath pictures in student quiz).'
+                      : selectedDiff === 'mahirap'
+                      ? 'Student sees a picture and taps jumbled letter buttons to arrange and spell the word correctly.'
+                      : 'Student reads a question and selects the correct text answer.'}
+                  </Text>
+                </View>
+              </View>
 
-              <Text style={styles.inputLabel}>Target Item Name (Filipino):</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Aso, Pusa..."
-                value={questionModal.question.target_item_name || ''}
-                onChangeText={(val) =>
-                  setQuestionModal((prev) => ({
-                    ...prev,
-                    question: { ...prev.question, target_item_name: val },
-                  }))
-                }
-              />
-
-              <Text style={styles.inputLabel}>Correct Answer:</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Type the exact correct answer..."
-                value={questionModal.question.correct_answer || ''}
-                onChangeText={(val) =>
-                  setQuestionModal((prev) => ({
-                    ...prev,
-                    question: { ...prev.question, correct_answer: val },
-                  }))
-                }
-              />
-
-              <Text style={styles.inputLabel}>Options (4 Choices):</Text>
-              {(questionModal.question.choices || ['', '', '', '']).map((ch: any, i: number) => {
-                const valStr = typeof ch === 'string' ? ch : (ch?.text || '');
-                return (
+              {/* ── KATAMTAMAN (MEDIUM): Voice Audio + 4 Picture Choices ── */}
+              {selectedDiff === 'katamtaman' && (
+                <>
+                  <Text style={styles.inputLabel}>Target Word (Filipino):</Text>
                   <TextInput
-                    key={i}
-                    style={[styles.modalInput, { marginBottom: 6 }]}
-                    placeholder={`Choice #${i + 1}`}
-                    value={valStr}
-                    onChangeText={(val) => {
-                      const next = [...(questionModal.question.choices || ['', '', '', ''])];
-                      next[i] = val;
+                    style={styles.modalInput}
+                    placeholder="e.g. Aso, Pusa, Mansanas..."
+                    value={questionModal.question.target_item_name || ''}
+                    onChangeText={(val) =>
                       setQuestionModal((prev) => ({
                         ...prev,
-                        question: { ...prev.question, choices: next },
-                      }));
-                    }}
+                        question: { ...prev.question, target_item_name: val, correct_answer: prev.question.correct_answer || val },
+                      }))
+                    }
                   />
+
+                  {/* Audio upload/picker */}
+                  <Text style={[styles.inputLabel, { marginTop: 8 }]}>🔊 Voice Over Audio (what student hears):</Text>
+                  {questionModal.question.audio_url ? (
+                    <View style={styles.audioPickedRow}>
+                      <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
+                      <Text style={styles.audioPickedText} numberOfLines={1}>
+                        {questionModal.question.audio_url.split('/').pop() || 'voice_recording.mp3'}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handlePlayAudioPreview(questionModal.question.audio_url || questionModal.question.target_item_name)}
+                        style={styles.audioPlayTestBtn}
+                      >
+                        <Ionicons name="play" size={14} color={Colors.white} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={handlePickQuizAudio}
+                        disabled={isUploadingQAudio}
+                        style={styles.audioReplaceBtn}
+                      >
+                        {isUploadingQAudio ? (
+                          <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                        ) : (
+                          <Text style={styles.audioReplaceBtnText}>Replace</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.pickMediaBtn}
+                      onPress={handlePickQuizAudio}
+                      disabled={isUploadingQAudio}
+                    >
+                      {isUploadingQAudio ? (
+                        <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                      ) : (
+                        <Ionicons name="mic-outline" size={22} color={Colors.teacherPurple} />
+                      )}
+                      <Text style={styles.pickMediaBtnText}>
+                        {isUploadingQAudio ? 'Uploading Voice Audio...' : 'Choose / Upload Audio from Device'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* 4 Picture Choices */}
+                  <Text style={[styles.inputLabel, { marginTop: 14 }]}>
+                    🖼️ 4 Picture Choices (Tap image to upload or replace):
+                  </Text>
+                  <Text style={{ fontSize: 11, color: Colors.textMuted, marginBottom: 8 }}>
+                    {'Provide 4 pictures for the student to choose from. Tap "Mark as Correct" for the right answer.'}
+                  </Text>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {[0, 1, 2, 3].map((choiceIndex) => {
+                      const choice = (questionModal.question.choices || [])[choiceIndex] || {};
+                      const imgUrl = typeof choice === 'object' ? choice.image_url : '';
+                      const choiceText = typeof choice === 'object' ? (choice.text || '') : (choice || '');
+                      const isCorrect =
+                        (questionModal.question.correct_choice_index === choiceIndex) ||
+                        (questionModal.question.correct_answer &&
+                          choiceText &&
+                          questionModal.question.correct_answer.toLowerCase().trim() === choiceText.toLowerCase().trim());
+                      const choiceImgSource = getQuestionVisualSource(
+                        imgUrl,
+                        choice.localImageSource || choice.vocabularyItem?.image,
+                        choiceText || choice.id,
+                        selectedCategory?.slug,
+                        quizData?.available_flashcards
+                      );
+
+                      return (
+                        <View
+                          key={`choice_card_${choiceIndex}`}
+                          style={{
+                            width: '47%',
+                            backgroundColor: isCorrect ? '#F0FDF4' : '#F8FAFC',
+                            borderRadius: Radius.lg,
+                            padding: 8,
+                            borderWidth: 2,
+                            borderColor: isCorrect ? Colors.grassGreen : '#E2E8F0',
+                          }}
+                        >
+                          <TouchableOpacity
+                            onPress={() => handlePickQuizChoiceImage(choiceIndex)}
+                            disabled={isUploadingQImage}
+                            style={{
+                              height: 86,
+                              borderRadius: Radius.md,
+                              backgroundColor: '#E2E8F0',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              overflow: 'hidden',
+                              borderWidth: 1,
+                              borderColor: 'rgba(0,0,0,0.08)',
+                            }}
+                          >
+                            {choiceImgSource ? (
+                              <View style={{ width: '100%', height: '100%' }}>
+                                <Image source={choiceImgSource} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                <View style={{
+                                  position: 'absolute', bottom: 0, left: 0, right: 0,
+                                  backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 2, alignItems: 'center',
+                                }}>
+                                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '600' }}>
+                                    📷 Tap to Replace
+                                  </Text>
+                                </View>
+                              </View>
+                            ) : (
+                              <View style={{ alignItems: 'center' }}>
+                                <Ionicons name="camera-outline" size={24} color={Colors.textMuted} />
+                                <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
+                                  Choice #{choiceIndex + 1} Image
+                                </Text>
+                                <Text style={{ fontSize: 9, color: Colors.teacherPurple, fontWeight: 'bold' }}>
+                                  Tap to Upload
+                                </Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+
+                          <TextInput
+                            style={[
+                              styles.modalInput,
+                              {
+                                marginTop: 6,
+                                paddingVertical: 4,
+                                paddingHorizontal: 8,
+                                fontSize: 11,
+                                height: 32,
+                              },
+                            ]}
+                            placeholder={`Word (e.g. ${choiceIndex === 0 ? 'Aso' : choiceIndex === 1 ? 'Pusa' : 'Ibon'})`}
+                            value={choiceText}
+                            onChangeText={(val) => {
+                              const choices = [...(questionModal.question.choices || [{}, {}, {}, {}])];
+                              const curr = typeof choices[choiceIndex] === 'object' ? choices[choiceIndex] : {};
+                              choices[choiceIndex] = { ...curr, text: val };
+                              setQuestionModal((prev) => ({
+                                ...prev,
+                                question: { ...prev.question, choices },
+                              }));
+                            }}
+                          />
+
+                          <TouchableOpacity
+                            style={{
+                              marginTop: 4,
+                              backgroundColor: isCorrect ? Colors.grassGreen : '#E2E8F0',
+                              paddingVertical: 5,
+                              borderRadius: Radius.sm,
+                              alignItems: 'center',
+                            }}
+                            onPress={() => {
+                              setQuestionModal((prev) => ({
+                                ...prev,
+                                question: {
+                                  ...prev.question,
+                                  correct_choice_index: choiceIndex,
+                                  correct_answer: choiceText || prev.question.target_item_name,
+                                },
+                              }));
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 'bold',
+                                color: isCorrect ? Colors.white : Colors.text,
+                              }}
+                            >
+                              {isCorrect ? '✓ Correct Choice' : 'Mark as Correct'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>Correct Answer Word:</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Filipino name of the correct picture..."
+                    value={questionModal.question.correct_answer || ''}
+                    onChangeText={(val) =>
+                      setQuestionModal((prev) => ({
+                        ...prev,
+                        question: { ...prev.question, correct_answer: val },
+                      }))
+                    }
+                  />
+                </>
+              )}
+
+              {/* ── MAHIRAP (HARD): Picture + Jumble Word ── */}
+              {selectedDiff === 'mahirap' && (() => {
+                const hardImgSource = getQuestionVisualSource(
+                  questionModal.question.target_image_url,
+                  questionModal.question.localImageSource || questionModal.question.targetItem?.image,
+                  questionModal.question.target_item_name || questionModal.question.correct_answer,
+                  selectedCategory?.slug,
+                  quizData?.available_flashcards
                 );
-              })}
+                return (
+                  <>
+                    <Text style={styles.inputLabel}>🖼️ Target Picture (shown to student):</Text>
+                    {hardImgSource ? (
+                      <View style={styles.previewImageWrap}>
+                        <Image
+                          source={hardImgSource}
+                          style={styles.previewImage}
+                          resizeMode="cover"
+                        />
+                        <TouchableOpacity
+                          style={styles.changeMediaBtn}
+                          onPress={handlePickQuizTargetImage}
+                          disabled={isUploadingQImage}
+                        >
+                          {isUploadingQImage ? (
+                            <ActivityIndicator size="small" color={Colors.white} />
+                          ) : (
+                            <Ionicons name="camera" size={16} color={Colors.white} />
+                          )}
+                          <Text style={styles.changeMediaBtnText}>
+                            {isUploadingQImage ? 'Uploading Picture...' : 'Replace Picture from Device'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.pickMediaBtn}
+                        onPress={handlePickQuizTargetImage}
+                        disabled={isUploadingQImage}
+                      >
+                        {isUploadingQImage ? (
+                          <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                        ) : (
+                          <Ionicons name="image-outline" size={22} color={Colors.teacherPurple} />
+                        )}
+                        <Text style={styles.pickMediaBtnText}>
+                          {isUploadingQImage ? 'Uploading Picture...' : 'Choose / Upload Picture from Device'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                      Word to Jumble (Filipino):
+                    </Text>
+                    <Text style={{ fontSize: 11, color: Colors.textMuted, marginBottom: 4 }}>
+                      Type the correct word. The student will be given these letters in scrambled order to solve.
+                    </Text>
+                    <TextInput
+                      style={[styles.modalInput, { fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }]}
+                      placeholder="e.g. ASO, PUSA, MANSANAS..."
+                      autoCapitalize="characters"
+                      value={questionModal.question.target_item_name || questionModal.question.correct_answer || ''}
+                      onChangeText={(val) => {
+                        const upper = val.toUpperCase();
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: {
+                            ...prev.question,
+                            target_item_name: upper,
+                            correct_answer: upper,
+                          },
+                        }));
+                      }}
+                    />
+
+                    {/* Real-time Jumble Scramble Preview */}
+                    {(questionModal.question.target_item_name || questionModal.question.correct_answer) ? (
+                      <View style={{ backgroundColor: '#FEF3C7', borderRadius: Radius.md, padding: 12, marginTop: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#92400E', marginBottom: 6 }}>
+                          🎲 Student Jumble Preview:
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {(questionModal.question.target_item_name || questionModal.question.correct_answer)
+                            .split('')
+                            .sort(() => 0.5 - Math.random())
+                            .map((char: string, cIdx: number) => (
+                              <View
+                                key={`tile_${cIdx}`}
+                                style={{
+                                  width: 34,
+                                  height: 38,
+                                  backgroundColor: Colors.white,
+                                  borderRadius: 6,
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderWidth: 2,
+                                  borderColor: Colors.sunYellowDark,
+                                }}
+                              >
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: Colors.text }}>{char}</Text>
+                              </View>
+                            ))}
+                        </View>
+                        <Text style={{ fontSize: 10, color: '#B45309', marginTop: 6 }}>
+                          ✓ Correct Answer: {questionModal.question.target_item_name || questionModal.question.correct_answer}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>Instruction Text:</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Ayusin ang mga letra upang mabuo ang tamang salita."
+                      value={questionModal.question.question_text || ''}
+                      onChangeText={(val) =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, question_text: val },
+                        }))
+                      }
+                    />
+                  </>
+                );
+              })()}
+
+              {/* ── MADALI (EASY): Standard Text Question + Target Picture + 4 Choices ── */}
+              {selectedDiff === 'madali' && (() => {
+                const easyImgSource = getQuestionVisualSource(
+                  questionModal.question.target_image_url,
+                  questionModal.question.localImageSource || questionModal.question.targetItem?.image,
+                  questionModal.question.target_item_name || questionModal.question.correct_answer,
+                  selectedCategory?.slug,
+                  quizData?.available_flashcards
+                );
+                return (
+                  <>
+                    <Text style={styles.inputLabel}>Question Text:</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Which of the following is...?"
+                      value={questionModal.question.question_text || ''}
+                      onChangeText={(val) =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, question_text: val },
+                        }))
+                      }
+                    />
+
+                    {/* Picture preview & replace (especially for "Ano ang nasa larawan?" questions) */}
+                    <Text style={[styles.inputLabel, { marginTop: 10 }]}>
+                      🖼️ Question Picture (Optional / For Picture ID Questions):
+                    </Text>
+                    <Text style={{ fontSize: 11, color: Colors.textMuted, marginBottom: 6 }}>
+                      {'If this question asks "Ano ang nasa larawan?" or tests image recognition, you can view or replace the picture here:'}
+                    </Text>
+                    {easyImgSource ? (
+                      <View style={styles.previewImageWrap}>
+                        <Image
+                          source={easyImgSource}
+                          style={styles.previewImage}
+                          resizeMode="cover"
+                        />
+                        <TouchableOpacity
+                          style={styles.changeMediaBtn}
+                          onPress={handlePickQuizTargetImage}
+                          disabled={isUploadingQImage}
+                        >
+                          {isUploadingQImage ? (
+                            <ActivityIndicator size="small" color={Colors.white} />
+                          ) : (
+                            <Ionicons name="camera" size={16} color={Colors.white} />
+                          )}
+                          <Text style={styles.changeMediaBtnText}>
+                            {isUploadingQImage ? 'Uploading Picture...' : 'Replace Picture from Device'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.pickMediaBtn}
+                        onPress={handlePickQuizTargetImage}
+                        disabled={isUploadingQImage}
+                      >
+                        {isUploadingQImage ? (
+                          <ActivityIndicator size="small" color={Colors.teacherPurple} />
+                        ) : (
+                          <Ionicons name="image-outline" size={22} color={Colors.teacherPurple} />
+                        )}
+                        <Text style={styles.pickMediaBtnText}>
+                          {isUploadingQImage ? 'Uploading Picture...' : 'Add / Choose Picture for Question'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <Text style={[styles.inputLabel, { marginTop: 10 }]}>Target Item Name (Filipino):</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g. Aso, Pusa..."
+                      value={questionModal.question.target_item_name || ''}
+                      onChangeText={(val) =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, target_item_name: val },
+                        }))
+                      }
+                    />
+
+                    <Text style={styles.inputLabel}>Correct Answer:</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Type the exact correct answer..."
+                      value={questionModal.question.correct_answer || ''}
+                      onChangeText={(val) =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, correct_answer: val },
+                        }))
+                      }
+                    />
+
+                    <Text style={styles.inputLabel}>Options (4 Choices):</Text>
+                    {(questionModal.question.choices || ['', '', '', '']).map((ch: any, i: number) => {
+                      const valStr = typeof ch === 'string' ? ch : (ch?.text || '');
+                      return (
+                        <TextInput
+                          key={i}
+                          style={[styles.modalInput, { marginBottom: 6 }]}
+                          placeholder={`Choice #${i + 1}`}
+                          value={valStr}
+                          onChangeText={(val) => {
+                            const next = [...(questionModal.question.choices || ['', '', '', ''])];
+                            next[i] = val;
+                            setQuestionModal((prev) => ({
+                              ...prev,
+                              question: { ...prev.question, choices: next },
+                            }));
+                          }}
+                        />
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </ScrollView>
 
             <View style={styles.modalFooterActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setQuestionModal({ open: false, question: {} })}
+                onPress={() => setQuestionModal({ open: false, question: {}, isEditing: false })}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveQuestion}>
-                <Text style={styles.modalSaveText}>Save Question</Text>
+                <Text style={styles.modalSaveText}>
+                  {questionModal.isEditing ? 'Update Question' : 'Save Question'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+        </ScrollView>
+      </View>
     </AnimatedBackground>
   );
 }
@@ -1732,6 +2959,10 @@ export default function ContentManagementScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 48 },
+  stickyFlashcardHeader: {
+    backgroundColor: 'transparent',
+    paddingBottom: 4,
+  },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -20,6 +20,9 @@ import { LoadingView } from '../../components/LoadingView';
 import { PressableScale } from '../../components/PressableScale';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { VolumeButton } from '../../components/VolumeButton';
+import { UserAvatar } from '../../components/UserAvatar';
+import { storage } from '../../utils/storage';
+import { getCachedUser, getCachedUserByName } from '../../services/offline/offline-session-store';
 import { teacherService } from '../../services/api';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../theme';
 import type { StudentMonitoringItem } from '../../types';
@@ -50,7 +53,30 @@ export default function StudentsMonitoringScreen() {
     try {
       setError(null);
       const res = await teacherService.getStudents();
-      setStudents(res.students);
+      const enrichedStudents = await Promise.all(
+        (res.students || []).map(async (s) => {
+          let avatar = s.avatar;
+          if (!avatar) {
+            try {
+              const localOverride =
+                (await storage.getItem(`@wikaplay_student_avatar_${s.id}`)) ||
+                (await storage.getItem(`@wikaplay_student_avatar_${(s.name || '').toLowerCase().trim()}`));
+              if (localOverride) {
+                avatar = localOverride;
+              } else {
+                const cached =
+                  (await getCachedUser(s.id).catch(() => null)) ||
+                  (await getCachedUserByName(s.name).catch(() => null));
+                if (cached?.avatar) {
+                  avatar = cached.avatar;
+                }
+              }
+            } catch {}
+          }
+          return { ...s, avatar };
+        })
+      );
+      setStudents(enrichedStudents);
       if (res.sections) {
         setSections(res.sections);
       }
@@ -74,6 +100,9 @@ export default function StudentsMonitoringScreen() {
     try {
       const res = await teacherService.getStudentHistory(student.id);
       setStudentDetails(res);
+      if (res?.student?.avatar && !student.avatar) {
+        setSelectedStudent((prev) => (prev ? { ...prev, avatar: res.student.avatar } : prev));
+      }
     } catch {
       // Non-critical, modal shows basic info
     } finally {
@@ -297,12 +326,13 @@ export default function StudentsMonitoringScreen() {
               >
                 {/* Avatar with status indicator */}
                 <View style={styles.avatarWrap}>
-                  <LinearGradient
-                    colors={student.is_online ? Gradients.grass : Gradients.teacher}
-                    style={styles.avatar}
-                  >
-                    <Text style={styles.avatarText}>{student.name.charAt(0).toUpperCase()}</Text>
-                  </LinearGradient>
+                  <UserAvatar
+                    avatar={student.avatar}
+                    name={student.name}
+                    size={46}
+                    showRing
+                    ringColors={student.is_online ? Gradients.grass : Gradients.teacher}
+                  />
                   {student.is_online ? <View style={styles.avatarOnlinePip} /> : null}
                 </View>
 
@@ -364,7 +394,13 @@ export default function StudentsMonitoringScreen() {
           <View style={styles.modalContainer}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
+              <UserAvatar
+                avatar={selectedStudent.avatar}
+                name={selectedStudent.name}
+                size={44}
+                showRing
+              />
+              <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={styles.modalTitle}>{selectedStudent.name}</Text>
                 <Text style={styles.modalSub}>
                   {selectedStudent.student_id_code || 'ID-' + selectedStudent.id} · {selectedStudent.section || 'Klase'}

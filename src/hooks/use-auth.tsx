@@ -20,7 +20,6 @@ import { User } from '../types';
 import {
   cacheUser,
   clearCachedUser,
-  getCachedUser,
   getLatestCachedUser,
   getCachedUserByName,
   getPendingStarsTotal,
@@ -86,12 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const res = await authService.getMe();
             const pendingStars = await getPendingStarsTotal().catch(() => 0);
-            const cached = await getLatestCachedUser().catch(() => null);
-            const combinedStars = Math.max(
-              res.user.stars_balance ?? 0,
-              (res.user.stars_balance ?? 0) + pendingStars,
-              cached?.stars_balance_last_known ?? 0
-            );
+            const combinedStars = (res.user.stars_balance ?? 0) + pendingStars;
             const enrichedUser = {
               ...res.user,
               stars_balance: combinedStars,
@@ -264,11 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await authService.getMe();
       const pendingStars = await getPendingStarsTotal().catch(() => 0);
-      const combinedStars = Math.max(
-        res.user.stars_balance ?? 0,
-        (res.user.stars_balance ?? 0) + pendingStars,
-        user?.stars_balance ?? 0
-      );
+      const combinedStars = (res.user.stars_balance ?? 0) + pendingStars;
       const updatedUser = {
         ...res.user,
         stars_balance: combinedStars,

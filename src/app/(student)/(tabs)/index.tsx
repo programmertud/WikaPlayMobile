@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   RefreshControl,
@@ -30,9 +30,10 @@ import { Colors, Gradients, Shadows, Typography, Radius } from '../../../theme';
 import { LEARNING_CATEGORIES } from '../../../data/categories';
 import { Category } from '../../../types';
 import { bgm } from '../../../services/audio/bgm-service';
+import { rewardService } from '../../../services/api';
 
 export default function StudentDashboardScreen() {
-  const { user } = useAuth();
+  const { user, updateUserStars } = useAuth();
   const insets = useSafeAreaInsets();
 
   const categories: Category[] = LEARNING_CATEGORIES.map((c, idx) => ({
@@ -49,6 +50,8 @@ export default function StudentDashboardScreen() {
 
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  // Real-time spendable star balance fetched from server (matches Gantimpala)
+  const [liveStarsBalance, setLiveStarsBalance] = useState<number | null>(null);
 
   // Pulse animation for stars pill
   const starScale = useSharedValue(1);
@@ -56,8 +59,22 @@ export default function StudentDashboardScreen() {
   usePresence('Nasa Bahay (Dashboard)', 'student_home');
 
   const loadData = async () => {
-    setLoading(false);
-    setRefreshing(false);
+    try {
+      // Fetch the real spendable stars balance from the reward service
+      // so it matches what is shown in Gantimpala (not the inflated auth context value)
+      const res = await rewardService.getAchievements();
+      const serverBalance = res?.stars_balance ?? null;
+      if (serverBalance !== null) {
+        setLiveStarsBalance(serverBalance);
+        // Also sync the auth context so other screens are consistent
+        updateUserStars(serverBalance);
+      }
+    } catch {
+      // Offline: fall back to auth context value (no update)
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -66,11 +83,16 @@ export default function StudentDashboardScreen() {
     loadData();
   }, []);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadData();
   };
-
   const handleStarPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     starScale.value = withSequence(
@@ -132,7 +154,7 @@ export default function StudentDashboardScreen() {
               style={[styles.starsPill, Shadows.subtle]}
             >
               <Ionicons name="star" size={18} color={Colors.sunYellowDark} style={styles.starIcon} />
-              <Text style={styles.starsCount}>{user?.stars_balance ?? 0}</Text>
+              <Text style={styles.starsCount}>{liveStarsBalance ?? user?.stars_balance ?? 0}</Text>
             </PressableScale>
           </Animated.View>
         </View>
