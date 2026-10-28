@@ -431,9 +431,18 @@ export async function playSound(
           finish();
         });
 
+        audio.onloadedmetadata = () => {
+          if (audio.duration && isFinite(audio.duration) && audio.duration > 0) {
+            if (fallbackTimer) clearTimeout(fallbackTimer);
+            fallbackTimer = setTimeout(() => {
+              if (!isCancelled) finish();
+            }, Math.max(25000, Math.ceil((audio.duration + 4) * 1000)));
+          }
+        };
+
         fallbackTimer = setTimeout(() => {
           if (!isCancelled) finish();
-        }, 8000);
+        }, 25000);
 
         return cleanup;
       }
@@ -468,12 +477,12 @@ export async function playSound(
       });
     } catch {}
 
-    // Safe fallback timeout (8s) gives the full question time to finish
+    // Safe fallback timeout (25s) ensures long voice descriptions (e.g. atis.m4a at ~10s, kahel.m4a at ~13s) play completely
     fallbackTimer = setTimeout(() => {
       if (!isCancelled) {
         finish();
       }
-    }, 8000);
+    }, 25000);
 
     player.play();
 
