@@ -76,11 +76,16 @@
       "router": {
         "asyncRoutes": {
           "web": true
+        },
+        "headers": {
+          "Cross-Origin-Embedder-Policy": "credentialless",
+          "Cross-Origin-Opener-Policy": "same-origin"
         }
       },
       "eas": {
-        "projectId": "c934b360-a1f7-43c1-8c1c-15fa73068549"
+        "projectId": "8583c104-faae-4f69-a0fb-5c890380dfd7"
       }
-    }
+    },
+    "owner": "riannecelone1216"
   }
 }
