@@ -279,10 +279,11 @@ export function getRandomVocabularyChoices(
   return choices;
 }
 
-export function overrideVocabularyItem(filipinoOrId: string, updates: Partial<VocabularyItem>) {
+export function overrideVocabularyItem(filipinoOrId: string, updates: Partial<VocabularyItem>, categorySlug?: string) {
   if (!filipinoOrId) return;
   const norm = filipinoOrId.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
   for (const cat of LEARNING_CATEGORIES) {
+    if (categorySlug && cat.slug !== categorySlug) continue;
     for (const item of cat.items) {
       const itemNorm = item.filipino.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
       if (item.id === filipinoOrId || itemNorm === norm) {
@@ -303,6 +304,64 @@ export function overrideVocabularyItem(filipinoOrId: string, updates: Partial<Vo
       }
     }
   }
+
+  // If item wasn't in bundled items and categorySlug provided, append as a custom item
+  if (categorySlug) {
+    const targetCat = LEARNING_CATEGORIES.find((c) => c.slug === categorySlug);
+    if (targetCat) {
+      const newItem: VocabularyItem = {
+        id: updates.id || `custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        categoryId: targetCat.id,
+        filipino: updates.filipino || filipinoOrId,
+        english: updates.english || '',
+        imageUri: updates.imageUri && !updates.imageUri.startsWith('blob:') ? updates.imageUri : undefined,
+        audioUri: updates.audioUri && !updates.audioUri.startsWith('blob:') ? updates.audioUri : undefined,
+        emoji: updates.emoji || '⭐',
+      };
+      targetCat.items.push(newItem);
+      return newItem;
+    }
+  }
+}
+
+export function removeVocabularyItem(filipinoOrId: string, categorySlug?: string) {
+  if (!filipinoOrId) return;
+  const norm = filipinoOrId.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
+  for (const cat of LEARNING_CATEGORIES) {
+    if (categorySlug && cat.slug !== categorySlug) continue;
+    const idx = cat.items.findIndex(
+      (it) => it.id === filipinoOrId || it.filipino.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === norm
+    );
+    if (idx >= 0) {
+      cat.items.splice(idx, 1);
+    }
+  }
+}
+
+export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
+  const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
+  if (!cat || !Array.isArray(flashcards)) return;
+
+  flashcards.forEach((f) => {
+    const name = f.filipino_name || f.name;
+    if (!name) return;
+    const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
+    const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
+    const validImage = f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined;
+    const validAudio = f.audio_url && !f.audio_url.startsWith('blob:') ? f.audio_url : undefined;
+
+    overrideVocabularyItem(
+      name,
+      {
+        id: `fc_${f.id}`,
+        filipino: name,
+        english: f.english_name || undefined,
+        imageUri: validImage,
+        audioUri: validAudio,
+      },
+      slug
+    );
+  });
 }
 
 export async function hydrateCategoryOverrides(slug: string) {
@@ -312,7 +371,7 @@ export async function hydrateCategoryOverrides(slug: string) {
     if (raw) {
       const overrides = JSON.parse(raw);
       Object.entries(overrides).forEach(([word, update]: [string, any]) => {
-        overrideVocabularyItem(word, update);
+        overrideVocabularyItem(word, update, slug);
       });
     }
   } catch {}

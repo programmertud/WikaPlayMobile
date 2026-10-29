@@ -20,7 +20,7 @@ import { AudioButton } from '../../../components/AudioButton';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
-import { getCategoryBySlug } from '../../../data/categories';
+import { getCategoryBySlug, syncCategoryFlashcards } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { playVocabularyItem, stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
@@ -72,6 +72,7 @@ export default function FlashcardsViewerScreen() {
       try {
         const res = await categoryService.getFlashcards(slug);
         if (res?.flashcards && isMounted) {
+          syncCategoryFlashcards(slug, res.flashcards);
           const overridesMap: Record<string, { imageUri?: string; audioUri?: string }> = {};
 
           setItems((prev) => {

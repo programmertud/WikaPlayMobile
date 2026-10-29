@@ -55,6 +55,8 @@ export interface MadaliQuestion {
   correctVocabId?: string;
   /** Accurate pre-recorded voice audio file */
   audio?: any;
+  /** Optional teacher uploaded or custom question picture */
+  target_image_url?: string;
 }
 
 // ---------------------------------------------------------------------------

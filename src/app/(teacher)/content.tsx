@@ -38,7 +38,7 @@ import { teacherService } from '../../services/api';
 import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
 import { Colors, Shadows, Typography, Radius } from '../../theme';
 import type { Category, Flashcard, QuizDifficulty, QuizQuestion } from '../../types';
-import { LEARNING_CATEGORIES, overrideVocabularyItem, getRandomVocabularyChoices } from '../../data/categories';
+import { LEARNING_CATEGORIES, overrideVocabularyItem, removeVocabularyItem, getRandomVocabularyChoices } from '../../data/categories';
 import { getMadaliQuestionsBySlug } from '../../data/quiz-bank-madali';
 import { storage } from '../../utils/storage';
 
@@ -957,6 +957,9 @@ export default function ContentManagementScreen({
             try {
               await teacherService.deleteFlashcard(id).catch(() => {});
               setFlashcards((prev) => prev.filter((f) => f.id !== id));
+              if (selectedCategory?.slug) {
+                removeVocabularyItem(name, selectedCategory.slug);
+              }
               Alert.alert('Success', 'Flashcard deleted successfully.');
             } catch (err: any) {
               Alert.alert('Error', err?.message || 'Failed to delete flashcard.');

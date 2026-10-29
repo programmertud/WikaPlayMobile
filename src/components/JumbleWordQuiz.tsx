@@ -10,6 +10,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
 import { ItemVisual } from './ItemVisual';
+import { resolveAvatarUrl } from './UserAvatar';
 import { PressableScale } from './PressableScale';
 import { PrimaryButton } from './PrimaryButton';
 import { Colors, Radius, Shadows, Typography } from '../theme';
@@ -77,6 +78,11 @@ export const JumbleWordQuiz: React.FC<JumbleWordQuizProps> = ({
 
   const [availableTiles, setAvailableTiles] = useState<LetterTile[]>([]);
   const [placedSlots, setPlacedSlots] = useState<(LetterTile | null)[]>([]);
+  const [imageFailed, setImageFailed] = useState<boolean>(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [targetImageUri]);
 
   // Reset tiles whenever target word changes
   useEffect(() => {
@@ -147,14 +153,15 @@ export const JumbleWordQuiz: React.FC<JumbleWordQuizProps> = ({
     <View style={styles.container}>
       {/* Target Picture Card */}
       <View style={[styles.visualCard, Shadows.card]}>
-        {targetItem ? (
-          <ItemVisual item={targetItem} size={150} style={{ alignSelf: 'center' }} />
-        ) : targetImageUri ? (
+        {targetImageUri && !imageFailed ? (
           <Image
-            source={{ uri: targetImageUri }}
+            source={{ uri: resolveAvatarUrl(targetImageUri) }}
             style={styles.image}
             contentFit="contain"
+            onError={() => setImageFailed(true)}
           />
+        ) : targetItem ? (
+          <ItemVisual item={targetItem} size={150} style={{ alignSelf: 'center' }} />
         ) : (
           <View style={styles.emojiFallback}>
             <Text style={styles.fallbackEmoji}>🖼️</Text>

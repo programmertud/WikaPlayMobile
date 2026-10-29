@@ -3,6 +3,7 @@ import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Fonts, Radius, Shadows } from '../theme';
 import { VocabularyItem } from '../types';
+import { resolveAvatarUrl } from './UserAvatar';
 
 interface ItemVisualProps {
   item: VocabularyItem;
@@ -13,17 +14,22 @@ interface ItemVisualProps {
 export const ItemVisual: React.FC<ItemVisualProps> = ({ item, size = 180, style }) => {
   const [imageError, setImageError] = React.useState(false);
 
+  const resolvedImageUri = React.useMemo(() => {
+    if (!item.imageUri) return undefined;
+    return resolveAvatarUrl(item.imageUri);
+  }, [item.imageUri]);
+
   // Reset error state when the image URI changes (e.g., when navigating between flashcards)
   React.useEffect(() => {
     setImageError(false);
-  }, [item.imageUri]);
+  }, [resolvedImageUri]);
 
   // 1. If explicit imageUri is provided and hasn't errored
-  if (item.imageUri && !imageError) {
+  if (resolvedImageUri && !imageError) {
     return (
       <View style={[styles.container, { width: size, height: size }, style]}>
         <Image
-          source={{ uri: item.imageUri }}
+          source={{ uri: resolvedImageUri }}
           style={styles.image}
           contentFit="contain"
           transition={200}

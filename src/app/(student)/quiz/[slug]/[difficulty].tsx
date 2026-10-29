@@ -24,7 +24,8 @@ import { PressableScale } from '../../../../components/PressableScale';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../../components/ScreenHeader';
-import { getCategoryBySlug, getRandomVocabularyChoices } from '../../../../data/categories';
+import { resolveAvatarUrl } from '../../../../components/UserAvatar';
+import { getCategoryBySlug, getRandomVocabularyChoices, syncCategoryFlashcards } from '../../../../data/categories';
 import { useAuth } from '../../../../hooks/use-auth';
 import { usePresence } from '../../../../hooks/use-presence';
 import { useQuiz } from '../../../../hooks/use-quiz';
@@ -92,6 +93,9 @@ export default function QuizGameplayScreen() {
       try {
         const fcRes = await categoryService.getFlashcards(slug);
         flashcardsList = fcRes?.flashcards || [];
+        if (fcRes?.flashcards) {
+          syncCategoryFlashcards(slug, fcRes.flashcards);
+        }
       } catch {}
 
       if (localItems.length > 0 && fetchedQuestions.length > 0) {
@@ -126,24 +130,42 @@ export default function QuizGameplayScreen() {
             }
           }
 
+          // If question has its own teacher-uploaded target image, apply it directly to target
+          if (q.target_image_url) {
+            if (target) {
+              target = { ...target, imageUri: q.target_image_url };
+            } else if (q.target_item_name) {
+              target = {
+                id: `target_${q.id}`,
+                categoryId: cat.id,
+                filipino: q.target_item_name,
+                english: '',
+                imageUri: q.target_image_url,
+              };
+            }
+          }
+
           const enrichedChoices = q.choices.map((ch) => {
-            if (ch.vocabularyItem) return ch;
+            let choiceImg = ch.image_url;
 
             // 1. Try match by ch.id directly in localItems
             let localMatch = localItems.find((it) => it.id === ch.id);
 
             // 2. Try match by ch.id as flashcard ID
-            if (!localMatch) {
-              const matchedFc = flashcardsList.find((f) => String(f.id) === String(ch.id));
-              if (matchedFc) {
-                const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
-                localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
-              }
+            let matchedFc = flashcardsList.find((f) => String(f.id) === String(ch.id));
+            if (!localMatch && matchedFc) {
+              const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+              localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
             }
 
             // 3. Try match by ch.text
             if (!localMatch && ch.text) {
               localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === ch.text.toLowerCase().trim());
+              if (!matchedFc) {
+                matchedFc = flashcardsList.find(
+                  (f) => (f.filipino_name || f.name || '').toLowerCase().trim() === ch.text.toLowerCase().trim()
+                );
+              }
             }
 
             // 4. Try match by image_url filename if present
@@ -154,7 +176,19 @@ export default function QuizGameplayScreen() {
               }
             }
 
-            return localMatch ? { ...ch, vocabularyItem: localMatch } : ch;
+            if (!choiceImg && matchedFc?.image_url) {
+              choiceImg = matchedFc.image_url;
+            }
+
+            if (localMatch) {
+              return {
+                ...ch,
+                image_url: choiceImg || localMatch.imageUri || ch.image_url,
+                vocabularyItem: choiceImg ? { ...localMatch, imageUri: choiceImg } : localMatch,
+              };
+            }
+
+            return choiceImg ? { ...ch, image_url: choiceImg } : ch;
           });
 
           // For Katamtaman, ensure audio plays by using target's bundled audio if available
@@ -163,6 +197,7 @@ export default function QuizGameplayScreen() {
           return {
             ...q,
             targetItem: target ?? q.targetItem,
+            target_image_url: q.target_image_url || target?.imageUri || '',
             audio_url: effectiveAudio,
             choices: enrichedChoices,
           };
@@ -649,7 +684,7 @@ export default function QuizGameplayScreen() {
                       />
                     ) : choice.image_url ? (
                       <Image
-                        source={{ uri: choice.image_url }}
+                        source={{ uri: resolveAvatarUrl(choice.image_url) }}
                         style={styles.choiceImage}
                         contentFit="contain"
                       />

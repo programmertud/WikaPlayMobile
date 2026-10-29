@@ -46,6 +46,9 @@ export const resolveAvatarUrl = (avatar?: string | null): string => {
   if (trimmed.startsWith('/storage/')) {
     return `${origin}${trimmed}`;
   }
+  if (trimmed.startsWith('storage/')) {
+    return `${origin}/${trimmed}`;
+  }
   if (trimmed.includes('localhost/storage/') || trimmed.includes('127.0.0.1/storage/')) {
     const relativePath = trimmed.replace(/^https?:\/\/[^/]+/, '');
     return `${origin}${relativePath}`;

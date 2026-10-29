@@ -11,6 +11,7 @@
  *  - picture-id                    : four ItemVisual cards (one per vocab item)
  */
 
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -36,7 +37,9 @@ import { ItemVisual } from '../../../../components/ItemVisual';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../../components/ScreenHeader';
-import { getCategoryBySlug, LEARNING_CATEGORIES } from '../../../../data/categories';
+import { resolveAvatarUrl } from '../../../../components/UserAvatar';
+import { getCategoryBySlug, hydrateCategoryOverrides, LEARNING_CATEGORIES, syncCategoryFlashcards } from '../../../../data/categories';
+import { categoryService } from '../../../../services/api';
 import {
   getMadaliQuestionsBySlug,
   MadaliQuestion,
@@ -124,6 +127,86 @@ export default function MadaliQuizScreen() {
       stopCurrentSound();
     };
   }, []);
+
+  // Sync teacher flashcards and quiz questions from API
+  useEffect(() => {
+    let mounted = true;
+
+    const syncMadaliContent = async () => {
+      // 1. Hydrate cached local overrides
+      await hydrateCategoryOverrides(slug);
+      if (mounted) setQuestions((prev) => [...prev]);
+
+      // 2. Fetch latest teacher flashcards from backend API
+      try {
+        const fcRes = await categoryService.getFlashcards(slug);
+        if (mounted && fcRes?.flashcards) {
+          syncCategoryFlashcards(slug, fcRes.flashcards);
+          setQuestions((prev) => [...prev]);
+        }
+      } catch {}
+
+      // 3. Fetch latest teacher quiz questions for Madali
+      try {
+        const res = await categoryService.getQuizQuestions(slug, 'madali');
+        if (res.is_locked) {
+          router.replace({
+            pathname: '/(student)/quiz-locked' as any,
+            params: { category: res.category.name || category.name, difficulty: 'madali' },
+          } as any);
+          return;
+        }
+
+        if (mounted && res.questions && res.questions.length > 0) {
+          const letters: AnswerId[] = ['A', 'B', 'C', 'D'];
+          const mapped: MadaliQuestion[] = res.questions.map((apiQ, idx) => {
+            const choices = (apiQ.choices || []).slice(0, 4);
+            const textChoices: MadaliTextChoice[] = choices.map((ch: any, cIdx: number) => ({
+              id: letters[cIdx],
+              text: typeof ch === 'string' ? ch : (ch?.text || ''),
+            }));
+
+            // Find correct choice letter index
+            const correctIdx = choices.findIndex((ch: any) => {
+              const text = typeof ch === 'string' ? ch : (ch?.text || '');
+              const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
+              return (
+                text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
+                idStr === String(apiQ.correct_answer)
+              );
+            });
+            const correctTextId = (correctIdx >= 0 ? letters[correctIdx] : 'A') as AnswerId;
+            const hasPic = !!apiQ.target_image_url;
+
+            return {
+              id: `api_${apiQ.id || idx}`,
+              categoryId: `cat_${slug}`,
+              categorySlug: slug,
+              difficulty: 'madali',
+              type: hasPic ? 'picture-id' : 'multiple-choice',
+              questionFil: apiQ.question_text || (hasPic ? 'Anong nasa litrato?' : 'Piliin ang tamang sagot.'),
+              questionEn: apiQ.question_text || '',
+              textChoices,
+              correctTextId,
+              target_image_url: apiQ.target_image_url || undefined,
+              audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) } : undefined,
+            };
+          });
+
+          // Only update questions if the student hasn't started answering yet
+          if (currentIndex === 0 && answers.length === 0) {
+            setQuestions(mapped);
+          }
+        }
+      } catch {}
+    };
+
+    syncMadaliContent();
+
+    return () => {
+      mounted = false;
+    };
+  }, [slug]);
 
   // Stable session ID generated at quiz mount/restart
   const sessionIdRef = useRef<string>(generateSessionId('quiz_madali'));
@@ -599,12 +682,18 @@ export default function MadaliQuizScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Large clear picture of the correct answer for Picture-ID questions */}
-          {currentQuestion?.type === 'picture-id' && !!currentQuestion?.correctVocabId ? (
+          {/* Large clear picture of the correct answer for Picture-ID questions or questions with uploaded target picture */}
+          {(currentQuestion?.target_image_url || (currentQuestion?.type === 'picture-id' && !!currentQuestion?.correctVocabId)) ? (
             <View style={styles.picturePromptContainer}>
-              {findVocabItem(currentQuestion.correctVocabId) ? (
+              {currentQuestion?.target_image_url ? (
+                <Image
+                  source={{ uri: resolveAvatarUrl(currentQuestion.target_image_url) }}
+                  style={{ width: 160, height: 160, borderRadius: Radius.lg }}
+                  contentFit="contain"
+                />
+              ) : findVocabItem(currentQuestion.correctVocabId!) ? (
                 <ItemVisual
-                  item={findVocabItem(currentQuestion.correctVocabId)!}
+                  item={findVocabItem(currentQuestion.correctVocabId!)!}
                   size={150}
                 />
               ) : null}
