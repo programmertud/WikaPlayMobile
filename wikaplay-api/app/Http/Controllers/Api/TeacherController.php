@@ -11,6 +11,7 @@ use App\Models\QuizAnswer;
 use App\Models\QuizAvailability;
 use App\Models\QuizQuestion;
 use App\Models\QuizSession;
+use App\Models\Section;
 use App\Models\StarTransaction;
 use App\Models\StudentBadge;
 use App\Models\StudentCollectible;
@@ -19,6 +20,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class TeacherController extends Controller
 {
@@ -28,7 +30,7 @@ class TeacherController extends Controller
     protected function authorizeTeacher(Request $request)
     {
         $user = $request->user();
-        if (!$user || !$user->isTeacher()) {
+        if (! $user || ! $user->isTeacher()) {
             abort(403, 'Ang bahaging ito ay para lamang sa mga guro.');
         }
     }
@@ -38,10 +40,11 @@ class TeacherController extends Controller
      */
     protected function getTeacherStudentIds(User $teacher)
     {
-        $sectionIds = \App\Models\Section::where('teacher_id', $teacher->id)->pluck('id');
+        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
         if ($sectionIds->isEmpty()) {
             return collect();
         }
+
         return User::where('role', 'student')
             ->whereIn('section_id', $sectionIds)
             ->pluck('id');
@@ -64,15 +67,15 @@ class TeacherController extends Controller
             ]);
 
         // Scope to students in the teacher's managed sections ONLY
-        $sectionIds = \App\Models\Section::where('teacher_id', $teacher->id)->pluck('id');
+        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
 
         // If teacher has no sections yet, return empty list
         if ($sectionIds->isEmpty()) {
             return response()->json([
-                'students'       => [],
+                'students' => [],
                 'total_students' => 0,
-                'online_count'   => 0,
-                'sections'       => [],
+                'online_count' => 0,
+                'sections' => [],
             ]);
         }
 
@@ -102,7 +105,7 @@ class TeacherController extends Controller
             ->whereIn('section_id', $sectionIds)
             ->with('presence')
             ->withCount([
-                'quizSessions as quizzes_passed' => fn($q) => $q->where('passed', true),
+                'quizSessions as quizzes_passed' => fn ($q) => $q->where('passed', true),
                 'minigameSessions as games_played',
                 'studentCollectibles as collectibles_count',
             ])
@@ -115,46 +118,46 @@ class TeacherController extends Controller
                 $badges = (int) ($badgesMap[$s->id] ?? 0);
 
                 return [
-                    'id'                   => $s->id,
-                    'name'                 => $s->name,
-                    'email'                => $s->email,
-                    'student_id_code'      => $s->student_id_code,
-                    'avatar'               => $s->avatar,
-                    'section'              => $s->section,
-                    'section_id'           => $s->section_id,
-                    'status'               => $s->status ?? 'active',
-                    'stars_balance'        => (int) $s->stars_balance,
-                    'lifetime_stars'       => $lifetime,
-                    'stars_spent'          => $spent,
-                    'quizzes_passed'       => (int) $s->quizzes_passed,
-                    'games_played'         => (int) $s->games_played,
-                    'collectibles_count'   => (int) $s->collectibles_count,
-                    'badges_count'         => $badges,
-                    'is_online'            => $isOnline,
-                    'current_activity'     => $presence ? $presence->current_activity : 'Offline',
-                    'current_screen'       => $presence ? $presence->current_screen : null,
+                    'id' => $s->id,
+                    'name' => $s->name,
+                    'email' => $s->email,
+                    'student_id_code' => $s->student_id_code,
+                    'avatar' => $s->avatar,
+                    'section' => $s->section,
+                    'section_id' => $s->section_id,
+                    'status' => $s->status ?? 'active',
+                    'stars_balance' => (int) $s->stars_balance,
+                    'lifetime_stars' => $lifetime,
+                    'stars_spent' => $spent,
+                    'quizzes_passed' => (int) $s->quizzes_passed,
+                    'games_played' => (int) $s->games_played,
+                    'collectibles_count' => (int) $s->collectibles_count,
+                    'badges_count' => $badges,
+                    'is_online' => $isOnline,
+                    'current_activity' => $presence ? $presence->current_activity : 'Offline',
+                    'current_screen' => $presence ? $presence->current_screen : null,
                     'current_game_or_quiz' => $presence ? $presence->current_game_or_quiz : null,
-                    'last_active_at'       => $presence && $presence->last_active_at ? $presence->last_active_at->diffForHumans() : 'Kamakailan',
+                    'last_active_at' => $presence && $presence->last_active_at ? $presence->last_active_at->diffForHumans() : 'Kamakailan',
                 ];
             });
 
         // Return section info alongside students
-        $sections = \App\Models\Section::where('teacher_id', $teacher->id)
+        $sections = Section::where('teacher_id', $teacher->id)
             ->withCount(['students'])
             ->get()
-            ->map(fn($s) => [
-                'id'              => $s->id,
-                'name'            => $s->name,
-                'status'          => $s->status,
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'status' => $s->status,
                 'enrollment_code' => $s->enrollment_code,
-                'students_count'  => $s->students_count,
+                'students_count' => $s->students_count,
             ]);
 
         return response()->json([
-            'students'       => $students,
+            'students' => $students,
             'total_students' => $students->count(),
-            'online_count'   => $students->where('is_online', true)->count(),
-            'sections'       => $sections,
+            'online_count' => $students->where('is_online', true)->count(),
+            'sections' => $sections,
         ]);
     }
 
@@ -167,9 +170,9 @@ class TeacherController extends Controller
         $teacher = $request->user();
 
         // Ensure teacher can only view students in their own sections
-        $sectionIds = \App\Models\Section::where('teacher_id', $teacher->id)->pluck('id');
+        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
         $student = User::where('role', 'student')
-            ->when($sectionIds->isNotEmpty(), fn($q) => $q->whereIn('section_id', $sectionIds))
+            ->when($sectionIds->isNotEmpty(), fn ($q) => $q->whereIn('section_id', $sectionIds))
             ->findOrFail($id);
 
         $lifetimeStars = (int) StarTransaction::where('user_id', $student->id)
@@ -220,6 +223,7 @@ class TeacherController extends Controller
                 ->get();
             $stars = min(60, (int) $sessions->sum('stars_awarded'));
             $attempts = $sessions->count();
+
             return [
                 'id' => $cat->id,
                 'name' => $cat->name,
@@ -272,10 +276,10 @@ class TeacherController extends Controller
         // Verify the teacher owns the section this student belongs to
         $teacher = $request->user();
         if ($student->section_id) {
-            $ownsSection = \App\Models\Section::where('id', $student->section_id)
+            $ownsSection = Section::where('id', $student->section_id)
                 ->where('teacher_id', $teacher->id)
                 ->exists();
-            if (!$ownsSection && !$teacher->isAdmin()) {
+            if (! $ownsSection && ! $teacher->isAdmin()) {
                 abort(403, 'Hindi ka awtorisadong ayusin ang bituin ng mag-aaral na ito.');
             }
         }
@@ -408,6 +412,7 @@ class TeacherController extends Controller
                 $catCorrect = QuizAnswer::whereIn('quiz_session_id', $sessionIds)->where('is_correct', true)->count();
                 $catAccuracy = $catTotal > 0 ? round(($catCorrect / $catTotal) * 100) : 0;
                 $avgScore = round((float) ($cat->quizSessions()->whereIn('id', $teacherSessionIds)->avg('score') ?? 0), 1);
+
                 return [
                     'id' => $cat->id,
                     'name' => $cat->name,
@@ -586,7 +591,7 @@ class TeacherController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('filipino_name', 'like', "%{$search}%");
+                    ->orWhere('filipino_name', 'like', "%{$search}%");
             });
         }
 
@@ -621,7 +626,7 @@ class TeacherController extends Controller
             'rarity' => 'nullable|string|in:common,rare,epic,legendary',
         ]);
 
-        $slug = \Illuminate\Support\Str::slug($validated['name']);
+        $slug = Str::slug($validated['name']);
 
         $collectible = Collectible::updateOrCreate(
             ['id' => $validated['id'] ?? null],
@@ -670,6 +675,7 @@ class TeacherController extends Controller
                 ->where('badge_key', $m['key'])
                 ->whereNotNull('claimed_at')
                 ->count();
+
             return array_merge($m, ['claimed_count' => $claimedCount]);
         });
 
@@ -710,10 +716,19 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
+        $teacher = $request->user();
         $categoryId = $request->query('category_id');
         $search = $request->query('search');
 
         $query = Flashcard::with('category:id,name,color');
+
+        // Filter by teacher's sections only - teachers should only see flashcards for their own sections
+        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+        if ($sectionIds->isNotEmpty()) {
+            // Get category IDs that belong to this teacher's sections
+            $categoryIds = Category::whereIn('section_id', $sectionIds)->pluck('id');
+            $query->whereIn('category_id', $categoryIds);
+        }
 
         if ($categoryId) {
             $query->where('category_id', $categoryId);
@@ -721,8 +736,8 @@ class TeacherController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('filipino_name', 'like', "%{$search}%")
-                  ->orWhere('english_name', 'like', "%{$search}%")
-                  ->orWhere('name', 'like', "%{$search}%");
+                    ->orWhere('english_name', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%");
             });
         }
 
@@ -751,7 +766,7 @@ class TeacherController extends Controller
             'is_published' => 'nullable|boolean',
         ]);
 
-        $slug = \Illuminate\Support\Str::slug($validated['name']);
+        $slug = Str::slug($validated['name']);
 
         $category = Category::updateOrCreate(
             ['id' => $validated['id'] ?? null],
@@ -799,18 +814,20 @@ class TeacherController extends Controller
         ]);
 
         $flashcard = null;
-        if (!empty($validated['id'])) {
+        // If ID is provided, always update that specific flashcard
+        if (! empty($validated['id'])) {
             $flashcard = Flashcard::find($validated['id']);
         }
-        if (!$flashcard) {
+        // Only search by name if no ID was provided (creating new flashcard)
+        if (! $flashcard) {
             $flashcard = Flashcard::where('category_id', $validated['category_id'])
                 ->where(function ($q) use ($validated) {
                     $q->where('filipino_name', $validated['filipino_name'])
-                      ->orWhere('name', $validated['filipino_name']);
+                        ->orWhere('name', $validated['filipino_name']);
                 })->first();
         }
-        if (!$flashcard) {
-            $flashcard = new Flashcard();
+        if (! $flashcard) {
+            $flashcard = new Flashcard;
         }
 
         $flashcard->category_id = $validated['category_id'];
@@ -842,6 +859,7 @@ class TeacherController extends Controller
         if ($hasQuestions) {
             $flashcard->is_published = false;
             $flashcard->save();
+
             return response()->json([
                 'message' => 'Nai-archive ang flashcard (itinago mula sa mga mag-aaral upang maprotektahan ang mga nakaraang pagsusulit).',
                 'archived' => true,
@@ -900,13 +918,21 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
+        $teacher = $request->user();
+
+        // Verify teacher has access to this category (belongs to their section)
+        $category = Category::findOrFail($categoryId);
+        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+        if ($sectionIds->isNotEmpty() && ! $sectionIds->contains($category->section_id)) {
+            abort(403, 'You do not have access to this category.');
+        }
+
         $questions = QuizQuestion::where('category_id', $categoryId)
             ->where('difficulty', $difficulty)
             ->with('flashcard')
             ->orderBy('sort_order')
             ->get();
 
-        $category = Category::findOrFail($categoryId);
         $flashcards = Flashcard::where('category_id', $categoryId)->get();
         $availability = QuizAvailability::where('category_id', $categoryId)
             ->where('difficulty', $difficulty)
@@ -928,19 +954,39 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
-        $validated = $request->validate([
+        $difficulty = $request->input('difficulty');
+
+        // Convert empty strings to null for optional fields
+        $request->merge([
+            'target_item_name' => $request->filled('target_item_name') ? $request->input('target_item_name') : null,
+            'target_image_url' => $request->filled('target_image_url') ? $request->input('target_image_url') : null,
+        ]);
+
+        // Build validation rules based on difficulty
+        $rules = [
             'id' => 'nullable|exists:quiz_questions,id',
             'category_id' => 'required|exists:categories,id',
             'difficulty' => 'required|in:madali,katamtaman,mahirap',
             'flashcard_id' => 'nullable|exists:flashcards,id',
             'question_text' => 'nullable|string',
-            'target_item_name' => 'required|string',
-            'target_image_url' => 'required|string',
             'audio_url' => 'nullable|string',
             'choices' => 'required|array|min:2',
             'correct_answer' => 'required|string',
             'points' => 'nullable|integer',
-        ]);
+        ];
+
+        // For katamtaman and mahirap, target_image_url and target_item_name are required
+        // For madali, these are optional (can be text-only questions)
+        if ($difficulty === 'katamtaman' || $difficulty === 'mahirap') {
+            $rules['target_item_name'] = 'required|string';
+            $rules['target_image_url'] = 'required|string';
+        } else {
+            // madali - make these optional for text-only questions
+            $rules['target_item_name'] = 'nullable|string';
+            $rules['target_image_url'] = 'nullable|string';
+        }
+
+        $validated = $request->validate($rules);
 
         $question = QuizQuestion::updateOrCreate(
             ['id' => $validated['id'] ?? null],
@@ -949,8 +995,8 @@ class TeacherController extends Controller
                 'difficulty' => $validated['difficulty'],
                 'flashcard_id' => $validated['flashcard_id'] ?? null,
                 'question_text' => $validated['question_text'] ?? '',
-                'target_item_name' => $validated['target_item_name'],
-                'target_image_url' => $validated['target_image_url'],
+                'target_item_name' => $validated['target_item_name'] ?? null,
+                'target_image_url' => $validated['target_image_url'] ?? null,
                 'audio_url' => $validated['audio_url'] ?? null,
                 'choices' => $validated['choices'],
                 'correct_answer' => $validated['correct_answer'],
@@ -994,7 +1040,7 @@ class TeacherController extends Controller
             ]);
 
             $path = $request->file('audio')->store('audio', 'public');
-            $storageUrl = config('app.url') . '/storage/' . $path;
+            $storageUrl = config('app.url').'/storage/'.$path;
 
             return response()->json([
                 'message' => 'Matagumpay na nai-upload ang audio!',
@@ -1023,7 +1069,7 @@ class TeacherController extends Controller
 
             $path = $request->file('image')->store('images', 'public');
             // Build an absolute URL that works from both localhost web and physical mobile devices
-            $storageUrl = config('app.url') . '/storage/' . $path;
+            $storageUrl = config('app.url').'/storage/'.$path;
 
             return response()->json([
                 'message' => 'Matagumpay na nai-upload ang larawan!',
@@ -1039,9 +1085,9 @@ class TeacherController extends Controller
                 $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
                 $type = strtolower($type[1]);
                 $base64Data = base64_decode($base64Data);
-                $filename = 'images/' . uniqid() . '.' . $type;
-                \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $base64Data);
-                $url = asset('storage/' . $filename);
+                $filename = 'images/'.uniqid().'.'.$type;
+                Storage::disk('public')->put($filename, $base64Data);
+                $url = asset('storage/'.$filename);
 
                 return response()->json([
                     'message' => 'Matagumpay na nai-upload ang larawan!',
@@ -1103,13 +1149,13 @@ class TeacherController extends Controller
                 ->with('user:id,name,student_id_code,section')
                 ->orderByDesc('created_at')
                 ->get();
-            $filename = 'wikaplay_minigames_report_' . date('Y-m-d') . '.csv';
+            $filename = 'wikaplay_minigames_report_'.date('Y-m-d').'.csv';
             $csvHeader = ['Student ID', 'Student Name', 'Section', 'Game Type', 'Score', 'Stars Awarded', 'Date'];
-            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
+            $rows = [implode(',', array_map(fn ($h) => '"'.str_replace('"', '""', $h).'"', $csvHeader))];
 
             foreach ($sessions as $s) {
                 $row = [
-                    $s->user->student_id_code ?? ('ID-' . $s->user_id),
+                    $s->user->student_id_code ?? ('ID-'.$s->user_id),
                     $s->user->name ?? 'Unknown',
                     $s->user->section ?? 'N/A',
                     $s->game_type,
@@ -1117,21 +1163,21 @@ class TeacherController extends Controller
                     $s->stars_awarded,
                     $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
                 ];
-                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+                $rows[] = implode(',', array_map(fn ($val) => '"'.str_replace('"', '""', (string) $val).'"', $row));
             }
         } elseif ($type === 'stars') {
             $txs = StarTransaction::whereIn('user_id', $studentIds)
                 ->with('user:id,name,student_id_code')
                 ->orderByDesc('created_at')
                 ->get();
-            $filename = 'wikaplay_stars_ledger_' . date('Y-m-d') . '.csv';
+            $filename = 'wikaplay_stars_ledger_'.date('Y-m-d').'.csv';
             $csvHeader = ['Transaction ID', 'Student ID', 'Student Name', 'Amount', 'Balance After', 'Source Type', 'Description', 'Date'];
-            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
+            $rows = [implode(',', array_map(fn ($h) => '"'.str_replace('"', '""', $h).'"', $csvHeader))];
 
             foreach ($txs as $t) {
                 $row = [
                     $t->id,
-                    $t->user->student_id_code ?? ('ID-' . $t->user_id),
+                    $t->user->student_id_code ?? ('ID-'.$t->user_id),
                     $t->user->name ?? 'Unknown',
                     $t->amount,
                     $t->balance_after,
@@ -1139,17 +1185,17 @@ class TeacherController extends Controller
                     $t->description,
                     $t->created_at ? $t->created_at->format('Y-m-d H:i:s') : '',
                 ];
-                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+                $rows[] = implode(',', array_map(fn ($val) => '"'.str_replace('"', '""', (string) $val).'"', $row));
             }
         } elseif ($type === 'students') {
             $students = User::where('role', 'student')->whereIn('id', $studentIds)->get();
-            $filename = 'wikaplay_students_roster_' . date('Y-m-d') . '.csv';
+            $filename = 'wikaplay_students_roster_'.date('Y-m-d').'.csv';
             $csvHeader = ['Student ID', 'Name', 'Email', 'Section', 'Stars Balance', 'Status', 'Registered At'];
-            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
+            $rows = [implode(',', array_map(fn ($h) => '"'.str_replace('"', '""', $h).'"', $csvHeader))];
 
             foreach ($students as $s) {
                 $row = [
-                    $s->student_id_code ?? ('ID-' . $s->id),
+                    $s->student_id_code ?? ('ID-'.$s->id),
                     $s->name,
                     $s->email,
                     $s->section ?? 'N/A',
@@ -1157,7 +1203,7 @@ class TeacherController extends Controller
                     $s->status ?? 'active',
                     $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
                 ];
-                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+                $rows[] = implode(',', array_map(fn ($val) => '"'.str_replace('"', '""', (string) $val).'"', $row));
             }
         } else {
             // Default: quizzes
@@ -1166,13 +1212,13 @@ class TeacherController extends Controller
                 ->orderByDesc('created_at')
                 ->get();
 
-            $filename = 'wikaplay_quiz_report_' . date('Y-m-d') . '.csv';
+            $filename = 'wikaplay_quiz_report_'.date('Y-m-d').'.csv';
             $csvHeader = ['Student ID', 'Student Name', 'Section', 'Category', 'Difficulty', 'Score', 'Total Questions', 'Correct', 'Wrong', 'Passed', 'Date'];
-            $rows = [implode(',', array_map(fn($h) => '"' . str_replace('"', '""', $h) . '"', $csvHeader))];
+            $rows = [implode(',', array_map(fn ($h) => '"'.str_replace('"', '""', $h).'"', $csvHeader))];
 
             foreach ($sessions as $s) {
                 $row = [
-                    $s->user->student_id_code ?? ('ID-' . $s->user_id),
+                    $s->user->student_id_code ?? ('ID-'.$s->user_id),
                     $s->user->name ?? 'Unknown',
                     $s->user->section ?? 'N/A',
                     $s->category->name ?? 'N/A',
@@ -1184,7 +1230,7 @@ class TeacherController extends Controller
                     $s->passed ? 'YES' : 'NO',
                     $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '',
                 ];
-                $rows[] = implode(',', array_map(fn($val) => '"' . str_replace('"', '""', (string)$val) . '"', $row));
+                $rows[] = implode(',', array_map(fn ($val) => '"'.str_replace('"', '""', (string) $val).'"', $row));
             }
         }
 
@@ -1193,7 +1239,7 @@ class TeacherController extends Controller
         if ($request->has('download')) {
             return response($csvContent, 200, [
                 'Content-Type' => 'text/csv; charset=UTF-8',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             ]);
         }
 

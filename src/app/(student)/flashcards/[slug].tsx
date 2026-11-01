@@ -87,14 +87,16 @@ export default function FlashcardsViewerScreen() {
               if (match) {
                 const isUnsplash = typeof match.image_url === 'string' && match.image_url.includes('images.unsplash.com');
                 const isBlobUrl = typeof match.image_url === 'string' && match.image_url.startsWith('blob:');
-                // Accept any valid non-placeholder, non-blob server URL
-                const validImage = match.image_url && !isUnsplash && !isBlobUrl
+                const isLocalFile = typeof match.image_url === 'string' && match.image_url.startsWith('file://');
+                // Accept any valid non-placeholder, non-blob, non-local-file server URL
+                const validImage = match.image_url && !isUnsplash && !isBlobUrl && !isLocalFile
                   ? match.image_url
                   : undefined;
                 // Only treat as valid audio override if it's an actual remote upload (http/storage)
                 const isRealRemoteAudio = typeof match.audio_url === 'string' &&
                   (match.audio_url.startsWith('http://') || match.audio_url.startsWith('https://') || match.audio_url.includes('/storage/'));
-                const validAudio = typeof match.audio_url === 'string' && isRealRemoteAudio && !match.audio_url.startsWith('blob:')
+                const isLocalAudioFile = typeof match.audio_url === 'string' && match.audio_url.startsWith('file://');
+                const validAudio = typeof match.audio_url === 'string' && isRealRemoteAudio && !match.audio_url.startsWith('blob:') && !isLocalAudioFile
                   ? match.audio_url
                   : undefined;
 
@@ -121,13 +123,15 @@ export default function FlashcardsViewerScreen() {
               if (!exists && f.filipino_name) {
                 const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
                 const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
+                const isLocalFile = typeof f.image_url === 'string' && f.image_url.startsWith('file://');
+                const isLocalAudioFile = typeof f.audio_url === 'string' && f.audio_url.startsWith('file://');
                 const customItem: VocabularyItem = {
                   id: `fc_${f.id}`,
                   categoryId: category.id,
                   filipino: f.filipino_name,
                   english: f.english_name || '',
-                  imageUri: f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined,
-                  audioUri: f.audio_url || undefined,
+                  imageUri: f.image_url && !isUnsplash && !isBlobUrl && !isLocalFile ? f.image_url : undefined,
+                  audioUri: f.audio_url && !isLocalAudioFile ? f.audio_url : undefined,
                   emoji: '⭐',
                 };
                 updated.push(customItem);

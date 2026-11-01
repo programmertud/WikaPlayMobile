@@ -18,6 +18,7 @@ class Category extends Model
         'color',
         'is_published',
         'sort_order',
+        'section_id',
     ];
 
     protected $casts = [
@@ -43,5 +44,10 @@ class Category extends Model
     public function quizSessions()
     {
         return $this->hasMany(QuizSession::class);
+    }
+
+    public function section()
+    {
+        return $this->belongsTo(Section::class);
     }
 }

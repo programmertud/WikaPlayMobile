@@ -420,51 +420,59 @@ export default function ContentManagementScreen({
       const res = await teacherService.getQuizQuestions(catId, diff);
       if (res?.availability) availability = res.availability;
       let questions = Array.isArray(res?.questions) ? res.questions : [];
-      if (questions.length < 10) {
-        if (diff === 'madali') {
-          questions = getMadaliQuestionsBySlug(catSlug).map((q, idx) => {
-            const isPictureQuestion =
-              q.type === 'picture-id' ||
-              Boolean(q.questionFil && /larawan|litrato/i.test(q.questionFil)) ||
-              idx >= 10;
+      
+      // For teacher dashboard: merge API questions with local quiz bank
+      // This allows teachers to see and manage ALL questions (original 20 + custom)
+      if (diff === 'madali') {
+        const localBankQuestions = getMadaliQuestionsBySlug(catSlug).map((q, idx) => {
+          const isPictureQuestion =
+            q.type === 'picture-id' ||
+            Boolean(q.questionFil && /larawan|litrato/i.test(q.questionFil)) ||
+            idx >= 10;
 
-            let matchedItem: any;
-            if (isPictureQuestion) {
-              matchedItem = catObj.items.find(
-                (it) => it.id === q.correctVocabId || it.filipino.toLowerCase() === (q.correctTextId || '').toLowerCase()
-              );
-              if (!matchedItem && q.correctVocabId) {
-                matchedItem = catObj.items.find((it) => it.id.includes(q.correctVocabId!));
-              }
-              if (!matchedItem) {
-                const correctChoiceText = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
-                if (correctChoiceText) {
-                  matchedItem = catObj.items.find((it) => it.filipino.toLowerCase() === correctChoiceText.toLowerCase());
-                }
+          let matchedItem: any;
+          if (isPictureQuestion) {
+            matchedItem = catObj.items.find(
+              (it) => it.id === q.correctVocabId || it.filipino.toLowerCase() === (q.correctTextId || '').toLowerCase()
+            );
+            if (!matchedItem && q.correctVocabId) {
+              matchedItem = catObj.items.find((it) => it.id.includes(q.correctVocabId!));
+            }
+            if (!matchedItem) {
+              const correctChoiceText = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
+              if (correctChoiceText) {
+                matchedItem = catObj.items.find((it) => it.filipino.toLowerCase() === correctChoiceText.toLowerCase());
               }
             }
+          }
 
-            const targetName = isPictureQuestion ? (matchedItem?.filipino || '') : '';
-            const targetImg = isPictureQuestion ? (matchedItem?.imageUri || '') : '';
-            const localImg = isPictureQuestion ? matchedItem?.image : undefined;
+          const targetName = isPictureQuestion ? (matchedItem?.filipino || '') : '';
+          const targetImg = isPictureQuestion ? (matchedItem?.imageUri || '') : '';
+          const localImg = isPictureQuestion ? matchedItem?.image : undefined;
 
-            return {
-              id: idx + 1,
-              category_id: catId,
-              flashcard_id: null,
-              question_text: q.questionFil || q.questionEn,
-              target_image_url: targetImg,
-              target_item_name: targetName,
-              targetItem: matchedItem,
-              localImageSource: localImg,
-              choices: q.textChoices?.map((choice) => ({ id: choice.id, text: choice.text, image_url: '' })) || [],
-              correct_answer: q.textChoices?.find((c) => c.id === q.correctTextId)?.text || q.correctTextId || 'A',
-              points: 1,
-              difficulty: diff,
-              is_picture_question: isPictureQuestion,
-            } as any;
-          });
-        } else if (diff === 'katamtaman') {
+          return {
+            id: `local_${idx}`, // Use distinct ID to avoid conflicts with API questions
+            category_id: catId,
+            flashcard_id: null,
+            question_text: q.questionFil || q.questionEn,
+            target_image_url: targetImg,
+            target_item_name: targetName,
+            targetItem: matchedItem,
+            localImageSource: localImg,
+            choices: q.textChoices?.map((choice) => ({ id: choice.id, text: choice.text, image_url: '' })) || [],
+            correct_answer: q.textChoices?.find((c) => c.id === q.correctTextId)?.text || q.correctTextId || 'A',
+            points: 1,
+            difficulty: diff,
+            is_picture_question: isPictureQuestion,
+            is_local: true, // Mark as local quiz bank question
+          } as any;
+        });
+
+        // Combine: local quiz bank + API custom questions
+        questions = [...localBankQuestions, ...questions];
+      } else if (questions.length === 0) {
+        // For katamtaman/mahirap, if no API questions, generate from vocabulary
+        if (diff === 'katamtaman') {
           questions = catObj.items.map((item, idx) => {
             const choices = getRandomVocabularyChoices(catSlug, item, 4);
             const mappedChoices = choices.map((c, cIdx) => ({
@@ -476,7 +484,7 @@ export default function ContentManagementScreen({
             }));
 
             return {
-              id: idx + 1,
+              id: `local_${idx}`,
               category_id: catId,
               flashcard_id: null,
               question_text: `Pakinggan ang audio at piliin ang tamang larawan para sa "${item.filipino}":`,
@@ -489,12 +497,13 @@ export default function ContentManagementScreen({
               correct_answer: item.filipino,
               points: 2,
               difficulty: diff,
+              is_local: true,
             } as any;
           });
         } else {
           // mahirap
           questions = catObj.items.map((item, idx) => ({
-            id: idx + 1,
+            id: `local_${idx}`,
             category_id: catId,
             flashcard_id: null,
             question_text: 'Ayusin ang mga letra upang mabuo ang tamang salita.',
@@ -506,6 +515,7 @@ export default function ContentManagementScreen({
             correct_answer: item.filipino.toUpperCase(),
             points: 3,
             difficulty: diff,
+            is_local: true,
           })) as any;
         }
       } else {
@@ -751,10 +761,11 @@ export default function ContentManagementScreen({
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setIsUploadingImage(true);
+      
+      // MUST upload to server - no local file fallback allowed
       try {
         const form = new FormData();
         if (Platform.OS === 'web') {
-          // On Web, fetch the blob URL and wrap in a real File instance so FormData transmits as multipart file
           const resp = await fetch(asset.uri);
           const blob = await resp.blob();
           const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
@@ -775,11 +786,12 @@ export default function ContentManagementScreen({
           card: { ...prev.card, image_url: res.url, localImageSource: undefined },
         }));
       } catch (uploadErr: any) {
-        console.warn('Image upload error, fallback to local asset:', uploadErr);
-        // Direct local device/computer file URI fallback
+        console.error('Image upload failed:', uploadErr);
+        Alert.alert('Upload Failed', 'Failed to upload image to server. Please check your internet connection and try again.');
+        // Do NOT fallback to local file path - this causes the error you're seeing
         setFlashcardModal((prev) => ({
           ...prev,
-          card: { ...prev.card, image_url: asset.uri, localImageSource: undefined },
+          card: { ...prev.card, image_url: '' },
         }));
       }
     } catch (err: any) {
@@ -821,11 +833,12 @@ export default function ContentManagementScreen({
           card: { ...prev.card, audio_url: res.url, localAudioSource: undefined },
         }));
       } catch (uploadErr: any) {
-        console.warn('Audio upload error, fallback to local asset:', uploadErr);
-        // Direct local device/computer file URI fallback
+        console.error('Audio upload failed:', uploadErr);
+        Alert.alert('Upload Failed', 'Failed to upload audio to server. Please check your internet connection and try again.');
+        // Do NOT fallback to local file path - this causes the error you're seeing
         setFlashcardModal((prev) => ({
           ...prev,
-          card: { ...prev.card, audio_url: asset.uri, localAudioSource: undefined },
+          card: { ...prev.card, audio_url: '' },
         }));
       }
     } catch (err: any) {
@@ -869,6 +882,12 @@ export default function ContentManagementScreen({
       return;
     }
 
+    // Validate that image_url is a valid server URL, not a local file path
+    if (c.image_url && (c.image_url.startsWith('file://') || c.image_url.startsWith('blob:'))) {
+      Alert.alert('Image Error', 'Please upload the image to the server. Local file paths are not supported.');
+      return;
+    }
+
     setIsSavingFlashcard(true);
     try {
       const catObj = categories.find((cat) => cat.id === c.category_id);
@@ -880,7 +899,7 @@ export default function ContentManagementScreen({
           filipino_name: c.filipino_name.trim(),
           english_name: c.english_name?.trim() || null,
           description: c.description?.trim() || null,
-          image_url: (c.image_url && !c.image_url.startsWith('blob:')) ? c.image_url : null,
+          image_url: (c.image_url && !c.image_url.startsWith('blob:') && !c.image_url.startsWith('file://')) ? c.image_url : null,
           audio_url: c.audio_url || null,
           is_published: c.is_published ?? true,
         });
@@ -893,25 +912,50 @@ export default function ContentManagementScreen({
       try {
         const raw = await storage.getItem(`@wikaplay_flashcards_${catSlug}`);
         const overrides = raw ? JSON.parse(raw) : {};
-        const norm = c.filipino_name.toLowerCase().trim();
-        overrides[norm] = {
-          imageUri: (c.image_url && !c.image_url.startsWith('blob:')) ? c.image_url : undefined,
+        const newNorm = c.filipino_name.toLowerCase().trim();
+
+        // If editing and name changed, remove old entry to avoid conflicts
+        if (flashcardModal.isEditing && c.name && c.name !== c.filipino_name) {
+          const oldNorm = c.name.toLowerCase().trim();
+          delete overrides[oldNorm];
+        }
+
+        // Only save if it's a valid server URL (http/https), not local file
+        const isValidImageUrl = c.image_url && 
+          !c.image_url.startsWith('blob:') && 
+          !c.image_url.startsWith('file://') &&
+          (c.image_url.startsWith('http://') || c.image_url.startsWith('https://'));
+
+        overrides[newNorm] = {
+          imageUri: isValidImageUrl ? c.image_url : undefined,
           audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
         };
         await storage.setItem(`@wikaplay_flashcards_${catSlug}`, JSON.stringify(overrides));
-        overrideVocabularyItem(c.filipino_name, {
-          filipino: c.filipino_name.trim(),
-          english: c.english_name?.trim() || undefined,
-          imageUri: (c.image_url && !c.image_url.startsWith('blob:')) ? c.image_url : undefined,
-          audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
-        });
+
+        // If name changed, update the vocabulary item with the new name
+        if (flashcardModal.isEditing && c.name && c.name !== c.filipino_name) {
+          // First, find and update by old name/id
+          overrideVocabularyItem(c.name, {
+            filipino: c.filipino_name.trim(),
+            english: c.english_name?.trim() || undefined,
+            imageUri: isValidImageUrl && c.image_url ? c.image_url : undefined,
+            audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
+          }, catSlug);
+        } else {
+          overrideVocabularyItem(c.filipino_name || '', {
+            filipino: c.filipino_name?.trim() || '',
+            english: c.english_name?.trim() || undefined,
+            imageUri: isValidImageUrl && c.image_url ? c.image_url : undefined,
+            audioUri: (c.audio_url && !c.audio_url.startsWith('blob:')) ? c.audio_url : undefined,
+          }, catSlug);
+        }
       } catch (storeErr) {
         console.warn('Storage override saving failed:', storeErr);
       }
 
       setFlashcards((prev) => {
         if (c.id) {
-          return prev.map((f) => (f.id === c.id ? { ...f, ...c, category: catObj || f.category } : f));
+          return prev.map((f) => (f.id === c.id ? { ...f, ...c, name: c.filipino_name?.trim() || c.name || '', category: catObj || f.category } : f));
         } else {
           const newId = savedCard?.id || Math.max(...prev.map((p) => p.id), 151) + 1;
           return [
@@ -1326,6 +1370,12 @@ export default function ContentManagementScreen({
     const q = { ...questionModal.question };
     if (!selectedCategory) return;
 
+    // Prevent saving local quiz bank questions (marked with is_local: true)
+    if ((q as any).is_local) {
+      Alert.alert('Cannot Edit', 'Original quiz bank questions cannot be edited. You can only edit custom questions you added.');
+      return;
+    }
+
     if (selectedDiff === 'mahirap') {
       const word = (q.target_item_name || q.correct_answer || '').trim().toUpperCase();
       if (!word) {
@@ -1349,9 +1399,17 @@ export default function ContentManagementScreen({
         q.question_text = `Nasaan ang ${q.target_item_name || q.correct_answer}?`;
       }
     } else {
+      // madali - text-only questions don't require target_item_name or target_image_url
       if (!q.correct_answer) {
         Alert.alert('Notice', 'Please specify the correct answer.');
         return;
+      }
+      // Ensure optional fields are null instead of empty strings
+      if (!q.target_item_name || q.target_item_name.trim() === '') {
+        q.target_item_name = null;
+      }
+      if (!q.target_image_url || q.target_image_url.trim() === '') {
+        q.target_image_url = null;
       }
     }
 

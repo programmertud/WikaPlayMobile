@@ -338,30 +338,89 @@ export function removeVocabularyItem(filipinoOrId: string, categorySlug?: string
   }
 }
 
+function normalizeWord(str?: string): string {
+  if (!str) return '';
+  return str.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
+}
+
 export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
   const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
-  if (!cat || !Array.isArray(flashcards)) return;
+  if (!cat || !Array.isArray(flashcards) || flashcards.length === 0) return;
 
-  flashcards.forEach((f) => {
-    const name = f.filipino_name || f.name;
-    if (!name) return;
-    const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
-    const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
-    const validImage = f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined;
-    const validAudio = f.audio_url && !f.audio_url.startsWith('blob:') ? f.audio_url : undefined;
+  const originalItems = [...cat.items];
+  const published = flashcards.filter((f) => f.is_published !== false);
 
-    overrideVocabularyItem(
-      name,
-      {
-        id: `fc_${f.id}`,
-        filipino: name,
-        english: f.english_name || undefined,
-        imageUri: validImage,
-        audioUri: validAudio,
-      },
-      slug
-    );
+  // Build a map of backend flashcards for easy lookup
+  const backendMap = new Map<string, any>();
+  published.forEach((f) => {
+    const norm = normalizeWord(f.filipino_name || f.name || '');
+    if (norm) backendMap.set(norm, f);
   });
+
+  // Update existing bundled items with teacher overrides (image/audio only)
+  // DO NOT change IDs - this preserves quiz bank references
+  const updatedItems: VocabularyItem[] = originalItems.map((originalItem) => {
+    const norm = normalizeWord(originalItem.filipino);
+    const backendFc = backendMap.get(norm);
+
+    if (backendFc) {
+      // Teacher has this flashcard - apply their custom image/audio if they uploaded one
+      const isUnsplash = typeof backendFc.image_url === 'string' && backendFc.image_url.includes('images.unsplash.com');
+      const isBlobUrl = typeof backendFc.image_url === 'string' && backendFc.image_url.startsWith('blob:');
+      const customImage = backendFc.image_url && !isUnsplash && !isBlobUrl ? backendFc.image_url : undefined;
+
+      const isRealRemoteAudio = typeof backendFc.audio_url === 'string' &&
+        (backendFc.audio_url.startsWith('http://') || backendFc.audio_url.startsWith('https://') || backendFc.audio_url.includes('/storage/'));
+      const customAudio = typeof backendFc.audio_url === 'string' && isRealRemoteAudio && !backendFc.audio_url.startsWith('blob:')
+        ? backendFc.audio_url
+        : undefined;
+
+      return {
+        ...originalItem,
+        // Always preserve the original ID
+        id: originalItem.id,
+        filipino: backendFc.filipino_name || originalItem.filipino,
+        english: (backendFc.english_name !== undefined && backendFc.english_name !== null) ? backendFc.english_name : originalItem.english,
+        imageUri: customImage ?? originalItem.imageUri,
+        image: customImage ? undefined : originalItem.image,
+        audioUri: customAudio ?? originalItem.audioUri,
+        audio: customAudio ? undefined : originalItem.audio,
+      };
+    }
+
+    // No teacher override - keep original
+    return originalItem;
+  });
+
+  // Add any custom teacher-added flashcards that don't match bundled items
+  published.forEach((f) => {
+    const norm = normalizeWord(f.filipino_name || f.name || '');
+    const exists = originalItems.some((it) => normalizeWord(it.filipino) === norm);
+    if (!exists && f.filipino_name) {
+      const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
+      const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
+      const customImage = f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined;
+
+      const isRealRemoteAudio = typeof f.audio_url === 'string' &&
+        (f.audio_url.startsWith('http://') || f.audio_url.startsWith('https://') || f.audio_url.includes('/storage/'));
+      const customAudio = typeof f.audio_url === 'string' && isRealRemoteAudio && !f.audio_url.startsWith('blob:')
+        ? f.audio_url
+        : undefined;
+
+      const customItem: VocabularyItem = {
+        id: `fc_${f.id}`,
+        categoryId: cat.id,
+        filipino: f.filipino_name,
+        english: f.english_name || '',
+        imageUri: customImage,
+        audioUri: customAudio,
+        emoji: '⭐',
+      };
+      updatedItems.push(customItem);
+    }
+  });
+
+  cat.items = updatedItems;
 }
 
 export async function hydrateCategoryOverrides(slug: string) {

@@ -78,7 +78,16 @@ interface AnswerRecord {
 // ---------------------------------------------------------------------------
 
 /** Look up a VocabularyItem by its id across all categories. */
-function findVocabItem(vocabId: string): VocabularyItem | undefined {
+function findVocabItem(vocabId: string, categorySlug?: string): VocabularyItem | undefined {
+  // First try to find in the specific category if provided
+  if (categorySlug) {
+    const cat = LEARNING_CATEGORIES.find((c) => c.slug === categorySlug);
+    if (cat) {
+      const item = cat.items.find((i) => i.id === vocabId);
+      if (item) return item;
+    }
+  }
+  // Fallback to search across all categories
   for (const cat of LEARNING_CATEGORIES) {
     const item = cat.items.find((i) => i.id === vocabId);
     if (item) return item;
@@ -137,16 +146,18 @@ export default function MadaliQuizScreen() {
       await hydrateCategoryOverrides(slug);
       if (mounted) setQuestions((prev) => [...prev]);
 
-      // 2. Fetch latest teacher flashcards from backend API
-      try {
-        const fcRes = await categoryService.getFlashcards(slug);
-        if (mounted && fcRes?.flashcards) {
-          syncCategoryFlashcards(slug, fcRes.flashcards);
-          setQuestions((prev) => [...prev]);
-        }
-      } catch {}
+      // 2. DO NOT sync flashcards for Madali quiz - this preserves the original vocabulary item IDs
+      // needed for picture questions. The local quiz bank has everything it needs.
+      // try {
+      //   const fcRes = await categoryService.getFlashcards(slug);
+      //   if (mounted && fcRes?.flashcards) {
+      //     syncCategoryFlashcards(slug, fcRes.flashcards);
+      //     setQuestions((prev) => [...prev]);
+      //   }
+      // } catch {}
 
-      // 3. Fetch latest teacher quiz questions for Madali
+      // 3. Fetch latest teacher quiz questions for Madali and merge with local quiz bank
+      // This allows teachers to add custom questions that students will see
       try {
         const res = await categoryService.getQuizQuestions(slug, 'madali');
         if (res.is_locked) {
@@ -157,16 +168,19 @@ export default function MadaliQuizScreen() {
           return;
         }
 
-        if (mounted && res.questions && res.questions.length > 0) {
+        // Merge local quiz bank with API custom questions
+        if (mounted && res.questions && res.questions.length > 0 && currentIndex === 0 && answers.length === 0) {
+          const localQuestions = getMadaliQuestionsBySlug(slug);
           const letters: AnswerId[] = ['A', 'B', 'C', 'D'];
-          const mapped: MadaliQuestion[] = res.questions.map((apiQ, idx) => {
+          
+          // Map API questions to match local format
+          const mappedApiQuestions: MadaliQuestion[] = res.questions.map((apiQ: any, idx: number) => {
             const choices = (apiQ.choices || []).slice(0, 4);
             const textChoices: MadaliTextChoice[] = choices.map((ch: any, cIdx: number) => ({
               id: letters[cIdx],
               text: typeof ch === 'string' ? ch : (ch?.text || ''),
             }));
 
-            // Find correct choice letter index
             const correctIdx = choices.findIndex((ch: any) => {
               const text = typeof ch === 'string' ? ch : (ch?.text || '');
               const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
@@ -176,7 +190,7 @@ export default function MadaliQuizScreen() {
               );
             });
             const correctTextId = (correctIdx >= 0 ? letters[correctIdx] : 'A') as AnswerId;
-            const hasPic = !!apiQ.target_image_url;
+            const hasPic = apiQ.target_image_url && typeof apiQ.target_image_url === 'string' && apiQ.target_image_url.trim().length > 0;
 
             return {
               id: `api_${apiQ.id || idx}`,
@@ -184,21 +198,22 @@ export default function MadaliQuizScreen() {
               categorySlug: slug,
               difficulty: 'madali',
               type: hasPic ? 'picture-id' : 'multiple-choice',
-              questionFil: apiQ.question_text || (hasPic ? 'Anong nasa litrato?' : 'Piliin ang tamang sagot.'),
+              questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
               questionEn: apiQ.question_text || '',
               textChoices,
               correctTextId,
-              target_image_url: apiQ.target_image_url || undefined,
+              target_image_url: hasPic ? apiQ.target_image_url : undefined,
               audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) } : undefined,
             };
           });
 
-          // Only update questions if the student hasn't started answering yet
-          if (currentIndex === 0 && answers.length === 0) {
-            setQuestions(mapped);
-          }
+          // Combine: local questions + API custom questions
+          setQuestions([...localQuestions, ...mappedApiQuestions]);
         }
-      } catch {}
+      } catch (err) {
+        // If API call fails, continue with local quiz bank only
+        console.warn('Failed to fetch API questions, using local quiz bank:', err);
+      }
     };
 
     syncMadaliContent();
@@ -691,9 +706,9 @@ export default function MadaliQuizScreen() {
                   style={{ width: 160, height: 160, borderRadius: Radius.lg }}
                   contentFit="contain"
                 />
-              ) : findVocabItem(currentQuestion.correctVocabId!) ? (
+              ) : findVocabItem(currentQuestion.correctVocabId!, currentQuestion.categorySlug) ? (
                 <ItemVisual
-                  item={findVocabItem(currentQuestion.correctVocabId!)!}
+                  item={findVocabItem(currentQuestion.correctVocabId!, currentQuestion.categorySlug)!}
                   size={150}
                 />
               ) : null}
