@@ -219,14 +219,6 @@ export default function MadaliQuizScreen() {
       } catch (err) {
         console.warn('[MadaliQuiz] Failed to fetch API questions, using local bank only:', err);
       }
-
-          // Combine: local questions + API custom questions
-          setQuestions([...localQuestions, ...mappedApiQuestions]);
-        }
-      } catch (err) {
-        // If API call fails, continue with local quiz bank only
-        console.warn('Failed to fetch API questions, using local quiz bank:', err);
-      }
     };
 
     syncMadaliContent();
