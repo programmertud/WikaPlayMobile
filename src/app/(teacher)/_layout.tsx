@@ -18,9 +18,9 @@ function TeacherTabBarIcon({
   return (
     <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
       <Ionicons
-        name={focused ? name : outlineName}
-        size={22}
-        color={focused ? Colors.teacherPurple : Colors.textMuted}
+        name={focused ? name : outlineName as any}
+        size={24}
+        color={focused ? '#FFD700' : Colors.textMuted}
       />
     </View>
   );
@@ -49,8 +49,8 @@ export default function TeacherLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.teacherPurple,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: '#FFFFFF',
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: styles.tabBar,
         tabBarBackground:
@@ -146,9 +146,8 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     height: Platform.OS === 'ios' ? 84 : 70,
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.85)' : Colors.white,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#0EA5E9',
+    borderTopWidth: 0,
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     paddingTop: 8,
     ...Shadows.card,
@@ -168,6 +167,6 @@ const styles = StyleSheet.create({
     minWidth: 44,
   },
   activeIconContainer: {
-    backgroundColor: Colors.teacherPurpleLight,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
   },
 });

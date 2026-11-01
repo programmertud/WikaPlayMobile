@@ -19,7 +19,7 @@ function TabBarIcon({
   return (
     <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
       <Ionicons
-        name={focused ? name : outlineName}
+        name={focused ? name : outlineName as any}
         size={24}
         color={focused ? '#FFD700' : Colors.textMuted}
       />
@@ -133,7 +133,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     paddingTop: 8,
-    borderTopWidth: 0,
     ...Shadows.card,
   },
   tabLabel: {
