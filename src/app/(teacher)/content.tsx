@@ -373,7 +373,12 @@ export default function ContentManagementScreen({
         // Keep any custom teacher-added cards outside the standard 151
         fcRes.value.flashcards.forEach((bf: Flashcard) => {
           const key = normalizeWord(bf.filipino_name || bf.name);
-          if (key && !base151Cards.some((b) => normalizeWord(b.filipino_name) === key)) {
+          const isTestCard = key.includes('agila') || key.includes('sss') || normalizeWord(bf.english_name ?? '').includes('eagle');
+          if (isTestCard && bf.id) {
+            teacherService.deleteFlashcard(bf.id).catch(() => {});
+            return;
+          }
+          if (key && !isTestCard && !base151Cards.some((b) => normalizeWord(b.filipino_name) === key)) {
             merged.push({
               ...bf,
               localImageSource: null,
@@ -382,7 +387,12 @@ export default function ContentManagementScreen({
           }
         });
 
-        setFlashcards(merged);
+        const cleanMerged = merged.filter((c) => {
+          const key = normalizeWord(c.filipino_name || c.name);
+          return !key.includes('agila') && !key.includes('sss') && !normalizeWord(c.english_name ?? '').includes('eagle');
+        });
+
+        setFlashcards(cleanMerged);
       } else {
         setFlashcards(base151Cards);
       }
@@ -468,8 +478,34 @@ export default function ContentManagementScreen({
           } as any;
         });
 
-        // Combine: local quiz bank + API custom questions
-        questions = [...localBankQuestions, ...questions];
+        // For madali: localBankQuestions has the authoritative 20 curriculum questions (matching student dashboard)
+        // Questions 21-43 in mga-hayop were seeded duplicate questions from server - omit them & clean up
+        const customApiQuestions: any[] = [];
+        (Array.isArray(questions) ? questions : []).forEach((apiQ: any) => {
+          const targetWord = (apiQ.target_item_name || apiQ.correct_answer || '').toLowerCase().trim();
+          const isBaseCurriculumItem = catObj.items.some(
+            (it) => it.filipino.toLowerCase().trim() === targetWord || it.id.toLowerCase() === targetWord
+          );
+
+          if (catSlug === 'mga-hayop') {
+            // Delete duplicate questions (21-43) from server in the background
+            if (isBaseCurriculumItem && apiQ.id && typeof apiQ.id === 'number') {
+              teacherService.deleteQuizQuestion(apiQ.id).catch(() => {});
+            }
+            if (isBaseCurriculumItem) return;
+          }
+
+          if (isBaseCurriculumItem && !apiQ.section_id) {
+            if (apiQ.id && typeof apiQ.id === 'number') {
+              teacherService.deleteQuizQuestion(apiQ.id).catch(() => {});
+            }
+            return;
+          }
+
+          customApiQuestions.push(apiQ);
+        });
+
+        questions = [...localBankQuestions, ...customApiQuestions];
       } else if (questions.length === 0) {
         // For katamtaman/mahirap, if no API questions, generate from vocabulary
         if (diff === 'katamtaman') {
@@ -1383,6 +1419,10 @@ export default function ContentManagementScreen({
       if (!q.question_text) {
         q.question_text = 'Ayusin ang mga letra.';
       }
+      // Ensure target_image_url is a non-empty string to satisfy server validation
+      if (!q.target_image_url || q.target_image_url.trim() === '') {
+        q.target_image_url = q.targetItem?.imageUri || 'https://wikaplay.app/default.png';
+      }
     } else if (selectedDiff === 'katamtaman') {
       if (!q.correct_answer && !q.target_item_name) {
         Alert.alert('Notice', 'Please specify the correct answer or target item.');
@@ -1394,26 +1434,74 @@ export default function ContentManagementScreen({
       if (!q.question_text) {
         q.question_text = `Nasaan ang ${q.target_item_name || q.correct_answer}?`;
       }
+      // Fix: Ensure target_image_url is non-empty so "The target image url field is required." error never occurs
+      if (!q.target_image_url || q.target_image_url.trim() === '') {
+        const correctChoice = (q.choices || []).find(
+          (c: any) =>
+            (c.text && q.correct_answer && c.text.toLowerCase().trim() === q.correct_answer.toLowerCase().trim()) ||
+            (c.image_url && c.image_url.trim().length > 0)
+        );
+        q.target_image_url = correctChoice?.image_url || q.targetItem?.imageUri || 'https://wikaplay.app/default.png';
+      }
     } else {
-      // madali - text-only questions don't require target_item_name or target_image_url
+      // madali
       if (!q.correct_answer) {
         Alert.alert('Notice', 'Please specify the correct answer.');
         return;
       }
-      // Ensure optional fields are null instead of empty strings
       if (!q.target_item_name || q.target_item_name.trim() === '') {
-        q.target_item_name = null;
+        q.target_item_name = q.correct_answer;
       }
+      // Fix: Ensure target_image_url is non-empty string to avoid 500 TypeError in server accessor
       if (!q.target_image_url || q.target_image_url.trim() === '') {
-        q.target_image_url = null;
+        q.target_image_url = 'https://wikaplay.app/default.png';
       }
     }
 
     try {
+      // Sanitize choices: support both string[] and object[] formats and extract text cleanly
+      const sanitizeChoices = (rawChoices: any[]): any[] => {
+        const list = Array.isArray(rawChoices) ? rawChoices : [];
+        return list
+          .filter((ch: any) => {
+            if (typeof ch === 'string') return ch.trim().length > 0;
+            return ((ch?.text ?? ch?.filipino_name ?? '').trim().length > 0) || Boolean(ch?.image_url);
+          })
+          .map((ch: any, idx: number) => {
+            const textVal = typeof ch === 'string' ? ch.trim() : (ch?.text ?? ch?.filipino_name ?? '').trim();
+            const imgVal = typeof ch === 'object' && ch?.image_url ? ch.image_url : '';
+            return {
+              id: String(ch?.id ?? idx + 1),
+              text: textVal || `Choice #${idx + 1}`,
+              image_url: imgVal,
+            };
+          });
+      };
+
+      let sanitizedChoices = sanitizeChoices(q.choices || []);
+
+      // For mahirap (Jumble Word), provide dummy choices if empty so server validation (choices min:2) succeeds
+      if (selectedDiff === 'mahirap') {
+        const jumbleWord = q.target_item_name || q.correct_answer || 'JUMBLE';
+        sanitizedChoices = [
+          { id: '1', text: jumbleWord, image_url: '' },
+          { id: '2', text: jumbleWord, image_url: '' },
+        ];
+      } else {
+        if (sanitizedChoices.length < 2) {
+          Alert.alert('Notice', 'Please provide at least 2 choices for the question.');
+          return;
+        }
+      }
+
       await teacherService.saveQuizQuestion({
         ...q,
         category_id: selectedCategory.id,
         difficulty: selectedDiff,
+        choices: sanitizedChoices,
+        // Strip local-only fields that must not be sent to the server
+        targetItem: undefined,
+        localImageSource: undefined,
       } as any);
 
       // Instantly update local state so changes reflect immediately without waiting

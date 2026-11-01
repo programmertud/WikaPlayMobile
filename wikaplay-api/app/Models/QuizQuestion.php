@@ -78,7 +78,7 @@ class QuizQuestion extends Model
     /**
      * Resolves the current target image url dynamically from flashcard if linked.
      */
-    public function getEffectiveImageUrlAttribute(): string
+    public function getEffectiveImageUrlAttribute(): ?string
     {
         if ($this->flashcard_id && $this->relationLoaded('flashcard') && $this->flashcard) {
             return $this->flashcard->image_url ?: $this->target_image_url;

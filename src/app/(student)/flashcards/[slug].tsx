@@ -50,20 +50,30 @@ export default function FlashcardsViewerScreen() {
         const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
         if (cachedRaw && isMounted) {
           const cachedMap: Record<string, { imageUri?: string; audioUri?: string }> = JSON.parse(cachedRaw);
+          // Purge any test entries like "agilassss" from cached overrides
+          Object.keys(cachedMap).forEach((k) => {
+            if (k.includes('agila') || k.includes('sss')) {
+              delete cachedMap[k];
+            }
+          });
+          storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(cachedMap)).catch(() => {});
+
           setItems((prev) =>
-            prev.map((item) => {
-              const norm = item.filipino.toLowerCase().trim();
-              const cached = cachedMap[norm];
-              if (cached) {
-                return {
-                  ...item,
-                  // Only override if cache has a real (non-blob) URL
-                  imageUri: (cached.imageUri && !cached.imageUri.startsWith('blob:')) ? cached.imageUri : item.imageUri,
-                  audioUri: cached.audioUri || item.audioUri,
-                };
-              }
-              return item;
-            })
+            prev
+              .filter((item) => !item.filipino.toLowerCase().includes('agila') && !item.filipino.toLowerCase().includes('sss'))
+              .map((item) => {
+                const norm = item.filipino.toLowerCase().trim();
+                const cached = cachedMap[norm];
+                if (cached) {
+                  return {
+                    ...item,
+                    // Only override if cache has a real (non-blob) URL
+                    imageUri: (cached.imageUri && !cached.imageUri.startsWith('blob:')) ? cached.imageUri : item.imageUri,
+                    audioUri: cached.audioUri || item.audioUri,
+                  };
+                }
+                return item;
+              })
           );
         }
       } catch {}
@@ -117,10 +127,13 @@ export default function FlashcardsViewerScreen() {
             });
 
             // Append any extra teacher-added flashcards not in the local curriculum
+            // Only include published flashcards (is_published !== false)
             res.flashcards.forEach((f) => {
               const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
               const exists = updated.some((it) => it.filipino.toLowerCase().trim() === fNorm);
-              if (!exists && f.filipino_name) {
+              const isTestCard = fNorm.includes('agila') || fNorm.includes('sss') || (f.english_name || '').toLowerCase().includes('eagle');
+              // Skip unpublished flashcards, test cards, and items already in local curriculum
+              if (!exists && f.filipino_name && f.is_published !== false && !isTestCard) {
                 const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
                 const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
                 const isLocalFile = typeof f.image_url === 'string' && f.image_url.startsWith('file://');
@@ -142,9 +155,14 @@ export default function FlashcardsViewerScreen() {
               }
             });
 
+            // Filter out any unwanted test cards from final list
+            const cleanUpdated = updated.filter(
+              (item) => !item.filipino.toLowerCase().includes('agila') && !item.filipino.toLowerCase().includes('sss')
+            );
+
             // Persist the latest overrides to local cache for next session
             storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap)).catch(() => {});
-            return updated;
+            return cleanUpdated;
           });
         }
       } catch {

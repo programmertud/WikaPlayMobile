@@ -1025,18 +1025,25 @@ class TeacherController extends Controller
             'flashcard_id' => 'nullable|exists:flashcards,id',
             'question_text' => 'nullable|string',
             'audio_url' => 'nullable|string',
-            'choices' => 'required|array|min:2',
             'correct_answer' => 'required|string',
             'points' => 'nullable|integer',
         ];
 
-        // For katamtaman and mahirap, target_image_url and target_item_name are required
-        // For madali, these are optional (can be text-only questions)
-        if ($difficulty === 'katamtaman' || $difficulty === 'mahirap') {
+        if ($difficulty === 'mahirap') {
+            // Mahirap (Hard) = Jumble Word — no choices needed, target word is required
+            $rules['choices'] = 'nullable|array';
             $rules['target_item_name'] = 'required|string';
-            $rules['target_image_url'] = 'required|string';
+            // target_image_url is optional for mahirap (image comes from vocabulary assets)
+            $rules['target_image_url'] = 'nullable|string';
+        } elseif ($difficulty === 'katamtaman') {
+            // Katamtaman (Medium) = Voice + Picture choices — choices required
+            $rules['choices'] = 'required|array|min:2';
+            $rules['target_item_name'] = 'required|string';
+            // target_image_url is optional — may come from vocabulary assets on the device
+            $rules['target_image_url'] = 'nullable|string';
         } else {
-            // madali - make these optional for text-only questions
+            // Madali (Easy) = Text choices — target image/name are optional
+            $rules['choices'] = 'required|array|min:2';
             $rules['target_item_name'] = 'nullable|string';
             $rules['target_image_url'] = 'nullable|string';
         }
@@ -1073,7 +1080,7 @@ class TeacherController extends Controller
                 'target_item_name' => $validated['target_item_name'] ?? null,
                 'target_image_url' => $validated['target_image_url'] ?? null,
                 'audio_url' => $validated['audio_url'] ?? null,
-                'choices' => $validated['choices'],
+                'choices' => $validated['choices'] ?? [],
                 'correct_answer' => $validated['correct_answer'],
                 'points' => $validated['points'] ?? 1,
             ]

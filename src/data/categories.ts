@@ -396,7 +396,9 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
   published.forEach((f) => {
     const norm = normalizeWord(f.filipino_name || f.name || '');
     const exists = originalItems.some((it) => normalizeWord(it.filipino) === norm);
-    if (!exists && f.filipino_name) {
+    // Ignore test/duplicate cards such as "agilassss"
+    const isTestCard = norm.includes('agila') || norm.includes('sss') || normalizeWord(f.english_name).includes('eagle');
+    if (!exists && f.filipino_name && !isTestCard) {
       const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
       const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
       const customImage = f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined;
