@@ -156,8 +156,8 @@ export default function MadaliQuizScreen() {
       //   }
       // } catch {}
 
-      // 3. Fetch latest teacher quiz questions for Madali and merge with local quiz bank
-      // This allows teachers to add custom questions that students will see
+      // 3. Fetch latest teacher quiz questions for Madali
+      // Only merge if teacher has actually added custom questions
       try {
         const res = await categoryService.getQuizQuestions(slug, 'madali');
         if (res.is_locked) {
@@ -168,11 +168,12 @@ export default function MadaliQuizScreen() {
           return;
         }
 
-        // Merge local quiz bank with API custom questions
+        // Only merge API questions if they exist and we're at the start of the quiz
+        // This prevents showing 43 questions when teacher hasn't added anything
         if (mounted && res.questions && res.questions.length > 0 && currentIndex === 0 && answers.length === 0) {
           const localQuestions = getMadaliQuestionsBySlug(slug);
           const letters: AnswerId[] = ['A', 'B', 'C', 'D'];
-          
+
           // Map API questions to match local format
           const mappedApiQuestions: MadaliQuestion[] = res.questions.map((apiQ: any, idx: number) => {
             const choices = (apiQ.choices || []).slice(0, 4);
@@ -206,6 +207,18 @@ export default function MadaliQuizScreen() {
               audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) } : undefined,
             };
           });
+
+          // Only merge if API questions are actual custom questions (not auto-generated ones)
+          // Auto-generated questions typically have IDs starting with 10000+
+          const customApiQuestions = mappedApiQuestions.filter((q) => !q.id.startsWith('api_10000'));
+
+          if (customApiQuestions.length > 0) {
+            setQuestions([...localQuestions, ...customApiQuestions]);
+          }
+        }
+      } catch (err) {
+        console.warn('[MadaliQuiz] Failed to fetch API questions, using local bank only:', err);
+      }
 
           // Combine: local questions + API custom questions
           setQuestions([...localQuestions, ...mappedApiQuestions]);
