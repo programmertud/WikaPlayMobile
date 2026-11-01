@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\QuizAvailability;
 use App\Models\QuizQuestion;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class CategoryController extends Controller
 {
@@ -113,7 +114,7 @@ class CategoryController extends Controller
             ->where('is_published', true);
 
         // If student, show flashcards from their section OR global flashcards
-        if ($user && $user->isStudent() && $user->section_id) {
+        if ($user && $user->isStudent() && $user->section_id && Schema::hasColumn('flashcards', 'section_id')) {
             $flashcardsQuery->where(function ($q) use ($user) {
                 $q->where('section_id', $user->section_id)
                     ->orWhereNull('section_id');
@@ -181,7 +182,7 @@ class CategoryController extends Controller
             ->with(['flashcard' => fn ($q) => $q->where('is_published', true)]);
 
         // If student, show questions from their section OR global questions
-        if ($user && $user->isStudent() && $user->section_id) {
+        if ($user && $user->isStudent() && $user->section_id && Schema::hasColumn('quiz_questions', 'section_id')) {
             $questionsQuery->where(function ($q) use ($user) {
                 $q->where('section_id', $user->section_id)
                     ->orWhereNull('section_id');
