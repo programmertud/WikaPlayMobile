@@ -2,8 +2,9 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Shadows, Typography, Radius } from '@/theme';
+import { Colors, Gradients, Shadows, Typography, Radius } from '@/theme';
 
 function TabBarIcon({
   name,
@@ -19,8 +20,8 @@ function TabBarIcon({
     <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
       <Ionicons
         name={focused ? name : outlineName}
-        size={22}
-        color={focused ? Colors.skyBlueDark : Colors.textMuted}
+        size={24}
+        color={focused ? '#FFD700' : Colors.textMuted}
       />
     </View>
   );
@@ -31,7 +32,7 @@ export default function StudentTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.skyBlueDark,
+        tabBarActiveTintColor: Colors.white,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: styles.tabBar,
@@ -128,28 +129,29 @@ export default function StudentTabsLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     height: Platform.OS === 'ios' ? 84 : 70,
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.85)' : '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#0EA5E9',
+    borderTopWidth: 0,
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     paddingTop: 8,
+    borderTopWidth: 0,
     ...Shadows.card,
   },
   tabLabel: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
+    color: Colors.white,
   },
   iconContainer: {
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 30,
-    minWidth: 44,
+    minHeight: 34,
+    minWidth: 48,
   },
   activeIconContainer: {
-    backgroundColor: Colors.skyBlueLight,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
 });
