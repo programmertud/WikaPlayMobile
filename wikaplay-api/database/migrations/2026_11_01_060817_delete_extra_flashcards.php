@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -13,10 +14,11 @@ return new class extends Migration
         // Delete extra flashcards that were added beyond the original curriculum
         // Original curriculum has IDs up to ~150 (20 per category * ~8 categories)
         // Delete flashcards with ID > 150 that don't belong to a specific section
-        DB::table('flashcards')
-            ->where('id', '>', 150)
-            ->whereNull('section_id')
-            ->delete();
+        $query = DB::table('flashcards')->where('id', '>', 150);
+        if (Schema::hasColumn('flashcards', 'section_id')) {
+            $query->whereNull('section_id');
+        }
+        $query->delete();
     }
 
     /**

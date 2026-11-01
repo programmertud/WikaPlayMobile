@@ -11,15 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('flashcards', function (Blueprint $table) {
-            $table->unsignedBigInteger('section_id')->nullable()->after('category_id');
-            $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
-        });
+        if (! Schema::hasColumn('flashcards', 'section_id')) {
+            Schema::table('flashcards', function (Blueprint $table) {
+                $table->unsignedBigInteger('section_id')->nullable()->after('category_id');
+                $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
+            });
+        }
 
-        Schema::table('quiz_questions', function (Blueprint $table) {
-            $table->unsignedBigInteger('section_id')->nullable()->after('category_id');
-            $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
-        });
+        if (! Schema::hasColumn('quiz_questions', 'section_id')) {
+            Schema::table('quiz_questions', function (Blueprint $table) {
+                $table->unsignedBigInteger('section_id')->nullable()->after('category_id');
+                $table->foreign('section_id')->references('id')->on('sections')->onDelete('cascade');
+            });
+        }
     }
 
     /**

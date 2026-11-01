@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -12,7 +13,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Delete the "agilasssss" flashcard — match by name (case-insensitive)
+        // 1. Delete the "agilasssss" flashcard (specifically ID 155 or name matches)
+        DB::table('flashcards')->where('id', 155)->delete();
+
         DB::table('flashcards')
             ->where(function ($q) {
                 $q->where('filipino_name', 'LIKE', '%agila%')
@@ -38,7 +41,6 @@ return new class extends Migration
 
         if ($hayopCategory) {
             // Delete extra madali quiz questions beyond the first 20 for mga-hayop
-            // Get sorted question IDs for madali difficulty in mga-hayop
             $questionIds = DB::table('quiz_questions')
                 ->where('category_id', $hayopCategory->id)
                 ->where('difficulty', 'madali')
@@ -48,32 +50,31 @@ return new class extends Migration
             // Keep only the first 20 (if any), delete the rest
             if ($questionIds->count() > 20) {
                 $toDelete = $questionIds->slice(20)->values();
-                // Nullify foreign keys in quiz_answers first
                 DB::table('quiz_answers')
                     ->whereIn('question_id', $toDelete)
                     ->update(['question_id' => null]);
-                // Now delete the extra questions
                 DB::table('quiz_questions')
                     ->whereIn('id', $toDelete)
                     ->delete();
             }
 
-            // Also delete ALL madali questions for mga-hayop that were auto-generated
-            // (local quiz bank is used instead — no DB questions needed for madali)
-            // Only delete if there's no custom section-specific question
-            DB::table('quiz_questions')
+            // Also delete all auto-seeded madali questions for mga-hayop without section_id
+            $madaliQuery = DB::table('quiz_questions')
                 ->where('category_id', $hayopCategory->id)
-                ->where('difficulty', 'madali')
-                ->whereNull('section_id')
-                ->get()
-                ->each(function ($q) {
-                    DB::table('quiz_answers')
-                        ->where('question_id', $q->id)
-                        ->update(['question_id' => null]);
-                    DB::table('quiz_questions')
-                        ->where('id', $q->id)
-                        ->delete();
-                });
+                ->where('difficulty', 'madali');
+
+            if (Schema::hasColumn('quiz_questions', 'section_id')) {
+                $madaliQuery->whereNull('section_id');
+            }
+
+            $madaliQuery->get()->each(function ($q) {
+                DB::table('quiz_answers')
+                    ->where('question_id', $q->id)
+                    ->update(['question_id' => null]);
+                DB::table('quiz_questions')
+                    ->where('id', $q->id)
+                    ->delete();
+            });
         }
     }
 

@@ -600,8 +600,9 @@ export default function ContentManagementScreen({
               ...q,
               targetItem: target ?? q.targetItem,
               target_item_name: targetWord,
-              correct_answer: q.correct_answer || targetWord,
+              correct_answer: targetWord || q.correct_answer,
               localImageSource: (q as any).localImageSource || target?.image,
+              localAudioSource: (q as any).localAudioSource || target?.audio,
               audio_url:
                 q.audio_url ||
                 target?.audioUri ||
@@ -2104,7 +2105,7 @@ export default function ContentManagementScreen({
                           </Text>
                           <TouchableOpacity
                             style={{ backgroundColor: '#0284C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}
-                            onPress={() => handlePlayAudioPreview(q.audio_url || q.target_item_name)}
+                            onPress={() => handlePlayAudioPreview((q as any).localAudioSource || q.targetItem?.audio || q.audio_url || q.target_item_name)}
                           >
                             <Ionicons name="play" size={12} color="#FFF" />
                           </TouchableOpacity>
@@ -2115,9 +2116,15 @@ export default function ContentManagementScreen({
                           {q.choices?.map((choice: any, cIdx: number) => {
                             const choiceImg = typeof choice === 'object' ? choice.image_url : '';
                             const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
-                            const isCorrect = q.correct_answer && (
-                              choiceText.toLowerCase().trim() === q.correct_answer.toLowerCase().trim() ||
-                              String(cIdx) === String(q.correct_answer)
+                            const targetWord = (q.target_item_name || '').toLowerCase().trim();
+                            const answerWord = (q.correct_answer || '').toLowerCase().trim();
+                            const choiceNorm = choiceText.toLowerCase().trim();
+                            const choiceId = choice && typeof choice === 'object' ? String(choice.id || '') : '';
+                            const isCorrect = Boolean(
+                              (targetWord && choiceNorm === targetWord) ||
+                              (answerWord && choiceNorm === answerWord) ||
+                              (answerWord && choiceId && choiceId === answerWord) ||
+                              (choice?.vocabularyItem?.filipino && targetWord && choice.vocabularyItem.filipino.toLowerCase().trim() === targetWord)
                             );
                             const choiceImgSource = getQuestionVisualSource(
                               choiceImg,
@@ -2722,11 +2729,15 @@ export default function ContentManagementScreen({
                       const choice = (questionModal.question.choices || [])[choiceIndex] || {};
                       const imgUrl = typeof choice === 'object' ? choice.image_url : '';
                       const choiceText = typeof choice === 'object' ? (choice.text || '') : (choice || '');
+                      const targetWord = (questionModal.question.target_item_name || '').toLowerCase().trim();
+                      const answerWord = (questionModal.question.correct_answer || '').toLowerCase().trim();
+                      const choiceNorm = choiceText.toLowerCase().trim();
+                      const choiceId = choice && typeof choice === 'object' ? String(choice.id || '') : '';
                       const isCorrect =
                         (questionModal.question.correct_choice_index === choiceIndex) ||
-                        (questionModal.question.correct_answer &&
-                          choiceText &&
-                          questionModal.question.correct_answer.toLowerCase().trim() === choiceText.toLowerCase().trim());
+                        (choiceNorm && targetWord && choiceNorm === targetWord) ||
+                        (choiceNorm && answerWord && choiceNorm === answerWord) ||
+                        (choiceId && answerWord && choiceId === answerWord);
                       const choiceImgSource = getQuestionVisualSource(
                         imgUrl,
                         choice.localImageSource || choice.vocabularyItem?.image,
@@ -2825,6 +2836,7 @@ export default function ContentManagementScreen({
                                   ...prev.question,
                                   correct_choice_index: choiceIndex,
                                   correct_answer: choiceText || prev.question.target_item_name,
+                                  target_item_name: choiceText || prev.question.target_item_name,
                                 },
                               }));
                             }}

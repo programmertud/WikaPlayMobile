@@ -19,6 +19,7 @@ use App\Models\StudentPresence;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -736,12 +737,14 @@ class TeacherController extends Controller
         $query = Flashcard::with('category:id,name,color');
 
         // Filter by teacher's sections OR global flashcards (section_id = null)
-        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
-        if ($sectionIds->isNotEmpty()) {
-            $query->where(function ($q) use ($sectionIds) {
-                $q->whereIn('section_id', $sectionIds)
-                    ->orWhereNull('section_id');
-            });
+        if (Schema::hasColumn('flashcards', 'section_id')) {
+            $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+            if ($sectionIds->isNotEmpty()) {
+                $query->where(function ($q) use ($sectionIds) {
+                    $q->whereIn('section_id', $sectionIds)
+                        ->orWhereNull('section_id');
+                });
+            }
         }
 
         if ($categoryId) {
@@ -863,7 +866,7 @@ class TeacherController extends Controller
         if (! empty($validated['id'])) {
             $flashcard = Flashcard::find($validated['id']);
             // Verify teacher has access to this flashcard's section
-            if ($flashcard && $flashcard->section_id) {
+            if ($flashcard && Schema::hasColumn('flashcards', 'section_id') && $flashcard->section_id) {
                 $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
                 if (! $teacherSectionIds->contains($flashcard->section_id)) {
                     abort(403, 'Hindi mo mababago ang flashcard na ito dahil hindi ito sa iyong seksyon.');
@@ -884,7 +887,9 @@ class TeacherController extends Controller
         }
 
         $flashcard->category_id = $validated['category_id'];
-        $flashcard->section_id = $sectionId;
+        if (Schema::hasColumn('flashcards', 'section_id')) {
+            $flashcard->section_id = $sectionId;
+        }
         $flashcard->name = $validated['filipino_name'];
         $flashcard->filipino_name = $validated['filipino_name'];
         $flashcard->english_name = $validated['english_name'] ?? null;
@@ -1060,7 +1065,7 @@ class TeacherController extends Controller
         // If editing existing question, verify access and preserve section
         if (! empty($validated['id'])) {
             $existingQuestion = QuizQuestion::find($validated['id']);
-            if ($existingQuestion && $existingQuestion->section_id) {
+            if ($existingQuestion && Schema::hasColumn('quiz_questions', 'section_id') && $existingQuestion->section_id) {
                 $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
                 if (! $teacherSectionIds->contains($existingQuestion->section_id)) {
                     abort(403, 'Hindi mo mababago ang tanong na ito dahil hindi ito sa iyong seksyon.');
@@ -1069,21 +1074,26 @@ class TeacherController extends Controller
             }
         }
 
+        $questionData = [
+            'category_id' => $validated['category_id'],
+            'difficulty' => $validated['difficulty'],
+            'flashcard_id' => $validated['flashcard_id'] ?? null,
+            'question_text' => $validated['question_text'] ?? '',
+            'target_item_name' => $validated['target_item_name'] ?? null,
+            'target_image_url' => $validated['target_image_url'] ?? null,
+            'audio_url' => $validated['audio_url'] ?? null,
+            'choices' => $validated['choices'] ?? [],
+            'correct_answer' => $validated['correct_answer'],
+            'points' => $validated['points'] ?? 1,
+        ];
+
+        if (Schema::hasColumn('quiz_questions', 'section_id')) {
+            $questionData['section_id'] = $sectionId;
+        }
+
         $question = QuizQuestion::updateOrCreate(
             ['id' => $validated['id'] ?? null],
-            [
-                'category_id' => $validated['category_id'],
-                'section_id' => $sectionId,
-                'difficulty' => $validated['difficulty'],
-                'flashcard_id' => $validated['flashcard_id'] ?? null,
-                'question_text' => $validated['question_text'] ?? '',
-                'target_item_name' => $validated['target_item_name'] ?? null,
-                'target_image_url' => $validated['target_image_url'] ?? null,
-                'audio_url' => $validated['audio_url'] ?? null,
-                'choices' => $validated['choices'] ?? [],
-                'correct_answer' => $validated['correct_answer'],
-                'points' => $validated['points'] ?? 1,
-            ]
+            $questionData
         );
 
         return response()->json([

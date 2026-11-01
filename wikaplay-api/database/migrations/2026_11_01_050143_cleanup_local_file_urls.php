@@ -10,26 +10,26 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Clean up local file URLs from flashcards
+        // Clean up local file URLs from flashcards (use empty string because image_url column is NOT NULL in schema)
         DB::table('flashcards')
-            ->where('image_url', 'like', 'file://%')
-            ->orWhere('image_url', 'like', 'blob:%')
-            ->update(['image_url' => null]);
+            ->where('image_url', 'like', '%file://%')
+            ->orWhere('image_url', 'like', '%blob:%')
+            ->update(['image_url' => '']);
 
         DB::table('flashcards')
-            ->where('audio_url', 'like', 'file://%')
-            ->orWhere('audio_url', 'like', 'blob:%')
+            ->where('audio_url', 'like', '%file://%')
+            ->orWhere('audio_url', 'like', '%blob:%')
             ->update(['audio_url' => null]);
 
         // Clean up local file URLs from quiz questions
         DB::table('quiz_questions')
-            ->where('target_image_url', 'like', 'file://%')
-            ->orWhere('target_image_url', 'like', 'blob:%')
-            ->update(['target_image_url' => null]);
+            ->where('target_image_url', 'like', '%file://%')
+            ->orWhere('target_image_url', 'like', '%blob:%')
+            ->update(['target_image_url' => '']);
 
         DB::table('quiz_questions')
-            ->where('audio_url', 'like', 'file://%')
-            ->orWhere('audio_url', 'like', 'blob:%')
+            ->where('audio_url', 'like', '%file://%')
+            ->orWhere('audio_url', 'like', '%blob:%')
             ->update(['audio_url' => null]);
     }
 

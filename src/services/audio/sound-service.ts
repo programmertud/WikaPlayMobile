@@ -205,90 +205,58 @@ export const VOICE_OVER_WEB_PATHS: Record<string, string> = {
 export function resolveAudioSource(source: string | any): any {
   if (!source) return null;
 
-  // If it's already a valid remote or relative web URL, return it directly
-  if (typeof source === 'string') {
-    if (
-      source.startsWith('/') ||
-      source.startsWith('./') ||
-      source.startsWith('http://') ||
-      source.startsWith('https://') ||
-      source.startsWith('data:') ||
-      source.startsWith('blob:')
-    ) {
-      return source;
-    }
-  }
-
-  // On Web, prefer direct web paths from public/audio if matching ID or key
-  if (Platform.OS === 'web' && typeof source === 'string') {
-    const rawTrim = source.trim();
-    const cleanKey = rawTrim.split('/').pop()?.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase() || rawTrim;
-    if (COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim]) return COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim];
-    if (COLLECTIBLE_NARRATION_WEB_PATHS[cleanKey]) return COLLECTIBLE_NARRATION_WEB_PATHS[cleanKey];
-    if (ALL_MADALI_WEB_PATHS[rawTrim]) return ALL_MADALI_WEB_PATHS[rawTrim];
-    if (ALL_MADALI_WEB_PATHS[cleanKey]) return ALL_MADALI_WEB_PATHS[cleanKey];
-    if (VOICE_OVER_WEB_PATHS[cleanKey]) return VOICE_OVER_WEB_PATHS[cleanKey];
-  }
-
   if (typeof source !== 'string') return source;
 
-  // Extract base filename if it has path elements (e.g. "audio/mga-gulay_ampalaya.mp3" -> "mga-gulay_ampalaya.mp3")
-  const filename = source.split('/').pop() || source;
+  // Extract base filename if it has path elements (e.g. "https://wikaplay-api.../audio/mga-hayop_aso.mp3" -> "mga-hayop_aso.mp3")
+  const rawTrim = source.trim();
+  const filename = rawTrim.split('/').pop()?.split('?')[0] || rawTrim;
   const noExt = filename.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase().trim();
 
-  // Prefer collectible narration audio if present
-  if (COLLECTIBLE_NARRATION_AUDIO[filename]) {
-    return COLLECTIBLE_NARRATION_AUDIO[filename];
-  }
-  if (COLLECTIBLE_NARRATION_AUDIO[noExt]) {
-    return COLLECTIBLE_NARRATION_AUDIO[noExt];
-  }
+  // 1. Prefer collectible narration audio if present
+  if (COLLECTIBLE_NARRATION_AUDIO[filename]) return COLLECTIBLE_NARRATION_AUDIO[filename];
+  if (COLLECTIBLE_NARRATION_AUDIO[noExt]) return COLLECTIBLE_NARRATION_AUDIO[noExt];
 
-  if (LOCAL_AUDIO_ASSETS[filename]) {
-    return LOCAL_AUDIO_ASSETS[filename];
-  }
-  if (LOCAL_AUDIO_ASSETS[noExt]) {
-    return LOCAL_AUDIO_ASSETS[noExt];
-  }
-  if (LOCAL_AUDIO_ASSETS[`${noExt}.mp3`]) {
-    return LOCAL_AUDIO_ASSETS[`${noExt}.mp3`];
-  }
+  // 2. Check local bundled audio assets (solves web 404 for pre-seeded recordings)
+  if (LOCAL_AUDIO_ASSETS[filename]) return LOCAL_AUDIO_ASSETS[filename];
+  if (LOCAL_AUDIO_ASSETS[noExt]) return LOCAL_AUDIO_ASSETS[noExt];
+  if (LOCAL_AUDIO_ASSETS[`${noExt}.mp3`]) return LOCAL_AUDIO_ASSETS[`${noExt}.mp3`];
 
-  // Strip prefixes like "mga-gulay_", "gulay_", "mga-hayop_", etc.
+  // 3. Strip prefixes like "mga-gulay_", "gulay_", "mga-hayop_", etc.
   const strippedPrefix = noExt.replace(/^(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/, '');
-  if (LOCAL_AUDIO_ASSETS[strippedPrefix]) {
-    return LOCAL_AUDIO_ASSETS[strippedPrefix];
-  }
-  if (LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`]) {
-    return LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`];
-  }
+  if (LOCAL_AUDIO_ASSETS[strippedPrefix]) return LOCAL_AUDIO_ASSETS[strippedPrefix];
+  if (LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`]) return LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`];
 
-  // If there's an underscore, take the suffix (e.g. "mga-gulay_ampalaya" -> "ampalaya")
+  // 4. Suffix after underscore (e.g. "mga-hayop_aso" -> "aso")
   if (noExt.includes('_')) {
     const afterUnderscore = noExt.split('_').pop() || '';
-    if (LOCAL_AUDIO_ASSETS[afterUnderscore]) {
-      return LOCAL_AUDIO_ASSETS[afterUnderscore];
-    }
-    if (LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`]) {
-      return LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`];
-    }
+    if (LOCAL_AUDIO_ASSETS[afterUnderscore]) return LOCAL_AUDIO_ASSETS[afterUnderscore];
+    if (LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`]) return LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`];
   }
 
-  // Check direct lookup in Madali dictionary
-  if (ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix]) {
-    return ALL_MADALI_AUDIO[source] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix];
+  // 5. Madali audio dictionary
+  if (ALL_MADALI_AUDIO[rawTrim] || ALL_MADALI_AUDIO[filename] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix]) {
+    return ALL_MADALI_AUDIO[rawTrim] || ALL_MADALI_AUDIO[filename] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix];
   }
 
-  // If it's a valid remote or relative web URL, return it directly
+  // 6. Web static paths
+  if (Platform.OS === 'web') {
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim]) return COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim];
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[noExt]) return COLLECTIBLE_NARRATION_WEB_PATHS[noExt];
+    if (ALL_MADALI_WEB_PATHS[rawTrim]) return ALL_MADALI_WEB_PATHS[rawTrim];
+    if (ALL_MADALI_WEB_PATHS[noExt]) return ALL_MADALI_WEB_PATHS[noExt];
+    if (VOICE_OVER_WEB_PATHS[noExt]) return VOICE_OVER_WEB_PATHS[noExt];
+  }
+
+  // 7. Custom uploaded audio files (http/https remote URLs that teacher recorded/uploaded)
   if (
-    source.startsWith('/') ||
-    source.startsWith('./') ||
-    source.startsWith('http://') ||
-    source.startsWith('https://') ||
-    source.startsWith('data:') ||
-    source.startsWith('blob:')
+    rawTrim.startsWith('/') ||
+    rawTrim.startsWith('./') ||
+    rawTrim.startsWith('http://') ||
+    rawTrim.startsWith('https://') ||
+    rawTrim.startsWith('data:') ||
+    rawTrim.startsWith('blob:')
   ) {
-    return source;
+    return rawTrim;
   }
 
   return null;
