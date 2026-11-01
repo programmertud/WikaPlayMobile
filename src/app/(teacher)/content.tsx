@@ -766,14 +766,12 @@ export default function ContentManagementScreen({
       try {
         const form = new FormData();
         if (Platform.OS === 'web') {
+          // Web: convert to blob and append
           const resp = await fetch(asset.uri);
           const blob = await resp.blob();
-          const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
-          const file = new File([blob], asset.fileName || `image_${Date.now()}.${ext}`, {
-            type: blob.type || asset.mimeType || 'image/jpeg',
-          });
-          form.append('image', file);
+          form.append('image', blob, asset.fileName || 'image.jpg');
         } else {
+          // Mobile: use uri-based upload
           form.append('image', {
             uri: asset.uri,
             name: asset.fileName || 'image.jpg',
@@ -813,14 +811,12 @@ export default function ContentManagementScreen({
       try {
         const form = new FormData();
         if (Platform.OS === 'web') {
+          // Web: convert to blob and append
           const resp = await fetch(asset.uri);
           const blob = await resp.blob();
-          const ext = (asset.mimeType || blob.type || 'audio/mpeg').split('/')[1] || 'mp3';
-          const file = new File([blob], asset.name || `audio_${Date.now()}.${ext}`, {
-            type: blob.type || asset.mimeType || 'audio/mpeg',
-          });
-          form.append('audio', file);
+          form.append('audio', blob, asset.name || 'audio.mp3');
         } else {
+          // Mobile: use uri-based upload
           form.append('audio', {
             uri: asset.uri,
             name: asset.name,

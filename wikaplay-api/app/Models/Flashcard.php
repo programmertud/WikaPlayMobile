@@ -11,6 +11,7 @@ class Flashcard extends Model
 
     protected $fillable = [
         'category_id',
+        'section_id',
         'name',
         'filipino_name',
         'english_name',
@@ -29,6 +30,11 @@ class Flashcard extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function section()
+    {
+        return $this->belongsTo(Section::class);
     }
 
     public function linkedQuestions()

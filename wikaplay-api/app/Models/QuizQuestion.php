@@ -11,6 +11,7 @@ class QuizQuestion extends Model
 
     protected $fillable = [
         'category_id',
+        'section_id',
         'difficulty',
         'flashcard_id',
         'question_text',
@@ -39,6 +40,11 @@ class QuizQuestion extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function section()
+    {
+        return $this->belongsTo(Section::class);
+    }
+
     public function flashcard()
     {
         return $this->belongsTo(Flashcard::class);
@@ -61,7 +67,7 @@ class QuizQuestion extends Model
 
         if ($this->flashcard_id) {
             $flashcard = $this->flashcard;
-            if ($flashcard && !empty($flashcard->audio_url)) {
+            if ($flashcard && ! empty($flashcard->audio_url)) {
                 return $flashcard->audio_url;
             }
         }
@@ -80,7 +86,7 @@ class QuizQuestion extends Model
 
         if ($this->flashcard_id) {
             $flashcard = $this->flashcard;
-            if ($flashcard && !empty($flashcard->image_url)) {
+            if ($flashcard && ! empty($flashcard->image_url)) {
                 return $flashcard->image_url;
             }
         }

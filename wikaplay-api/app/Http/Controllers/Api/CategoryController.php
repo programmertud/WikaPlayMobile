@@ -15,9 +15,10 @@ class CategoryController extends Controller
      */
     public function index(Request $request)
     {
+        // Categories are global (shared curriculum), always show all published categories
         $categories = Category::where('is_published', true)
             ->withCount([
-                'flashcards' => fn($q) => $q->where('is_published', true),
+                'flashcards' => fn ($q) => $q->where('is_published', true),
             ])
             ->with('quizAvailabilities')
             ->orderBy('sort_order')
@@ -54,11 +55,22 @@ class CategoryController extends Controller
     /**
      * Get a specific category with its flashcards.
      */
-    public function show($slug)
+    public function show(Request $request, $slug)
     {
+        $user = $request->user();
+
+        $flashcardsQuery = fn ($q) => $q->where('is_published', true)->orderBy('sort_order');
+
+        // If student, only show flashcards from their section
+        if ($user && $user->isStudent() && $user->section_id) {
+            $flashcardsQuery = fn ($q) => $q->where('is_published', true)
+                ->where('section_id', $user->section_id)
+                ->orderBy('sort_order');
+        }
+
         $category = Category::where('slug', $slug)
             ->where('is_published', true)
-            ->with(['flashcards' => fn($q) => $q->where('is_published', true)->orderBy('sort_order')])
+            ->with(['flashcards' => $flashcardsQuery])
             ->with('quizAvailabilities')
             ->firstOrFail();
 
@@ -89,16 +101,23 @@ class CategoryController extends Controller
     /**
      * Get flashcards for a category.
      */
-    public function flashcards($slug)
+    public function flashcards(Request $request, $slug)
     {
+        $user = $request->user();
+
         $category = Category::where('slug', $slug)
             ->where('is_published', true)
             ->firstOrFail();
 
-        $flashcards = $category->flashcards()
-            ->where('is_published', true)
-            ->orderBy('sort_order')
-            ->get();
+        $flashcardsQuery = $category->flashcards()
+            ->where('is_published', true);
+
+        // If student, only show flashcards from their section
+        if ($user && $user->isStudent() && $user->section_id) {
+            $flashcardsQuery->where('section_id', $user->section_id);
+        }
+
+        $flashcards = $flashcardsQuery->orderBy('sort_order')->get();
 
         return response()->json([
             'category' => [
@@ -118,9 +137,11 @@ class CategoryController extends Controller
     public function getQuizQuestions(Request $request, $slug, $difficulty)
     {
         $difficulty = strtolower($difficulty);
-        if (!in_array($difficulty, ['madali', 'katamtaman', 'mahirap'])) {
+        if (! in_array($difficulty, ['madali', 'katamtaman', 'mahirap'])) {
             return response()->json(['message' => 'Di-wastong antas ng kahirapan.'], 400);
         }
+
+        $user = $request->user();
 
         $category = Category::where('slug', $slug)
             ->where('is_published', true)
@@ -140,11 +161,16 @@ class CategoryController extends Controller
         }
 
         // 2. Load questions with flashcard relation so dynamic updates reflect immediately
-        $questions = QuizQuestion::where('category_id', $category->id)
+        $questionsQuery = QuizQuestion::where('category_id', $category->id)
             ->where('difficulty', $difficulty)
-            ->with(['flashcard' => fn($q) => $q->where('is_published', true)])
-            ->orderBy('sort_order')
-            ->get();
+            ->with(['flashcard' => fn ($q) => $q->where('is_published', true)]);
+
+        // If student, only show questions from their section
+        if ($user && $user->isStudent() && $user->section_id) {
+            $questionsQuery->where('section_id', $user->section_id);
+        }
+
+        $questions = $questionsQuery->orderBy('sort_order')->get();
 
         // 3. Format questions according to difficulty requirements
         $formattedQuestions = $questions->map(function ($q) use ($difficulty) {
@@ -157,17 +183,17 @@ class CategoryController extends Controller
                 // Katamtaman: Question prominently at the top ("Nasaan ang [target]?"), 4 pictures, no text labels beneath
                 $choices = array_map(function ($choice) {
                     return [
-                        'id' => (string)($choice['id'] ?? ''),
+                        'id' => (string) ($choice['id'] ?? ''),
                         'image_url' => $choice['image_url'] ?? '',
                         'text' => '', // No names beneath pictures
                     ];
                 }, $choices);
 
                 $targetName = $q->target_item_name ?: ($q->flashcard ? $q->flashcard->filipino_name : '');
-                $questionText = !empty($q->question_text) ? $q->question_text : ('Nasaan ang ' . strtolower($targetName) . '?');
+                $questionText = ! empty($q->question_text) ? $q->question_text : ('Nasaan ang '.strtolower($targetName).'?');
             } elseif ($difficulty === 'mahirap') {
                 $targetName = $q->target_item_name ?: ($q->flashcard ? $q->flashcard->filipino_name : '');
-                $questionText = !empty($q->question_text) ? $q->question_text : 'Ayusin ang mga letra.';
+                $questionText = ! empty($q->question_text) ? $q->question_text : 'Ayusin ang mga letra.';
             } else {
                 $targetName = $q->target_item_name;
                 $questionText = $q->question_text;
@@ -181,7 +207,7 @@ class CategoryController extends Controller
                 'target_image_url' => $q->effective_image_url,
                 'target_item_name' => $targetName,
                 'choices' => $choices,
-                'correct_answer' => (string)$q->correct_answer,
+                'correct_answer' => (string) $q->correct_answer,
                 'points' => 1,
                 'difficulty' => $q->difficulty,
             ];
@@ -197,25 +223,25 @@ class CategoryController extends Controller
                 $needed = $targetCount - $existingCount;
                 for ($i = 0; $i < $needed; $i++) {
                     $targetFc = $allFlashcards[$i % count($allFlashcards)];
-                    $otherFcs = array_values(array_filter($allFlashcards, fn($f) => $f->id !== $targetFc->id));
+                    $otherFcs = array_values(array_filter($allFlashcards, fn ($f) => $f->id !== $targetFc->id));
                     shuffle($otherFcs);
                     $choiceFcs = array_merge([$targetFc], array_slice($otherFcs, 0, min(3, count($otherFcs))));
                     shuffle($choiceFcs);
 
                     $choices = array_map(function ($f) use ($difficulty) {
                         return [
-                            'id' => (string)$f->id,
+                            'id' => (string) $f->id,
                             'image_url' => $f->image_url,
                             'text' => ($difficulty === 'katamtaman') ? '' : $f->filipino_name,
                         ];
                     }, $choiceFcs);
 
                     $qText = ($difficulty === 'katamtaman')
-                        ? 'Nasaan ang ' . strtolower($targetFc->filipino_name) . '?'
+                        ? 'Nasaan ang '.strtolower($targetFc->filipino_name).'?'
                         : 'Ayusin ang mga letra.';
 
                     $correctAnswer = ($difficulty === 'katamtaman')
-                        ? (string)$targetFc->id
+                        ? (string) $targetFc->id
                         : strtoupper($targetFc->filipino_name);
 
                     $formattedQuestions->push([

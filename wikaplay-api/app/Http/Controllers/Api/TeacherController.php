@@ -701,10 +701,20 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
-        $categories = Category::withCount('flashcards')
-            ->with('quizAvailabilities')
-            ->orderBy('sort_order')
-            ->get();
+        $teacher = $request->user();
+
+        // Filter categories by teacher's sections
+        $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+
+        $query = Category::withCount('flashcards')
+            ->with('quizAvailabilities');
+
+        // Only show categories from teacher's sections
+        if ($sectionIds->isNotEmpty()) {
+            $query->whereIn('section_id', $sectionIds);
+        }
+
+        $categories = $query->orderBy('sort_order')->get();
 
         return response()->json(['categories' => $categories]);
     }
@@ -756,6 +766,8 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
+        $teacher = $request->user();
+
         $validated = $request->validate([
             'id' => 'nullable|exists:categories,id',
             'name' => 'required|string|max:191',
@@ -768,6 +780,25 @@ class TeacherController extends Controller
 
         $slug = Str::slug($validated['name']);
 
+        // Get teacher's active section
+        $activeSection = Section::where('teacher_id', $teacher->id)
+            ->where('status', 'active')
+            ->first();
+
+        $sectionId = $activeSection ? $activeSection->id : null;
+
+        // If editing an existing category, ensure it belongs to this teacher's section
+        if (! empty($validated['id'])) {
+            $existingCategory = Category::find($validated['id']);
+            if ($existingCategory && $existingCategory->section_id) {
+                $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+                if (! $teacherSectionIds->contains($existingCategory->section_id)) {
+                    abort(403, 'Hindi mo mababago ang kategoryang ito dahil hindi ito sa iyong seksyon.');
+                }
+                $sectionId = $existingCategory->section_id;
+            }
+        }
+
         $category = Category::updateOrCreate(
             ['id' => $validated['id'] ?? null],
             [
@@ -778,6 +809,7 @@ class TeacherController extends Controller
                 'cover_image' => $validated['cover_image'] ?? null,
                 'color' => $validated['color'] ?? '#38BDF8',
                 'is_published' => $validated['is_published'] ?? true,
+                'section_id' => $sectionId,
             ]
         );
 
@@ -802,6 +834,8 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
+        $teacher = $request->user();
+
         $validated = $request->validate([
             'id' => 'nullable|integer',
             'category_id' => 'required|exists:categories,id',
@@ -813,10 +847,25 @@ class TeacherController extends Controller
             'is_published' => 'nullable|boolean',
         ]);
 
+        // Get teacher's active section
+        $activeSection = Section::where('teacher_id', $teacher->id)
+            ->where('status', 'active')
+            ->first();
+
+        $sectionId = $activeSection ? $activeSection->id : null;
+
         $flashcard = null;
         // If ID is provided, always update that specific flashcard
         if (! empty($validated['id'])) {
             $flashcard = Flashcard::find($validated['id']);
+            // Verify teacher has access to this flashcard's section
+            if ($flashcard && $flashcard->section_id) {
+                $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+                if (! $teacherSectionIds->contains($flashcard->section_id)) {
+                    abort(403, 'Hindi mo mababago ang flashcard na ito dahil hindi ito sa iyong seksyon.');
+                }
+                $sectionId = $flashcard->section_id;
+            }
         }
         // Only search by name if no ID was provided (creating new flashcard)
         if (! $flashcard) {
@@ -831,6 +880,7 @@ class TeacherController extends Controller
         }
 
         $flashcard->category_id = $validated['category_id'];
+        $flashcard->section_id = $sectionId;
         $flashcard->name = $validated['filipino_name'];
         $flashcard->filipino_name = $validated['filipino_name'];
         $flashcard->english_name = $validated['english_name'] ?? null;
@@ -954,6 +1004,7 @@ class TeacherController extends Controller
     {
         $this->authorizeTeacher($request);
 
+        $teacher = $request->user();
         $difficulty = $request->input('difficulty');
 
         // Convert empty strings to null for optional fields
@@ -988,10 +1039,30 @@ class TeacherController extends Controller
 
         $validated = $request->validate($rules);
 
+        // Get teacher's active section
+        $activeSection = Section::where('teacher_id', $teacher->id)
+            ->where('status', 'active')
+            ->first();
+
+        $sectionId = $activeSection ? $activeSection->id : null;
+
+        // If editing existing question, verify access and preserve section
+        if (! empty($validated['id'])) {
+            $existingQuestion = QuizQuestion::find($validated['id']);
+            if ($existingQuestion && $existingQuestion->section_id) {
+                $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+                if (! $teacherSectionIds->contains($existingQuestion->section_id)) {
+                    abort(403, 'Hindi mo mababago ang tanong na ito dahil hindi ito sa iyong seksyon.');
+                }
+                $sectionId = $existingQuestion->section_id;
+            }
+        }
+
         $question = QuizQuestion::updateOrCreate(
             ['id' => $validated['id'] ?? null],
             [
                 'category_id' => $validated['category_id'],
+                'section_id' => $sectionId,
                 'difficulty' => $validated['difficulty'],
                 'flashcard_id' => $validated['flashcard_id'] ?? null,
                 'question_text' => $validated['question_text'] ?? '',
