@@ -7,6 +7,7 @@ export interface User {
   role: UserRole;
   avatar?: string | null;
   section?: string | null;
+  section_id?: number | null;
   stars_balance: number;
   student_id_code?: string | null;
   status?: 'active' | 'pending_approval' | 'disabled';

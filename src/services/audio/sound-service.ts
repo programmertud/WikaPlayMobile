@@ -56,6 +56,21 @@ LEARNING_CATEGORIES.forEach((category) => {
   });
 });
 
+// Explicit aliases for buko and niyog
+if (LOCAL_AUDIO_ASSETS['prutas_buko']) {
+  const bukoAsset = LOCAL_AUDIO_ASSETS['prutas_buko'];
+  LOCAL_AUDIO_ASSETS['niyog'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['niyog.mp3'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['Niyog.mp3'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['prutas_niyog'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['prutas_niyog.mp3'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['mga-prutas_niyog'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['mga-prutas_niyog.mp3'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['buko'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['buko.mp3'] = bukoAsset;
+  LOCAL_AUDIO_ASSETS['Buko.mp3'] = bukoAsset;
+}
+
 // Backward-compatible HAYOP_AUDIO_ASSETS export
 export const HAYOP_AUDIO_ASSETS: Record<string, any> = {};
 const hayopCategory = LEARNING_CATEGORIES.find((c) => c.id === 'cat_hayop');
@@ -199,6 +214,113 @@ export const VOICE_OVER_WEB_PATHS: Record<string, string> = {
   'subukan ulit': '/audio/VOICE OVERS/subukan ulit.mp3',
 };
 
+// Static Web paths for vocabulary flashcards across all 8 learning categories
+export const VOCABULARY_WEB_PATHS: Record<string, string> = {};
+
+LEARNING_CATEGORIES.forEach((category) => {
+  category.items.forEach((item) => {
+    const fil = item.filipino.toLowerCase().trim();
+    const cap = fil.charAt(0).toUpperCase() + fil.slice(1);
+
+    let folder = '';
+    let isLower = false;
+    const catId = category.id;
+    if (catId === 'cat_hayop') {
+      folder = 'HAYOP';
+    } else if (catId === 'cat_prutas') {
+      folder = 'PRUTAS';
+    } else if (catId === 'cat_gulay') {
+      folder = 'GULAY';
+    } else if (catId === 'cat_kulay') {
+      folder = 'KULAY';
+    } else if (catId === 'cat_hugis') {
+      folder = 'HUGIS';
+      isLower = true;
+    } else if (catId === 'cat_bilang') {
+      folder = 'NUMERO';
+    } else if (catId === 'cat_katawan') {
+      folder = 'PARTE NG KATAWAN';
+      isLower = true;
+    } else if (catId === 'cat_pagbati') {
+      folder = 'MGA BATIAN';
+      isLower = true;
+    }
+
+    if (folder) {
+      const fileName = isLower ? fil : cap;
+      const finalPath = `/audio/${folder}/${fileName}.mp3`;
+      VOCABULARY_WEB_PATHS[item.id] = finalPath;
+      VOCABULARY_WEB_PATHS[`${item.id}.mp3`] = finalPath;
+      VOCABULARY_WEB_PATHS[fil] = finalPath;
+      VOCABULARY_WEB_PATHS[`${fil}.mp3`] = finalPath;
+      VOCABULARY_WEB_PATHS[cap] = finalPath;
+      VOCABULARY_WEB_PATHS[`${cap}.mp3`] = finalPath;
+      VOCABULARY_WEB_PATHS[`${category.slug}_${fil}`] = finalPath;
+      VOCABULARY_WEB_PATHS[`${category.slug}_${fil}.mp3`] = finalPath;
+    }
+  });
+});
+
+// Explicit aliases and overrides for special vocabulary recordings
+// Prutas: buko uses Niyog.mp3, balimbing has normalized names
+VOCABULARY_WEB_PATHS['prutas_buko'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['prutas_buko.mp3'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['buko'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['buko.mp3'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['prutas_niyog'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['prutas_niyog.mp3'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['niyog'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['niyog.mp3'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['mga-prutas_buko'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['mga-prutas_buko.mp3'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['mga-prutas_niyog'] = '/audio/PRUTAS/Niyog.mp3';
+VOCABULARY_WEB_PATHS['mga-prutas_niyog.mp3'] = '/audio/PRUTAS/Niyog.mp3';
+
+VOCABULARY_WEB_PATHS['prutas_balimbing'] = '/audio/PRUTAS/Balimbing.mp3';
+VOCABULARY_WEB_PATHS['prutas_balimbing.mp3'] = '/audio/PRUTAS/Balimbing.mp3';
+VOCABULARY_WEB_PATHS['balimbing'] = '/audio/PRUTAS/Balimbing.mp3';
+VOCABULARY_WEB_PATHS['balimbing.mp3'] = '/audio/PRUTAS/Balimbing.mp3';
+VOCABULARY_WEB_PATHS['balimbing .mp3'] = '/audio/PRUTAS/Balimbing.mp3';
+VOCABULARY_WEB_PATHS['mga-prutas_balimbing'] = '/audio/PRUTAS/Balimbing.mp3';
+VOCABULARY_WEB_PATHS['mga-prutas_balimbing.mp3'] = '/audio/PRUTAS/Balimbing.mp3';
+
+VOCABULARY_WEB_PATHS['gulay_sibuyas'] = '/audio/GULAY/Sibuyas.mp3';
+VOCABULARY_WEB_PATHS['gulay_sibuyas.mp3'] = '/audio/GULAY/Sibuyas.mp3';
+VOCABULARY_WEB_PATHS['sibuyas'] = '/audio/GULAY/Sibuyas.mp3';
+VOCABULARY_WEB_PATHS['sibuyas.mp3'] = '/audio/GULAY/Sibuyas.mp3';
+VOCABULARY_WEB_PATHS['sibuyas .mp3'] = '/audio/GULAY/Sibuyas.mp3';
+VOCABULARY_WEB_PATHS['mga-gulay_sibuyas'] = '/audio/GULAY/Sibuyas.mp3';
+VOCABULARY_WEB_PATHS['mga-gulay_sibuyas.mp3'] = '/audio/GULAY/Sibuyas.mp3';
+
+VOCABULARY_WEB_PATHS['hugis_silindro'] = '/audio/HUGIS/silindro.mp3';
+VOCABULARY_WEB_PATHS['hugis_silindro.mp3'] = '/audio/HUGIS/silindro.mp3';
+VOCABULARY_WEB_PATHS['silindro'] = '/audio/HUGIS/silindro.mp3';
+VOCABULARY_WEB_PATHS['silindro.mp3'] = '/audio/HUGIS/silindro.mp3';
+VOCABULARY_WEB_PATHS['silindro .mp3'] = '/audio/HUGIS/silindro.mp3';
+VOCABULARY_WEB_PATHS['mga-hugis_silindro'] = '/audio/HUGIS/silindro.mp3';
+VOCABULARY_WEB_PATHS['mga-hugis_silindro.mp3'] = '/audio/HUGIS/silindro.mp3';
+
+// Unlock browser audio upon first user gesture
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  const unlockAudioContext = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+      }
+    } catch {}
+    window.removeEventListener('click', unlockAudioContext);
+    window.removeEventListener('touchstart', unlockAudioContext);
+    window.removeEventListener('keydown', unlockAudioContext);
+  };
+  window.addEventListener('click', unlockAudioContext, { once: true, passive: true });
+  window.addEventListener('touchstart', unlockAudioContext, { once: true, passive: true });
+  window.addEventListener('keydown', unlockAudioContext, { once: true, passive: true });
+}
+
 /**
  * Resolve an audio key or URL to a playable source
  */
@@ -212,39 +334,67 @@ export function resolveAudioSource(source: string | any): any {
   const filename = rawTrim.split('/').pop()?.split('?')[0] || rawTrim;
   const noExt = filename.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase().trim();
 
-  // 1. Prefer collectible narration audio if present
-  if (COLLECTIBLE_NARRATION_AUDIO[filename]) return COLLECTIBLE_NARRATION_AUDIO[filename];
-  if (COLLECTIBLE_NARRATION_AUDIO[noExt]) return COLLECTIBLE_NARRATION_AUDIO[noExt];
+  // If source already starts with /audio/ or audio/, return the normalized direct path directly
+  if (rawTrim.startsWith('/audio/') || rawTrim.startsWith('audio/')) {
+    return rawTrim.startsWith('/') ? rawTrim : `/${rawTrim}`;
+  }
 
-  // 2. Check local bundled audio assets (solves web 404 for pre-seeded recordings)
+  // On Web, prefer direct web paths from public/audio to avoid Metro unstable_path 404s
+  if (Platform.OS === 'web') {
+    // 1. Feedback sounds (tama, mali, magaling)
+    if (VOICE_OVER_WEB_PATHS[noExt]) return VOICE_OVER_WEB_PATHS[noExt];
+    if (VOICE_OVER_WEB_PATHS[rawTrim]) return VOICE_OVER_WEB_PATHS[rawTrim];
+
+    // 2. Madali quiz prompt voice audios
+    if (ALL_MADALI_WEB_PATHS[rawTrim] || ALL_MADALI_WEB_PATHS[filename] || ALL_MADALI_WEB_PATHS[noExt]) {
+      return ALL_MADALI_WEB_PATHS[rawTrim] || ALL_MADALI_WEB_PATHS[filename] || ALL_MADALI_WEB_PATHS[noExt];
+    }
+
+    // 3. Vocabulary flashcards pronunciation (CRITICAL: checked BEFORE collectible narration so 'abukado' plays Abukado.mp3, NOT the long story!)
+    if (VOCABULARY_WEB_PATHS[rawTrim] || VOCABULARY_WEB_PATHS[filename] || VOCABULARY_WEB_PATHS[noExt]) {
+      return VOCABULARY_WEB_PATHS[rawTrim] || VOCABULARY_WEB_PATHS[filename] || VOCABULARY_WEB_PATHS[noExt];
+    }
+
+    // 4. Collectible story narration (.m4a) — only for collectible cards/slugs
+    if (COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim] || COLLECTIBLE_NARRATION_WEB_PATHS[filename] || COLLECTIBLE_NARRATION_WEB_PATHS[noExt]) {
+      return COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim] || COLLECTIBLE_NARRATION_WEB_PATHS[filename] || COLLECTIBLE_NARRATION_WEB_PATHS[noExt];
+    }
+  }
+
+  // 1. Check local bundled audio assets (solves abukado and all 151 vocabulary words on mobile APK)
   if (LOCAL_AUDIO_ASSETS[filename]) return LOCAL_AUDIO_ASSETS[filename];
   if (LOCAL_AUDIO_ASSETS[noExt]) return LOCAL_AUDIO_ASSETS[noExt];
   if (LOCAL_AUDIO_ASSETS[`${noExt}.mp3`]) return LOCAL_AUDIO_ASSETS[`${noExt}.mp3`];
 
-  // 3. Strip prefixes like "mga-gulay_", "gulay_", "mga-hayop_", etc.
+  // 2. Strip prefixes like "mga-gulay_", "gulay_", "mga-hayop_", etc.
   const strippedPrefix = noExt.replace(/^(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/, '');
   if (LOCAL_AUDIO_ASSETS[strippedPrefix]) return LOCAL_AUDIO_ASSETS[strippedPrefix];
   if (LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`]) return LOCAL_AUDIO_ASSETS[`${strippedPrefix}.mp3`];
 
-  // 4. Suffix after underscore (e.g. "mga-hayop_aso" -> "aso")
+  // 3. Suffix after underscore (e.g. "mga-hayop_aso" -> "aso")
   if (noExt.includes('_')) {
     const afterUnderscore = noExt.split('_').pop() || '';
     if (LOCAL_AUDIO_ASSETS[afterUnderscore]) return LOCAL_AUDIO_ASSETS[afterUnderscore];
     if (LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`]) return LOCAL_AUDIO_ASSETS[`${afterUnderscore}.mp3`];
   }
 
-  // 5. Madali audio dictionary
+  // 4. Madali audio dictionary
   if (ALL_MADALI_AUDIO[rawTrim] || ALL_MADALI_AUDIO[filename] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix]) {
     return ALL_MADALI_AUDIO[rawTrim] || ALL_MADALI_AUDIO[filename] || ALL_MADALI_AUDIO[noExt] || ALL_MADALI_AUDIO[strippedPrefix];
   }
 
-  // 6. Web static paths
+  // 5. Collectible story narration audio (.m4a)
+  if (COLLECTIBLE_NARRATION_AUDIO[filename]) return COLLECTIBLE_NARRATION_AUDIO[filename];
+  if (COLLECTIBLE_NARRATION_AUDIO[noExt]) return COLLECTIBLE_NARRATION_AUDIO[noExt];
+
+  // 6. Web static paths fallback
   if (Platform.OS === 'web') {
+    if (VOICE_OVER_WEB_PATHS[noExt]) return VOICE_OVER_WEB_PATHS[noExt];
+    if (VOCABULARY_WEB_PATHS[noExt]) return VOCABULARY_WEB_PATHS[noExt];
     if (COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim]) return COLLECTIBLE_NARRATION_WEB_PATHS[rawTrim];
     if (COLLECTIBLE_NARRATION_WEB_PATHS[noExt]) return COLLECTIBLE_NARRATION_WEB_PATHS[noExt];
     if (ALL_MADALI_WEB_PATHS[rawTrim]) return ALL_MADALI_WEB_PATHS[rawTrim];
     if (ALL_MADALI_WEB_PATHS[noExt]) return ALL_MADALI_WEB_PATHS[noExt];
-    if (VOICE_OVER_WEB_PATHS[noExt]) return VOICE_OVER_WEB_PATHS[noExt];
   }
 
   // 7. Custom uploaded audio files (http/https remote URLs that teacher recorded/uploaded)
@@ -378,7 +528,12 @@ export async function playSound(
       // If still no URI and source was a string, try web path maps
       if (!webUri && typeof source === 'string') {
         const clean = source.trim().toLowerCase();
-        webUri = ALL_MADALI_WEB_PATHS[clean] || VOICE_OVER_WEB_PATHS[clean] || '';
+        webUri =
+          VOICE_OVER_WEB_PATHS[clean] ||
+          ALL_MADALI_WEB_PATHS[clean] ||
+          COLLECTIBLE_NARRATION_WEB_PATHS[clean] ||
+          VOCABULARY_WEB_PATHS[clean] ||
+          '';
       }
 
       // Check COLLECTIBLE_NARRATION_AUDIO if source is a number, find its key and use web path
@@ -391,13 +546,41 @@ export async function playSound(
         }
       }
 
-      // Last resort: if source is a number, find its key in ALL_MADALI_AUDIO and use web path
+      // Check ALL_MADALI_AUDIO if source is a number, find its key and use web path
       if (!webUri && typeof source === 'number') {
         for (const [key, asset] of Object.entries(ALL_MADALI_AUDIO)) {
           if (asset === source) {
             webUri = ALL_MADALI_WEB_PATHS[key] || '';
             break;
           }
+        }
+      }
+
+      // Normalize Metro web asset URLs to public folder URLs
+      if (webUri) {
+        if (webUri.includes('unstable_path=')) {
+          try {
+            const match = webUri.match(/unstable_path=([^&]+)/);
+            if (match) {
+              const decoded = decodeURIComponent(match[1]);
+              const audioIdx = decoded.toLowerCase().indexOf('assets/audio/');
+              if (audioIdx !== -1) {
+                webUri = '/' + decoded.substring(audioIdx).replace(/\\/g, '/').replace(/^assets\//i, '');
+              } else {
+                webUri = decoded.replace(/^.*?assets\/audio\//i, '/audio/').replace(/\\/g, '/');
+              }
+            }
+          } catch {}
+        }
+        if (webUri.includes('assets/audio/')) {
+          webUri = webUri.replace(/^.*?assets\/audio\//i, '/audio/').replace(/\\/g, '/');
+        }
+
+        // Rewrite localhost storage URLs to live Render backend
+        if (webUri.startsWith('http://localhost/storage/') || webUri.startsWith('https://localhost/storage/')) {
+          webUri = webUri.replace(/https?:\/\/localhost\/storage\//, 'https://wikaplay-api.onrender.com/storage/');
+        } else if (webUri.startsWith('/storage/')) {
+          webUri = `https://wikaplay-api.onrender.com${webUri}`;
         }
       }
 
@@ -430,7 +613,7 @@ export async function playSound(
 
         audio.play().catch((err) => {
           // Autoplay policy or gesture required
-          console.warn('[SoundService] Play error (autoplay gesture policy):', err?.message);
+          console.warn('[SoundService] Play notice:', err?.message || err);
           finish();
         });
 
@@ -544,6 +727,17 @@ export async function playVocabularyItem(
     return playSound(item.audioUri, onFinished);
   }
 
+  // On Web, check direct web path first to avoid Metro bundler packager 404s
+  if (Platform.OS === 'web') {
+    const fil = item.filipino?.toLowerCase().trim();
+    if (fil && VOCABULARY_WEB_PATHS[fil]) {
+      return playSound(VOCABULARY_WEB_PATHS[fil], onFinished);
+    }
+    if (item.id && VOCABULARY_WEB_PATHS[item.id]) {
+      return playSound(VOCABULARY_WEB_PATHS[item.id], onFinished);
+    }
+  }
+
   // 2. Direct audio asset attached to item (e.g. require('../../assets/audio/...'))
   if (item.audio) {
     return playSound(item.audio, onFinished);
@@ -631,6 +825,9 @@ export async function playFeedbackSound(
 export const MALIGAYANG_PAGDATING_AUDIO = require('../../../assets/audio/MGA BATIAN/maligayang pagdating.mp3');
 
 export async function playWelcomeSound(onFinished?: () => void): Promise<() => void> {
+  if (Platform.OS === 'web') {
+    return playSound('/audio/MGA BATIAN/maligayang pagdating.mp3', onFinished);
+  }
   return playSound(MALIGAYANG_PAGDATING_AUDIO, onFinished);
 }
 

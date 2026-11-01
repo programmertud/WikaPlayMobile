@@ -58,14 +58,18 @@ class CategoryController extends Controller
      */
     public function show(Request $request, $slug)
     {
-        $user = $request->user();
+        $user = $request->user() ?? auth('sanctum')->user();
+        $sectionId = ($user && $user->section_id) ? $user->section_id : $request->query('section_id');
 
         $flashcardsQuery = fn ($q) => $q->where('is_published', true)->orderBy('sort_order');
 
-        // If student, only show flashcards from their section
-        if ($user && $user->isStudent() && $user->section_id) {
+        // If student belongs to a section, show flashcards from their section OR global flashcards
+        if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
             $flashcardsQuery = fn ($q) => $q->where('is_published', true)
-                ->where('section_id', $user->section_id)
+                ->where(function ($sq) use ($sectionId) {
+                    $sq->where('section_id', $sectionId)
+                        ->orWhereNull('section_id');
+                })
                 ->orderBy('sort_order');
         }
 
@@ -104,7 +108,8 @@ class CategoryController extends Controller
      */
     public function flashcards(Request $request, $slug)
     {
-        $user = $request->user();
+        $user = $request->user() ?? auth('sanctum')->user();
+        $sectionId = ($user && $user->section_id) ? $user->section_id : $request->query('section_id');
 
         $category = Category::where('slug', $slug)
             ->where('is_published', true)
@@ -113,15 +118,22 @@ class CategoryController extends Controller
         $flashcardsQuery = $category->flashcards()
             ->where('is_published', true);
 
-        // If student, show flashcards from their section OR global flashcards
-        if ($user && $user->isStudent() && $user->section_id && Schema::hasColumn('flashcards', 'section_id')) {
-            $flashcardsQuery->where(function ($q) use ($user) {
-                $q->where('section_id', $user->section_id)
+        // If student belongs to a section, show flashcards from their section OR global flashcards
+        if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
+            $flashcardsQuery->where(function ($q) use ($sectionId) {
+                $q->where('section_id', $sectionId)
                     ->orWhereNull('section_id');
             });
         }
 
         $flashcards = $flashcardsQuery->orderBy('sort_order')->get();
+
+        // If in a section, ensure teacher's section-specific flashcards override global ones for the same word
+        if ($sectionId) {
+            $flashcards = $flashcards->sortByDesc(fn ($fc) => $fc->section_id ? 1 : 0)
+                ->unique(fn ($fc) => mb_strtolower(trim($fc->filipino_name ?: $fc->name), 'UTF-8'))
+                ->values();
+        }
 
         // Convert relative image URLs to full URLs
         $flashcards = $flashcards->map(function ($flashcard) {
@@ -157,7 +169,8 @@ class CategoryController extends Controller
             return response()->json(['message' => 'Di-wastong antas ng kahirapan.'], 400);
         }
 
-        $user = $request->user();
+        $user = $request->user() ?? auth('sanctum')->user();
+        $sectionId = ($user && $user->section_id) ? $user->section_id : $request->query('section_id');
 
         $category = Category::where('slug', $slug)
             ->where('is_published', true)
@@ -181,15 +194,22 @@ class CategoryController extends Controller
             ->where('difficulty', $difficulty)
             ->with(['flashcard' => fn ($q) => $q->where('is_published', true)]);
 
-        // If student, show questions from their section OR global questions
-        if ($user && $user->isStudent() && $user->section_id && Schema::hasColumn('quiz_questions', 'section_id')) {
-            $questionsQuery->where(function ($q) use ($user) {
-                $q->where('section_id', $user->section_id)
+        // If student belongs to a section, show questions from their section OR global questions
+        if ($sectionId && Schema::hasColumn('quiz_questions', 'section_id')) {
+            $questionsQuery->where(function ($q) use ($sectionId) {
+                $q->where('section_id', $sectionId)
                     ->orWhereNull('section_id');
             });
         }
 
         $questions = $questionsQuery->orderBy('sort_order')->get();
+
+        // If in a section, teacher's section-specific questions override base questions
+        if ($sectionId) {
+            $questions = $questions->sortByDesc(fn ($q) => $q->section_id ? 1 : 0)
+                ->unique(fn ($q) => ($q->target_item_name ?: $q->correct_answer ?: $q->id))
+                ->values();
+        }
 
         // 3. Format questions according to difficulty requirements
         $formattedQuestions = $questions->map(function ($q) use ($difficulty) {
@@ -235,7 +255,19 @@ class CategoryController extends Controller
         // Ensure Katamtaman and Mahirap quizzes have 20 questions
         $targetCount = ($difficulty === 'katamtaman' || $difficulty === 'mahirap') ? 20 : 10;
         if ($formattedQuestions->count() < $targetCount) {
-            $flashcards = $category->flashcards()->where('is_published', true)->get();
+            $fcQuery = $category->flashcards()->where('is_published', true);
+            if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
+                $fcQuery->where(function ($q) use ($sectionId) {
+                    $q->where('section_id', $sectionId)
+                        ->orWhereNull('section_id');
+                });
+            }
+            $flashcards = $fcQuery->get();
+            if ($sectionId) {
+                $flashcards = $flashcards->sortByDesc(fn ($fc) => $fc->section_id ? 1 : 0)
+                    ->unique(fn ($fc) => mb_strtolower(trim($fc->filipino_name ?: $fc->name), 'UTF-8'))
+                    ->values();
+            }
             if ($flashcards->isNotEmpty()) {
                 $allFlashcards = $flashcards->all();
                 $existingCount = $formattedQuestions->count();

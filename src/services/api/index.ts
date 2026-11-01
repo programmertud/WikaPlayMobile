@@ -106,22 +106,24 @@ export const categoryService = {
     return data.category;
   },
 
-  getFlashcards: async (slug: string) => {
+  getFlashcards: async (slug: string, sectionId?: number | null) => {
+    const qs = sectionId ? `?section_id=${sectionId}` : '';
     const data = await ApiClient.get<{
       category: { id: number; slug: string; name: string; color: string };
       flashcards: Flashcard[];
-    }>(`categories/${slug}/flashcards`);
+    }>(`categories/${slug}/flashcards${qs}`);
     return data;
   },
 
-  getQuizQuestions: async (slug: string, difficulty: QuizDifficulty) => {
+  getQuizQuestions: async (slug: string, difficulty: QuizDifficulty, sectionId?: number | null) => {
+    const qs = sectionId ? `?section_id=${sectionId}` : '';
     return ApiClient.get<{
       category: { id: number; slug: string; name: string; color: string };
       difficulty: QuizDifficulty;
       is_locked: boolean;
       pass_score: number;
       questions: QuizQuestion[];
-    }>(`categories/${slug}/quizzes/${difficulty}`).catch((error: any) => {
+    }>(`categories/${slug}/quizzes/${difficulty}${qs}`).catch((error: any) => {
       if (error?.status === 403 || error?.response?.status === 403) {
         return { is_locked: true, category: { name: slug, id: 0, color: '' }, difficulty, pass_score: 3, questions: [] };
       }

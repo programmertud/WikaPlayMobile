@@ -48,7 +48,7 @@ export const LEARNING_CATEGORIES: LearningCategory[] = [
       { id: 'prutas_atis',     categoryId: 'cat_prutas', filipino: 'atis',     english: 'sugar apple',  emoji: '🍈', image: require('../../assets/images/Prutas/Atis.jpg'),          audio: require('../../assets/audio/PRUTAS/Atis.mp3') },
       { id: 'prutas_balimbing',categoryId: 'cat_prutas', filipino: 'balimbing',english: 'star fruit',   emoji: '⭐', image: require('../../assets/images/Prutas/Balimbing.jpg'),     audio: require('../../assets/audio/PRUTAS/Balimbing .mp3') },
       { id: 'prutas_bayabas',  categoryId: 'cat_prutas', filipino: 'bayabas',  english: 'guava',        emoji: '🍐', image: require('../../assets/images/Prutas/Bayabas.jpg'),       audio: require('../../assets/audio/PRUTAS/Bayabas.mp3') },
-      { id: 'prutas_buko',     categoryId: 'cat_prutas', filipino: 'buko',     english: 'young coconut',emoji: '🥥', image: require('../../assets/images/Prutas/Buko o Niyog.jpg'), audio: require('../../assets/audio/PRUTAS/Niyog.mp3') },
+      { id: 'prutas_buko',     categoryId: 'cat_prutas', filipino: 'buko',      english: 'young coconut',emoji: '🥥', image: require('../../assets/images/Prutas/Buko o Niyog.jpg'), audio: require('../../assets/audio/PRUTAS/Niyog.mp3') },
       { id: 'prutas_durian',   categoryId: 'cat_prutas', filipino: 'durian',   english: 'durian',       emoji: '🍈', image: require('../../assets/images/Prutas/Durian.jpg'),        audio: require('../../assets/audio/PRUTAS/Durian.mp3') },
       { id: 'prutas_kakao',    categoryId: 'cat_prutas', filipino: 'kakao',    english: 'cacao',        emoji: '🍫', image: require('../../assets/images/Prutas/Kakao.jpg'),         audio: require('../../assets/audio/PRUTAS/Kakao.mp3') },
       { id: 'prutas_langka',   categoryId: 'cat_prutas', filipino: 'langka',   english: 'jackfruit',    emoji: '🍍', image: require('../../assets/images/Prutas/Langka.jpg'),        audio: require('../../assets/audio/PRUTAS/Langka.mp3') },
@@ -396,8 +396,8 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
   published.forEach((f) => {
     const norm = normalizeWord(f.filipino_name || f.name || '');
     const exists = originalItems.some((it) => normalizeWord(it.filipino) === norm);
-    // Ignore test/duplicate cards such as "agilassss"
-    const isTestCard = norm.includes('agila') || norm.includes('sss') || normalizeWord(f.english_name).includes('eagle');
+    // Ignore test/duplicate cards with repeated letters (e.g. "agilasssss")
+    const isTestCard = f.id === 155 || /s{3,}/i.test(norm) || /s{3,}/i.test(f.english_name || '');
     if (!exists && f.filipino_name && !isTestCard) {
       const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
       const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');

@@ -20,7 +20,9 @@ import { AudioButton } from '../../../components/AudioButton';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
+import { resolveAvatarUrl } from '../../../components/UserAvatar';
 import { getCategoryBySlug, syncCategoryFlashcards } from '../../../data/categories';
+import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { playVocabularyItem, stopCurrentSound, useBgmDuck } from '../../../services/audio/sound-service';
@@ -34,6 +36,7 @@ const CARD_SIZE = Math.min(width - 48, 340);
 
 export default function FlashcardsViewerScreen() {
   useBgmDuck();
+  const { user } = useAuth();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const category = getCategoryBySlug(slug);
   const [items, setItems] = useState<VocabularyItem[]>(category.items);
@@ -50,9 +53,9 @@ export default function FlashcardsViewerScreen() {
         const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
         if (cachedRaw && isMounted) {
           const cachedMap: Record<string, { imageUri?: string; audioUri?: string }> = JSON.parse(cachedRaw);
-          // Purge any test entries like "agilassss" from cached overrides
+          // Purge legacy test artifacts with repeated letters (e.g. "agilasssss")
           Object.keys(cachedMap).forEach((k) => {
-            if (k.includes('agila') || k.includes('sss')) {
+            if (/s{3,}/i.test(k)) {
               delete cachedMap[k];
             }
           });
@@ -60,7 +63,7 @@ export default function FlashcardsViewerScreen() {
 
           setItems((prev) =>
             prev
-              .filter((item) => !item.filipino.toLowerCase().includes('agila') && !item.filipino.toLowerCase().includes('sss'))
+              .filter((item) => !/s{3,}/i.test(item.filipino))
               .map((item) => {
                 const norm = item.filipino.toLowerCase().trim();
                 const cached = cachedMap[norm];
@@ -80,7 +83,7 @@ export default function FlashcardsViewerScreen() {
 
       // Step 2: Always fetch from the live backend API — teacher updates must appear immediately
       try {
-        const res = await categoryService.getFlashcards(slug);
+        const res = await categoryService.getFlashcards(slug, user?.section_id);
         if (res?.flashcards && isMounted) {
           syncCategoryFlashcards(slug, res.flashcards);
           const overridesMap: Record<string, { imageUri?: string; audioUri?: string }> = {};
@@ -88,19 +91,20 @@ export default function FlashcardsViewerScreen() {
           setItems((prev) => {
             const updated = prev.map((item) => {
               const norm = item.filipino.toLowerCase().trim();
-              const match = res.flashcards.find(
-                (f) =>
-                  f.filipino_name?.toLowerCase().trim() === norm ||
-                  f.name?.toLowerCase().trim() === norm
-              );
+              const match = res.flashcards.find((f) => {
+                const fn = (f.filipino_name || f.name || '').toLowerCase().trim();
+                return fn === norm || (norm === 'buko' && fn === 'niyog') || (norm === 'niyog' && fn === 'buko');
+              });
 
               if (match) {
                 const isUnsplash = typeof match.image_url === 'string' && match.image_url.includes('images.unsplash.com');
                 const isBlobUrl = typeof match.image_url === 'string' && match.image_url.startsWith('blob:');
                 const isLocalFile = typeof match.image_url === 'string' && match.image_url.startsWith('file://');
                 // Accept any valid non-placeholder, non-blob, non-local-file server URL
-                const validImage = match.image_url && !isUnsplash && !isBlobUrl && !isLocalFile
-                  ? match.image_url
+                const normalizedImg = match.image_url ? resolveAvatarUrl(match.image_url) : undefined;
+                const isPlaceholder = normalizedImg?.includes('wikaplay.app');
+                const validImage = normalizedImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder
+                  ? normalizedImg
                   : undefined;
                 // Only treat as valid audio override if it's an actual remote upload (http/storage)
                 const isRealRemoteAudio = typeof match.audio_url === 'string' &&
@@ -130,20 +134,25 @@ export default function FlashcardsViewerScreen() {
             // Only include published flashcards (is_published !== false)
             res.flashcards.forEach((f) => {
               const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
-              const exists = updated.some((it) => it.filipino.toLowerCase().trim() === fNorm);
-              const isTestCard = fNorm.includes('agila') || fNorm.includes('sss') || (f.english_name || '').toLowerCase().includes('eagle');
+              const exists = updated.some((it) => {
+                const itNorm = it.filipino.toLowerCase().trim();
+                return itNorm === fNorm || (fNorm === 'buko' && itNorm === 'niyog') || (fNorm === 'niyog' && itNorm === 'buko');
+              });
+              const isTestCard = f.id === 155 || /s{3,}/i.test(fNorm) || /s{3,}/i.test(f.english_name || '');
               // Skip unpublished flashcards, test cards, and items already in local curriculum
               if (!exists && f.filipino_name && f.is_published !== false && !isTestCard) {
-                const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
-                const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
-                const isLocalFile = typeof f.image_url === 'string' && f.image_url.startsWith('file://');
+                const normalizedFImg = f.image_url ? resolveAvatarUrl(f.image_url) : undefined;
+                const isUnsplash = typeof normalizedFImg === 'string' && normalizedFImg.includes('images.unsplash.com');
+                const isBlobUrl = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('blob:');
+                const isLocalFile = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('file://');
+                const isPlaceholder = typeof normalizedFImg === 'string' && normalizedFImg.includes('wikaplay.app');
                 const isLocalAudioFile = typeof f.audio_url === 'string' && f.audio_url.startsWith('file://');
                 const customItem: VocabularyItem = {
                   id: `fc_${f.id}`,
                   categoryId: category.id,
                   filipino: f.filipino_name,
                   english: f.english_name || '',
-                  imageUri: f.image_url && !isUnsplash && !isBlobUrl && !isLocalFile ? f.image_url : undefined,
+                  imageUri: normalizedFImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder ? normalizedFImg : undefined,
                   audioUri: f.audio_url && !isLocalAudioFile ? f.audio_url : undefined,
                   emoji: '⭐',
                 };
@@ -155,9 +164,9 @@ export default function FlashcardsViewerScreen() {
               }
             });
 
-            // Filter out any unwanted test cards from final list
+            // Filter out any unwanted test cards with 3+ repeated letters
             const cleanUpdated = updated.filter(
-              (item) => !item.filipino.toLowerCase().includes('agila') && !item.filipino.toLowerCase().includes('sss')
+              (item) => !/s{3,}/i.test(item.filipino)
             );
 
             // Persist the latest overrides to local cache for next session

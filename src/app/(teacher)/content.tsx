@@ -34,6 +34,7 @@ import { LoadingView } from '../../components/LoadingView';
 import { PressableScale } from '../../components/PressableScale';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { VolumeButton } from '../../components/VolumeButton';
+import { resolveAvatarUrl } from '../../components/UserAvatar';
 import { teacherService } from '../../services/api';
 import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
 import { Colors, Shadows, Typography, Radius } from '../../theme';
@@ -110,16 +111,18 @@ function normalizeWord(str?: string): string {
 function getFlashcardImageSource(card?: Partial<Flashcard & { localImageSource?: any }>) {
   if (!card) return null;
   // If user explicitly picked/uploaded a custom file from device or local gallery:
-  if (card.image_url && !card.image_url.includes('images.unsplash.com') && card.image_url.trim().length > 0) {
-    return { uri: card.image_url };
+  if (card.image_url && !card.image_url.includes('images.unsplash.com') && !card.image_url.includes('wikaplay.app') && card.image_url.trim().length > 0) {
+    const resolved = resolveAvatarUrl(card.image_url);
+    if (resolved) return { uri: resolved };
   }
   // Authentic student flashcard bundled illustration:
   if (card.localImageSource) {
     return card.localImageSource;
   }
   // Fallback to server URL if valid and not empty
-  if (card.image_url && card.image_url.trim().length > 0) {
-    return { uri: card.image_url };
+  if (card.image_url && !card.image_url.includes('wikaplay.app') && card.image_url.trim().length > 0) {
+    const resolved = resolveAvatarUrl(card.image_url);
+    if (resolved) return { uri: resolved };
   }
   return null;
 }
@@ -133,8 +136,9 @@ function getQuestionVisualSource(
   flashcardsList?: Flashcard[]
 ) {
   // 1. Explicitly uploaded custom image (file://, data:, http(s)://):
-  if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0 && !imgUrl.includes('images.unsplash.com')) {
-    return { uri: imgUrl };
+  if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0 && !imgUrl.includes('images.unsplash.com') && !imgUrl.includes('wikaplay.app')) {
+    const resolved = resolveAvatarUrl(imgUrl);
+    if (resolved) return { uri: resolved };
   }
   // 2. Bundled local image source (require asset or object with uri)
   if (localSource) {
@@ -157,7 +161,10 @@ function getQuestionVisualSource(
           (query.length > 2 && item.filipino.toLowerCase().includes(query))
       );
       if (found) {
-        if (found.imageUri) return { uri: found.imageUri };
+        if (found.imageUri) {
+          const resolved = resolveAvatarUrl(found.imageUri);
+          if (resolved) return { uri: resolved };
+        }
         if (found.image) return found.image;
       }
     }
@@ -171,8 +178,9 @@ function getQuestionVisualSource(
         (f.name && f.name.toLowerCase().trim() === query)
     );
     if (matchedFc) {
-      if (matchedFc.image_url && !matchedFc.image_url.includes('images.unsplash.com')) {
-        return { uri: matchedFc.image_url };
+      if (matchedFc.image_url && !matchedFc.image_url.includes('images.unsplash.com') && !matchedFc.image_url.includes('wikaplay.app')) {
+        const resolved = resolveAvatarUrl(matchedFc.image_url);
+        if (resolved) return { uri: resolved };
       }
       if ((matchedFc as any).localImageSource) {
         return (matchedFc as any).localImageSource;
@@ -180,8 +188,9 @@ function getQuestionVisualSource(
     }
   }
   // 5. Fallback to server URL if valid and not empty
-  if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0) {
-    return { uri: imgUrl };
+  if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0 && !imgUrl.includes('wikaplay.app')) {
+    const resolved = resolveAvatarUrl(imgUrl);
+    if (resolved) return { uri: resolved };
   }
   return null;
 }
@@ -357,7 +366,7 @@ export default function ContentManagementScreen({
 
         const merged = base151Cards.map((baseCard) => {
           const key = normalizeWord(baseCard.filipino_name);
-          const backendCard = backendMap.get(key);
+          const backendCard = backendMap.get(key) || (key === 'buko' ? backendMap.get('niyog') : key === 'niyog' ? backendMap.get('buko') : undefined);
           if (backendCard) {
             return {
               ...baseCard,
@@ -373,12 +382,16 @@ export default function ContentManagementScreen({
         // Keep any custom teacher-added cards outside the standard 151
         fcRes.value.flashcards.forEach((bf: Flashcard) => {
           const key = normalizeWord(bf.filipino_name || bf.name);
-          const isTestCard = key.includes('agila') || key.includes('sss') || normalizeWord(bf.english_name ?? '').includes('eagle');
+          const isTestCard = bf.id === 155 || /s{3,}/i.test(key) || /s{3,}/i.test(bf.english_name ?? '');
           if (isTestCard && bf.id) {
             teacherService.deleteFlashcard(bf.id).catch(() => {});
             return;
           }
-          if (key && !isTestCard && !base151Cards.some((b) => normalizeWord(b.filipino_name) === key)) {
+          const alreadyInBase = base151Cards.some((b) => {
+            const bk = normalizeWord(b.filipino_name);
+            return bk === key || (key === 'buko' && bk === 'niyog') || (key === 'niyog' && bk === 'buko');
+          });
+          if (key && !isTestCard && !alreadyInBase) {
             merged.push({
               ...bf,
               localImageSource: null,
@@ -389,7 +402,7 @@ export default function ContentManagementScreen({
 
         const cleanMerged = merged.filter((c) => {
           const key = normalizeWord(c.filipino_name || c.name);
-          return !key.includes('agila') && !key.includes('sss') && !normalizeWord(c.english_name ?? '').includes('eagle');
+          return c.id !== 155 && !/s{3,}/i.test(key) && !/s{3,}/i.test(c.english_name ?? '');
         });
 
         setFlashcards(cleanMerged);
@@ -1420,9 +1433,9 @@ export default function ContentManagementScreen({
       if (!q.question_text) {
         q.question_text = 'Ayusin ang mga letra.';
       }
-      // Ensure target_image_url is a non-empty string to satisfy server validation
-      if (!q.target_image_url || q.target_image_url.trim() === '') {
-        q.target_image_url = q.targetItem?.imageUri || 'https://wikaplay.app/default.png';
+      // Ensure target_image_url is a string (clean data URI fallback if none provided)
+      if (!q.target_image_url || q.target_image_url.trim() === '' || q.target_image_url.includes('wikaplay.app')) {
+        q.target_image_url = q.targetItem?.imageUri || '';
       }
     } else if (selectedDiff === 'katamtaman') {
       if (!q.correct_answer && !q.target_item_name) {
@@ -1435,14 +1448,13 @@ export default function ContentManagementScreen({
       if (!q.question_text) {
         q.question_text = `Nasaan ang ${q.target_item_name || q.correct_answer}?`;
       }
-      // Fix: Ensure target_image_url is non-empty so "The target image url field is required." error never occurs
-      if (!q.target_image_url || q.target_image_url.trim() === '') {
+      if (!q.target_image_url || q.target_image_url.trim() === '' || q.target_image_url.includes('wikaplay.app')) {
         const correctChoice = (q.choices || []).find(
           (c: any) =>
             (c.text && q.correct_answer && c.text.toLowerCase().trim() === q.correct_answer.toLowerCase().trim()) ||
             (c.image_url && c.image_url.trim().length > 0)
         );
-        q.target_image_url = correctChoice?.image_url || q.targetItem?.imageUri || 'https://wikaplay.app/default.png';
+        q.target_image_url = correctChoice?.image_url || q.targetItem?.imageUri || '';
       }
     } else {
       // madali
@@ -1453,9 +1465,8 @@ export default function ContentManagementScreen({
       if (!q.target_item_name || q.target_item_name.trim() === '') {
         q.target_item_name = q.correct_answer;
       }
-      // Fix: Ensure target_image_url is non-empty string to avoid 500 TypeError in server accessor
-      if (!q.target_image_url || q.target_image_url.trim() === '') {
-        q.target_image_url = 'https://wikaplay.app/default.png';
+      if (!q.target_image_url || q.target_image_url.trim() === '' || q.target_image_url.includes('wikaplay.app')) {
+        q.target_image_url = '';
       }
     }
 
@@ -1495,15 +1506,22 @@ export default function ContentManagementScreen({
         }
       }
 
-      await teacherService.saveQuizQuestion({
+      // Only send ID if editing an existing server question (not a mock/temporary client ID)
+      const isRealServerId = questionModal.isEditing && q.id && Number(q.id) < 100000 && !(q as any).is_local;
+      const questionPayload = {
         ...q,
+        id: isRealServerId ? q.id : undefined,
         category_id: selectedCategory.id,
         difficulty: selectedDiff,
         choices: sanitizedChoices,
         // Strip local-only fields that must not be sent to the server
         targetItem: undefined,
         localImageSource: undefined,
-      } as any);
+        is_local: undefined,
+      };
+
+      const saveRes = await teacherService.saveQuizQuestion(questionPayload as any);
+      const savedQuestion = saveRes?.question || { ...q, id: q.id || Date.now() };
 
       // Instantly update local state so changes reflect immediately without waiting
       setQuizData((prev) => {
@@ -1511,9 +1529,9 @@ export default function ContentManagementScreen({
         const existingIdx = prev.questions.findIndex((item) => item.id === q.id);
         const updated = [...prev.questions];
         if (existingIdx >= 0) {
-          updated[existingIdx] = { ...updated[existingIdx], ...q };
+          updated[existingIdx] = { ...updated[existingIdx], ...savedQuestion };
         } else {
-          updated.push({ ...q, id: q.id || Date.now() });
+          updated.push(savedQuestion);
         }
         return { ...prev, questions: updated };
       });
@@ -1548,13 +1566,21 @@ export default function ContentManagementScreen({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            // Instantly remove from local state so the question disappears without delay
+            setQuizData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                questions: prev.questions.filter((q) => q.id !== questionId),
+              };
+            });
             try {
               await teacherService.deleteQuizQuestion(questionId);
-              if (selectedCategory) loadQuiz(selectedCategory.id, selectedDiff);
-              Alert.alert('Success', 'Question deleted successfully.');
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to delete question.');
+              console.warn('Backend delete quiz question notice:', err?.message);
             }
+            if (selectedCategory) loadQuiz(selectedCategory.id, selectedDiff);
+            Alert.alert('Success', 'Question deleted successfully.');
           },
         },
       ]

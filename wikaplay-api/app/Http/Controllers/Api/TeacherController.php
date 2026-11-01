@@ -856,10 +856,10 @@ class TeacherController extends Controller
 
         // Get teacher's active section
         $activeSection = Section::where('teacher_id', $teacher->id)
-            ->where('status', 'active')
+            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
             ->first();
 
-        $sectionId = $activeSection ? $activeSection->id : null;
+        $sectionId = $activeSection ? $activeSection->id : ($teacher->section_id ?? null);
 
         $flashcard = null;
         // If ID is provided, always update that specific flashcard
@@ -874,9 +874,10 @@ class TeacherController extends Controller
                 $sectionId = $flashcard->section_id;
             }
         }
-        // Only search by name if no ID was provided (creating new flashcard)
-        if (! $flashcard) {
+        // Only search by name if no ID was provided in this teacher's section
+        if (! $flashcard && $sectionId) {
             $flashcard = Flashcard::where('category_id', $validated['category_id'])
+                ->where('section_id', $sectionId)
                 ->where(function ($q) use ($validated) {
                     $q->where('filipino_name', $validated['filipino_name'])
                         ->orWhere('name', $validated['filipino_name']);
@@ -894,8 +895,21 @@ class TeacherController extends Controller
         $flashcard->filipino_name = $validated['filipino_name'];
         $flashcard->english_name = $validated['english_name'] ?? null;
         $flashcard->description = $validated['description'] ?? null;
-        $flashcard->image_url = $validated['image_url'];
-        $flashcard->audio_url = $validated['audio_url'] ?? null;
+
+        $imageUrl = $validated['image_url'] ?? null;
+        if (!empty($imageUrl) && str_contains($imageUrl, 'localhost/storage/')) {
+            $imageUrl = str_replace('http://localhost/storage/', 'https://wikaplay-api.onrender.com/storage/', $imageUrl);
+            $imageUrl = str_replace('https://localhost/storage/', 'https://wikaplay-api.onrender.com/storage/', $imageUrl);
+        }
+        $flashcard->image_url = $imageUrl ?? '';
+
+        $audioUrl = $validated['audio_url'] ?? null;
+        if (!empty($audioUrl) && str_contains($audioUrl, 'localhost/storage/')) {
+            $audioUrl = str_replace('http://localhost/storage/', 'https://wikaplay-api.onrender.com/storage/', $audioUrl);
+            $audioUrl = str_replace('https://localhost/storage/', 'https://wikaplay-api.onrender.com/storage/', $audioUrl);
+        }
+        $flashcard->audio_url = $audioUrl;
+
         $flashcard->is_published = $validated['is_published'] ?? true;
         $flashcard->save();
 
@@ -911,8 +925,16 @@ class TeacherController extends Controller
     public function deleteFlashcard(Request $request, $id)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
 
         $flashcard = Flashcard::findOrFail($id);
+
+        if (Schema::hasColumn('flashcards', 'section_id') && $flashcard->section_id) {
+            $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+            if (! $teacherSectionIds->contains($flashcard->section_id)) {
+                abort(403, 'Hindi mo mababura ang flashcard na ito dahil hindi ito sa iyong seksyon.');
+            }
+        }
 
         $hasQuestions = QuizQuestion::where('flashcard_id', $flashcard->id)->exists();
         if ($hasQuestions) {
@@ -986,13 +1008,27 @@ class TeacherController extends Controller
             abort(403, 'You do not have access to this category.');
         }
 
-        $questions = QuizQuestion::where('category_id', $categoryId)
+        $questionsQuery = QuizQuestion::where('category_id', $categoryId)
             ->where('difficulty', $difficulty)
-            ->with('flashcard')
-            ->orderBy('sort_order')
-            ->get();
+            ->with('flashcard');
 
-        $flashcards = Flashcard::where('category_id', $categoryId)->get();
+        if (Schema::hasColumn('quiz_questions', 'section_id') && $sectionIds->isNotEmpty()) {
+            $questionsQuery->where(function ($q) use ($sectionIds) {
+                $q->whereIn('section_id', $sectionIds)
+                    ->orWhereNull('section_id');
+            });
+        }
+
+        $questions = $questionsQuery->orderBy('sort_order')->get();
+
+        $flashcardsQuery = Flashcard::where('category_id', $categoryId);
+        if (Schema::hasColumn('flashcards', 'section_id') && $sectionIds->isNotEmpty()) {
+            $flashcardsQuery->where(function ($q) use ($sectionIds) {
+                $q->whereIn('section_id', $sectionIds)
+                    ->orWhereNull('section_id');
+            });
+        }
+        $flashcards = $flashcardsQuery->get();
         $availability = QuizAvailability::where('category_id', $categoryId)
             ->where('difficulty', $difficulty)
             ->first();
@@ -1024,7 +1060,7 @@ class TeacherController extends Controller
 
         // Build validation rules based on difficulty
         $rules = [
-            'id' => 'nullable|exists:quiz_questions,id',
+            'id' => 'nullable',
             'category_id' => 'required|exists:categories,id',
             'difficulty' => 'required|in:madali,katamtaman,mahirap',
             'flashcard_id' => 'nullable|exists:flashcards,id',
@@ -1057,44 +1093,63 @@ class TeacherController extends Controller
 
         // Get teacher's active section
         $activeSection = Section::where('teacher_id', $teacher->id)
-            ->where('status', 'active')
+            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
             ->first();
 
-        $sectionId = $activeSection ? $activeSection->id : null;
+        $sectionId = $activeSection ? $activeSection->id : ($teacher->section_id ?? null);
 
         // If editing existing question, verify access and preserve section
+        $question = null;
         if (! empty($validated['id'])) {
-            $existingQuestion = QuizQuestion::find($validated['id']);
-            if ($existingQuestion && Schema::hasColumn('quiz_questions', 'section_id') && $existingQuestion->section_id) {
+            $question = QuizQuestion::find($validated['id']);
+            if ($question && Schema::hasColumn('quiz_questions', 'section_id') && $question->section_id) {
                 $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
-                if (! $teacherSectionIds->contains($existingQuestion->section_id)) {
+                if (! $teacherSectionIds->contains($question->section_id)) {
                     abort(403, 'Hindi mo mababago ang tanong na ito dahil hindi ito sa iyong seksyon.');
                 }
-                $sectionId = $existingQuestion->section_id;
+                $sectionId = $question->section_id;
             }
         }
 
-        $questionData = [
-            'category_id' => $validated['category_id'],
-            'difficulty' => $validated['difficulty'],
-            'flashcard_id' => $validated['flashcard_id'] ?? null,
-            'question_text' => $validated['question_text'] ?? '',
-            'target_item_name' => $validated['target_item_name'] ?? null,
-            'target_image_url' => $validated['target_image_url'] ?? null,
-            'audio_url' => $validated['audio_url'] ?? null,
-            'choices' => $validated['choices'] ?? [],
-            'correct_answer' => $validated['correct_answer'],
-            'points' => $validated['points'] ?? 1,
-        ];
-
-        if (Schema::hasColumn('quiz_questions', 'section_id')) {
-            $questionData['section_id'] = $sectionId;
+        if (! $question) {
+            $question = new QuizQuestion;
         }
 
-        $question = QuizQuestion::updateOrCreate(
-            ['id' => $validated['id'] ?? null],
-            $questionData
-        );
+        $targetImageUrl = $validated['target_image_url'] ?? null;
+        if (!empty($targetImageUrl) && str_contains($targetImageUrl, 'localhost/storage/')) {
+            $targetImageUrl = str_replace(['http://localhost/storage/', 'https://localhost/storage/'], 'https://wikaplay-api.onrender.com/storage/', $targetImageUrl);
+        }
+
+        $audioUrl = $validated['audio_url'] ?? null;
+        if (!empty($audioUrl) && str_contains($audioUrl, 'localhost/storage/')) {
+            $audioUrl = str_replace(['http://localhost/storage/', 'https://localhost/storage/'], 'https://wikaplay-api.onrender.com/storage/', $audioUrl);
+        }
+
+        $choices = $validated['choices'] ?? [];
+        if (is_array($choices)) {
+            foreach ($choices as &$choice) {
+                if (isset($choice['image_url']) && str_contains($choice['image_url'], 'localhost/storage/')) {
+                    $choice['image_url'] = str_replace(['http://localhost/storage/', 'https://localhost/storage/'], 'https://wikaplay-api.onrender.com/storage/', $choice['image_url']);
+                }
+            }
+        }
+
+        $question->category_id = $validated['category_id'];
+        $question->difficulty = $validated['difficulty'];
+        $question->flashcard_id = $validated['flashcard_id'] ?? null;
+        $question->question_text = $validated['question_text'] ?? '';
+        $question->target_item_name = $validated['target_item_name'] ?? null;
+        $question->target_image_url = $targetImageUrl;
+        $question->audio_url = $audioUrl;
+        $question->choices = $choices;
+        $question->correct_answer = $validated['correct_answer'];
+        $question->points = $validated['points'] ?? 1;
+
+        if (Schema::hasColumn('quiz_questions', 'section_id')) {
+            $question->section_id = $sectionId;
+        }
+
+        $question->save();
 
         return response()->json([
             'message' => 'Nai-save ang tanong sa pagsusulit!',
@@ -1108,8 +1163,21 @@ class TeacherController extends Controller
     public function deleteQuizQuestion(Request $request, $id)
     {
         $this->authorizeTeacher($request);
+        $teacher = $request->user();
 
-        $question = QuizQuestion::findOrFail($id);
+        $question = QuizQuestion::find($id);
+
+        if (! $question) {
+            // If already deleted or was a client-side mock id, return success cleanly
+            return response()->json(['message' => 'Matagumpay na nabura ang tanong.']);
+        }
+
+        if (Schema::hasColumn('quiz_questions', 'section_id') && $question->section_id) {
+            $teacherSectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
+            if (! $teacherSectionIds->contains($question->section_id)) {
+                abort(403, 'Hindi mo mababura ang tanong na ito dahil hindi ito sa iyong seksyon.');
+            }
+        }
 
         // Detach or nullify foreign key in student answers so attempts are never deleted
         QuizAnswer::where('question_id', $question->id)->update(['question_id' => null]);
@@ -1132,7 +1200,11 @@ class TeacherController extends Controller
             ]);
 
             $path = $request->file('audio')->store('audio', 'public');
-            $storageUrl = config('app.url').'/storage/'.$path;
+            $baseUrl = config('app.url');
+            if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
+                $baseUrl = 'https://wikaplay-api.onrender.com';
+            }
+            $storageUrl = rtrim($baseUrl, '/').'/storage/'.$path;
 
             return response()->json([
                 'message' => 'Matagumpay na nai-upload ang audio!',
@@ -1161,7 +1233,11 @@ class TeacherController extends Controller
 
             $path = $request->file('image')->store('images', 'public');
             // Build an absolute URL that works from both localhost web and physical mobile devices
-            $storageUrl = config('app.url').'/storage/'.$path;
+            $baseUrl = config('app.url');
+            if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
+                $baseUrl = 'https://wikaplay-api.onrender.com';
+            }
+            $storageUrl = rtrim($baseUrl, '/').'/storage/'.$path;
 
             return response()->json([
                 'message' => 'Matagumpay na nai-upload ang larawan!',
@@ -1179,7 +1255,12 @@ class TeacherController extends Controller
                 $base64Data = base64_decode($base64Data);
                 $filename = 'images/'.uniqid().'.'.$type;
                 Storage::disk('public')->put($filename, $base64Data);
-                $url = asset('storage/'.$filename);
+
+                $baseUrl = config('app.url');
+                if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
+                    $baseUrl = 'https://wikaplay-api.onrender.com';
+                }
+                $url = rtrim($baseUrl, '/').'/storage/'.$filename;
 
                 return response()->json([
                     'message' => 'Matagumpay na nai-upload ang larawan!',

@@ -74,7 +74,7 @@ export default function QuizGameplayScreen() {
     try {
       setLoading(true);
       setError(null);
-      const res = await categoryService.getQuizQuestions(slug, difficulty);
+      const res = await categoryService.getQuizQuestions(slug, difficulty, user?.section_id);
       if (res.is_locked) {
         const category = getCategoryBySlug(slug);
         router.replace({ pathname: '/(student)/quiz-locked' as any, params: { category: res.category.name || category?.name || slug, difficulty } } as any);
@@ -91,7 +91,7 @@ export default function QuizGameplayScreen() {
       const localItems = cat?.items || [];
       let flashcardsList: any[] = [];
       try {
-        const fcRes = await categoryService.getFlashcards(slug);
+        const fcRes = await categoryService.getFlashcards(slug, user?.section_id);
         flashcardsList = fcRes?.flashcards || [];
         if (fcRes?.flashcards) {
           syncCategoryFlashcards(slug, fcRes.flashcards);
