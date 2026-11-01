@@ -709,9 +709,12 @@ class TeacherController extends Controller
         $query = Category::withCount('flashcards')
             ->with('quizAvailabilities');
 
-        // Only show categories from teacher's sections
+        // Show categories from teacher's sections OR global categories (section_id = null)
         if ($sectionIds->isNotEmpty()) {
-            $query->whereIn('section_id', $sectionIds);
+            $query->where(function ($q) use ($sectionIds) {
+                $q->whereIn('section_id', $sectionIds)
+                    ->orWhereNull('section_id');
+            });
         }
 
         $categories = $query->orderBy('sort_order')->get();
@@ -732,12 +735,13 @@ class TeacherController extends Controller
 
         $query = Flashcard::with('category:id,name,color');
 
-        // Filter by teacher's sections only - teachers should only see flashcards for their own sections
+        // Filter by teacher's sections OR global flashcards (section_id = null)
         $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
         if ($sectionIds->isNotEmpty()) {
-            // Get category IDs that belong to this teacher's sections
-            $categoryIds = Category::whereIn('section_id', $sectionIds)->pluck('id');
-            $query->whereIn('category_id', $categoryIds);
+            $query->where(function ($q) use ($sectionIds) {
+                $q->whereIn('section_id', $sectionIds)
+                    ->orWhereNull('section_id');
+            });
         }
 
         if ($categoryId) {
@@ -970,10 +974,10 @@ class TeacherController extends Controller
 
         $teacher = $request->user();
 
-        // Verify teacher has access to this category (belongs to their section)
+        // Verify teacher has access to this category (belongs to their section OR is global)
         $category = Category::findOrFail($categoryId);
         $sectionIds = Section::where('teacher_id', $teacher->id)->pluck('id');
-        if ($sectionIds->isNotEmpty() && ! $sectionIds->contains($category->section_id)) {
+        if ($sectionIds->isNotEmpty() && $category->section_id && ! $sectionIds->contains($category->section_id)) {
             abort(403, 'You do not have access to this category.');
         }
 

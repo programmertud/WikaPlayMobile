@@ -112,12 +112,27 @@ class CategoryController extends Controller
         $flashcardsQuery = $category->flashcards()
             ->where('is_published', true);
 
-        // If student, only show flashcards from their section
+        // If student, show flashcards from their section OR global flashcards
         if ($user && $user->isStudent() && $user->section_id) {
-            $flashcardsQuery->where('section_id', $user->section_id);
+            $flashcardsQuery->where(function ($q) use ($user) {
+                $q->where('section_id', $user->section_id)
+                    ->orWhereNull('section_id');
+            });
         }
 
         $flashcards = $flashcardsQuery->orderBy('sort_order')->get();
+
+        // Convert relative image URLs to full URLs
+        $flashcards = $flashcards->map(function ($flashcard) {
+            if ($flashcard->image_url && ! str_starts_with($flashcard->image_url, 'http')) {
+                $flashcard->image_url = url('storage/'.ltrim($flashcard->image_url, '/'));
+            }
+            if ($flashcard->audio_url && ! str_starts_with($flashcard->audio_url, 'http')) {
+                $flashcard->audio_url = url('storage/'.ltrim($flashcard->audio_url, '/'));
+            }
+
+            return $flashcard;
+        });
 
         return response()->json([
             'category' => [
@@ -165,9 +180,12 @@ class CategoryController extends Controller
             ->where('difficulty', $difficulty)
             ->with(['flashcard' => fn ($q) => $q->where('is_published', true)]);
 
-        // If student, only show questions from their section
+        // If student, show questions from their section OR global questions
         if ($user && $user->isStudent() && $user->section_id) {
-            $questionsQuery->where('section_id', $user->section_id);
+            $questionsQuery->where(function ($q) use ($user) {
+                $q->where('section_id', $user->section_id)
+                    ->orWhereNull('section_id');
+            });
         }
 
         $questions = $questionsQuery->orderBy('sort_order')->get();
