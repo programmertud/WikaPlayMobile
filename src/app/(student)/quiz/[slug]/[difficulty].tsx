@@ -550,9 +550,13 @@ export default function QuizGameplayScreen() {
           </View>
         </View>
 
-        {/* Fireworks celebration for high score (15-20) */}
-        {resultSession.correct_count >= 15 && resultSession.correct_count <= 20 ? (
-          <FireworksOverlay visible={true} score={resultSession.correct_count} />
+        {/* Fireworks celebration for high score (15+) */}
+        {resultSession.correct_count >= 15 ? (
+          <FireworksOverlay
+            visible={true}
+            score={resultSession.correct_count}
+            totalQuestions={resultSession.total_questions || questions.length}
+          />
         ) : null}
 
         {/* Confetti celebration for passing */}
@@ -560,7 +564,8 @@ export default function QuizGameplayScreen() {
           visible={isPassed}
           subtitle={`Nakakuha ka ng ${resultSession.correct_count} tamang sagot!`}
           score={resultSession.correct_count}
-          showFireworks={resultSession.correct_count >= 15 && resultSession.correct_count <= 20}
+          totalQuestions={resultSession.total_questions || questions.length}
+          showFireworks={resultSession.correct_count >= 15}
           onContinue={() => {
             if (router.canGoBack()) {
               router.back();

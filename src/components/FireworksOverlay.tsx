@@ -259,6 +259,10 @@ export interface FireworksOverlayProps {
    */
   score?: number;
   /**
+   * Total questions so the banner shows e.g. "19/21" instead of "19/20"
+   */
+  totalQuestions?: number;
+  /**
    * Optional title banner (e.g. "Pambihirang Tagumpay!")
    */
   bannerText?: string;
@@ -267,6 +271,7 @@ export interface FireworksOverlayProps {
 export function FireworksOverlay({
   visible,
   score,
+  totalQuestions,
   bannerText,
 }: FireworksOverlayProps) {
   const [cycleKey, setCycleKey] = useState(0);
@@ -355,12 +360,12 @@ export function FireworksOverlay({
       </View>
 
       {/* Optional Top Floating Fireworks Banner */}
-      {bannerText || (score !== undefined && score >= 15 && score <= 20) ? (
+      {bannerText || (score !== undefined && score >= 15) ? (
         <View style={styles.bannerWrapper}>
           <View style={[styles.bannerPill, Shadows.button]}>
             <Text style={styles.bannerEmoji}>🎆</Text>
             <Text style={styles.bannerText}>
-              {bannerText ?? `Pambihirang Puntos! ${score}/20 ⭐`}
+              {bannerText ?? `Pambihirang Puntos! ${score}/${totalQuestions ?? score} ⭐`}
             </Text>
             <Text style={styles.bannerEmoji}>🎇</Text>
           </View>

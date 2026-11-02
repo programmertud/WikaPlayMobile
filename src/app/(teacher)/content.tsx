@@ -571,8 +571,11 @@ export default function ContentManagementScreen({
         // Enrich questions returned from server so local assets and images are linked
         questions = questions.map((q: any, idx: number) => {
           if (diff === 'katamtaman') {
-            const target = findTargetVocabItem(q, catObj.items) || catObj.items[idx % catObj.items.length];
-            const targetWord = target?.filipino || q.target_item_name || q.correct_answer || '';
+            const target = findTargetVocabItem(q, catObj.items);
+            // CRITICAL: Preserve custom target_item_name and correct_answer; do NOT overwrite with fallback item!
+            const targetWord = (q.target_item_name && String(q.target_item_name).trim().length > 0)
+              ? String(q.target_item_name).trim()
+              : (target?.filipino || q.correct_answer || '');
 
             // Check if choices are empty or missing text
             const needsChoices =
@@ -613,7 +616,7 @@ export default function ContentManagementScreen({
               ...q,
               targetItem: target ?? q.targetItem,
               target_item_name: targetWord,
-              correct_answer: targetWord || q.correct_answer,
+              correct_answer: q.correct_answer || targetWord,
               localImageSource: (q as any).localImageSource || target?.image,
               localAudioSource: (q as any).localAudioSource || target?.audio,
               audio_url:
@@ -625,13 +628,15 @@ export default function ContentManagementScreen({
           }
 
           if (diff === 'mahirap') {
-            const target = findTargetVocabItem(q, catObj.items) || catObj.items[idx % catObj.items.length];
-            const targetWord = (target?.filipino || q.target_item_name || q.correct_answer || '').toUpperCase();
+            const target = findTargetVocabItem(q, catObj.items);
+            const targetWord = (q.target_item_name && String(q.target_item_name).trim().length > 0)
+              ? String(q.target_item_name).trim().toUpperCase()
+              : (target?.filipino || q.correct_answer || '').toUpperCase();
             return {
               ...q,
               targetItem: target ?? q.targetItem,
               target_item_name: targetWord,
-              correct_answer: targetWord,
+              correct_answer: q.correct_answer ? String(q.correct_answer).toUpperCase() : targetWord,
               target_image_url: q.target_image_url || target?.imageUri || '',
               localImageSource: (q as any).localImageSource || target?.image,
             };
@@ -1266,6 +1271,7 @@ export default function ContentManagementScreen({
 
         if (choicesHaveContent) {
           // Re-enrich existing choices with localImageSource from vocab
+          // IMPORTANT: always use positional IDs (1,2,3,4) so "Mark as Correct" choice IDs match
           normChoices = normChoices.map((c: any, idx: number) => {
             if (typeof c === 'string') {
               const vocab = catObj.items.find((it) => it.filipino.toLowerCase().trim() === c.toLowerCase().trim());
@@ -1281,7 +1287,8 @@ export default function ContentManagementScreen({
                   it.filipino.toLowerCase().trim() === chText.toLowerCase().trim()
               );
             return {
-              id: String(c.id || idx + 1),
+              // Force positional IDs so Mark-as-Correct stores "1","2","3","4" consistently
+              id: String(idx + 1),
               text: chText || vocab?.filipino || '',
               image_url: c.image_url || vocab?.imageUri || '',
               localImageSource: c.localImageSource || vocab?.image,
@@ -1295,7 +1302,7 @@ export default function ContentManagementScreen({
             const targetVocab = findTargetVocabItem(question, catObj.items) || catObj.items[0];
             const gen = getRandomVocabularyChoices(catSlug, targetVocab, 4);
             normChoices = gen.map((c, idx) => ({
-              id: String(c.id || idx + 1),
+              id: String(idx + 1),  // Always positional
               text: c.filipino,
               image_url: c.imageUri || '',
               localImageSource: c.image,
@@ -1308,7 +1315,7 @@ export default function ContentManagementScreen({
             findTargetVocabItem(question, catObj.items) || catObj.items[0];
           const gen = getRandomVocabularyChoices(catSlug, targetVocab, 4);
           normChoices = gen.map((c, idx) => ({
-            id: String(c.id || idx + 1),
+            id: String(idx + 1),  // Always positional
             text: c.filipino,
             image_url: c.imageUri || '',
             localImageSource: c.image,
@@ -1341,6 +1348,18 @@ export default function ContentManagementScreen({
         (question as any).targetItem ||
         findTargetVocabItem(question, catObj.items);
 
+      // Derive correct_choice_index from correct_answer if not already set.
+      // This ensures the green checkmark appears correctly even after re-fetching from server.
+      let derivedCorrectChoiceIndex = (question as any).correct_choice_index ?? -1;
+      if (derivedCorrectChoiceIndex < 0 && question.correct_answer && Array.isArray(normChoices)) {
+        const ansNorm = String(question.correct_answer).toLowerCase().trim();
+        derivedCorrectChoiceIndex = normChoices.findIndex((c: any) => {
+          const cId = String(c?.id ?? '').toLowerCase().trim();
+          const cText = String(c?.text ?? c?.filipino_name ?? '').toLowerCase().trim();
+          return cId === ansNorm || cText === ansNorm;
+        });
+      }
+
       setQuestionModal({
         open: true,
         question: {
@@ -1350,6 +1369,7 @@ export default function ContentManagementScreen({
           choices: normChoices,
           targetItem: enrichedTargetItem,
           localImageSource: (question as any).localImageSource || enrichedTargetItem?.image,
+          correct_choice_index: derivedCorrectChoiceIndex >= 0 ? derivedCorrectChoiceIndex : undefined,
         },
         isEditing: isEdit,
       });
@@ -2149,9 +2169,11 @@ export default function ContentManagementScreen({
                             const choiceNorm = choiceText.toLowerCase().trim();
                             const choiceId = choice && typeof choice === 'object' ? String(choice.id || '') : '';
                             const isCorrect = Boolean(
+                              ((q as any).correct_choice_index !== undefined && (q as any).correct_choice_index === cIdx) ||
+                              (answerWord && (answerWord === String(cIdx + 1) || answerWord === String(cIdx))) ||
+                              (answerWord && choiceId && choiceId === answerWord) ||
                               (targetWord && choiceNorm === targetWord) ||
                               (answerWord && choiceNorm === answerWord) ||
-                              (answerWord && choiceId && choiceId === answerWord) ||
                               (choice?.vocabularyItem?.filipino && targetWord && choice.vocabularyItem.filipino.toLowerCase().trim() === targetWord)
                             );
                             const choiceImgSource = getQuestionVisualSource(
@@ -2868,8 +2890,8 @@ export default function ContentManagementScreen({
                                   correct_choice_index: choiceIndex,
                                   // Store the choice ID as correct_answer so backend/student can match by ID
                                   correct_answer: choiceIdVal,
-                                  // Also set target_item_name from choice text for display/audio
-                                  target_item_name: choiceText || prev.question.target_item_name,
+                                  // Only set target_item_name from choice text if teacher hasn't typed one already
+                                  target_item_name: prev.question.target_item_name || choiceText,
                                 },
                               }));
                             }}

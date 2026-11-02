@@ -101,6 +101,7 @@ interface CelebrationOverlayProps {
   scoreText?: string;
   stars?: number;
   score?: number;
+  totalQuestions?: number;
   showFireworks?: boolean;
   onContinue?: () => void;
   continueText?: string;
@@ -115,6 +116,7 @@ export function CelebrationOverlay({
   scoreText,
   stars = 3,
   score,
+  totalQuestions,
   showFireworks,
   onContinue,
   continueText = 'Magpatuloy',
@@ -143,7 +145,7 @@ export function CelebrationOverlay({
     }
   }
 
-  const shouldShowFireworks = showFireworks ?? (score !== undefined && score >= 15 && score <= 20);
+  const shouldShowFireworks = showFireworks ?? (score !== undefined && score >= 15);
 
   useEffect(() => {
     if (visible) {
@@ -169,9 +171,9 @@ export function CelebrationOverlay({
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <View style={styles.backdrop} />
 
-      {/* Fireworks Display when score is 15-20 or showFireworks is true */}
+      {/* Fireworks Display when score is high or showFireworks is true */}
       {shouldShowFireworks ? (
-        <FireworksOverlay visible={visible} score={score} />
+        <FireworksOverlay visible={visible} score={score} totalQuestions={totalQuestions} />
       ) : null}
 
       {/* Confetti Particles */}

@@ -587,15 +587,16 @@ export default function MadaliQuizScreen() {
           </View>
         </ScrollView>
 
-        {correctCount >= 15 && correctCount <= 20 && !showCelebration ? (
-          <FireworksOverlay visible={true} score={correctCount} />
+        {correctCount >= 15 && !showCelebration ? (
+          <FireworksOverlay visible={true} score={correctCount} totalQuestions={totalQuestions} />
         ) : null}
 
         <CelebrationOverlay
           visible={showCelebration}
           subtitle={`Nakakuha ka ng ${correctCount} tamang sagot!`}
           score={correctCount}
-          showFireworks={correctCount >= 15 && correctCount <= 20}
+          totalQuestions={totalQuestions}
+          showFireworks={correctCount >= 15}
           onContinue={() => setShowCelebration(false)}
           continueText="Tingnan ang Resulta"
         />
