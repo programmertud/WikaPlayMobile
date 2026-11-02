@@ -100,11 +100,11 @@ export default function QuizGameplayScreen() {
 
       if (localItems.length > 0 && fetchedQuestions.length > 0) {
         fetchedQuestions = fetchedQuestions.map((q) => {
-          // Resolve targetItem
-          let target = localItems.find(
-            (it) => it.id === q.correct_answer ||
-              it.filipino.toLowerCase().trim() === (q.target_item_name || '').toLowerCase().trim()
-          );
+          // Resolve targetItem matching
+          const normTargetName = String(q.target_item_name || '').toLowerCase().trim();
+          let target = normTargetName
+            ? localItems.find((it) => it.filipino.toLowerCase().trim() === normTargetName)
+            : undefined;
 
           if (!target && q.flashcard_id) {
             const matchedFc = flashcardsList.find((f) => String(f.id) === String(q.flashcard_id));
@@ -114,12 +114,9 @@ export default function QuizGameplayScreen() {
             }
           }
 
-          if (!target && q.correct_answer) {
-            const matchedFc = flashcardsList.find((f) => String(f.id) === String(q.correct_answer));
-            if (matchedFc) {
-              const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
-              target = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
-            }
+          if (!target && q.correct_answer && isNaN(Number(q.correct_answer))) {
+            const normAns = String(q.correct_answer).toLowerCase().trim();
+            target = localItems.find((it) => it.filipino.toLowerCase().trim() === normAns || it.id === normAns);
           }
 
           if (!target && q.question_text) {
@@ -146,53 +143,66 @@ export default function QuizGameplayScreen() {
           }
 
           const enrichedChoices = q.choices.map((ch) => {
-            let choiceImg = ch.image_url;
+            const rawImg = ch.image_url || '';
+            const choiceImg = rawImg.includes('wikaplay.app') ? '' : rawImg;
+            const hasCustomImage = Boolean(choiceImg && choiceImg.trim().length > 0);
 
-            // 1. Try match by ch.id directly in localItems
-            let localMatch = localItems.find((it) => it.id === ch.id);
+            let localMatch: VocabularyItem | undefined;
 
-            // 2. Try match by ch.id as flashcard ID
-            let matchedFc = flashcardsList.find((f) => String(f.id) === String(ch.id));
-            if (!localMatch && matchedFc) {
-              const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
-              localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
-            }
+            // Only attempt vocabularyItem matching if the choice doesn't already have its own uploaded image
+            if (!hasCustomImage) {
+              // 1. Try match by ch.id directly in localItems only if it's a non-numeric slug (e.g. 'mga-hayop_aso')
+              if (ch.id && isNaN(Number(ch.id))) {
+                localMatch = localItems.find((it) => it.id === ch.id || it.filipino.toLowerCase().trim() === ch.id.toLowerCase().trim());
+              }
 
-            // 3. Try match by ch.text
-            if (!localMatch && ch.text) {
-              localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === ch.text.toLowerCase().trim());
-              if (!matchedFc) {
-                matchedFc = flashcardsList.find(
-                  (f) => (f.filipino_name || f.name || '').toLowerCase().trim() === ch.text.toLowerCase().trim()
-                );
+              // 2. Try match by ch.text if non-empty and not generic "Choice #..."
+              if (!localMatch && ch.text && ch.text.trim().length > 0 && !/^choice\s*#?\d+$/i.test(ch.text.trim())) {
+                const norm = ch.text.toLowerCase().trim();
+                localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === norm);
+              }
+
+              // 3. Match by flashcard name if ch.id is a flashcard ID
+              if (!localMatch && ch.id) {
+                const matchedFc = flashcardsList.find((f) => String(f.id) === String(ch.id));
+                if (matchedFc) {
+                  const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+                  localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
+                }
+              }
+
+              // 4. Fallback if still no match: pick distinct animal from localItems so no choice shows a broken 🖼️ emoji
+              if (!localMatch && localItems.length > 0) {
+                const targetNorm = (q.target_item_name || '').toLowerCase().trim();
+                const targetIndex = localItems.findIndex((it) => it.filipino.toLowerCase().trim() === targetNorm);
+                const choiceNum = Number(ch.id);
+                const safeNum = !isNaN(choiceNum) && choiceNum >= 1 ? choiceNum : 1;
+                if (String(q.correct_answer) === String(ch.id) && targetIndex >= 0) {
+                  localMatch = localItems[targetIndex];
+                } else {
+                  const fallbackIdx = (safeNum * 3 + (targetIndex >= 0 ? targetIndex : 0)) % localItems.length;
+                  localMatch = localItems[fallbackIdx];
+                }
               }
             }
 
-            // 4. Try match by image_url filename if present
-            if (!localMatch && ch.image_url) {
-              const imgName = ch.image_url.split('/').pop()?.replace(/\.[^/.]+$/, '').toLowerCase().trim();
-              if (imgName) {
-                localMatch = localItems.find((it) => it.filipino.toLowerCase().trim() === imgName);
-              }
-            }
-
-            if (!choiceImg && matchedFc?.image_url) {
-              choiceImg = matchedFc.image_url;
-            }
-
-            if (localMatch) {
+            if (localMatch && !hasCustomImage) {
               return {
                 ...ch,
-                image_url: choiceImg || localMatch.imageUri || ch.image_url,
-                vocabularyItem: choiceImg ? { ...localMatch, imageUri: choiceImg } : localMatch,
+                image_url: localMatch.imageUri || choiceImg,
+                vocabularyItem: localMatch,
               };
             }
 
-            return choiceImg ? { ...ch, image_url: choiceImg } : ch;
+            return {
+              ...ch,
+              image_url: choiceImg,
+              vocabularyItem: undefined, // Preserve custom uploaded images (e.g. eagle, robots)
+            };
           });
 
-          // For Katamtaman, ensure audio plays by using target's bundled audio if available
-          const effectiveAudio = target?.audio ?? (q.audio_url || (target ? `${target.id}.mp3` : undefined));
+          // For Katamtaman, prioritize custom teacher audio if uploaded, then bundled audio, then filename
+          const effectiveAudio = q.audio_url || target?.audio || (target ? `${target.id}.mp3` : undefined);
 
           return {
             ...q,
@@ -215,7 +225,7 @@ export default function QuizGameplayScreen() {
             const mappedChoices: ChoiceItem[] = choices.map((c) => ({
               id: c.id,
               image_url: c.imageUri || '',
-              text: difficulty === 'katamtaman' ? '' : c.filipino,
+              text: c.filipino,
               vocabularyItem: c,
             }));
             const qText = difficulty === 'katamtaman'
@@ -287,7 +297,7 @@ export default function QuizGameplayScreen() {
             const mappedChoices: ChoiceItem[] = choices.map((c) => ({
               id: c.id,
               image_url: c.imageUri || '',
-              text: difficulty === 'katamtaman' ? '' : c.filipino,
+              text: c.filipino,
               vocabularyItem: c,
             }));
             const qText = difficulty === 'katamtaman'
@@ -334,7 +344,7 @@ export default function QuizGameplayScreen() {
           const mappedChoices: ChoiceItem[] = choices.map((c) => ({
             id: c.id,
             image_url: c.imageUri || '',
-            text: difficulty === 'katamtaman' ? '' : c.filipino, // Katamtaman: no names beneath pictures
+            text: c.filipino,
             vocabularyItem: c,
           }));
 
@@ -688,18 +698,18 @@ export default function QuizGameplayScreen() {
                       Shadows.soft,
                     ]}
                   >
-                    {/* Picture only: ItemVisual or Image */}
-                    {choice.vocabularyItem ? (
-                      <ItemVisual
-                        item={choice.vocabularyItem}
-                        size={CHOICE_WIDTH - 28}
-                        style={{ flex: 1 }}
-                      />
-                    ) : choice.image_url ? (
+                    {/* Picture: Render teacher-uploaded image first if provided, else ItemVisual */}
+                    {choice.image_url && !choice.image_url.includes('wikaplay.app') ? (
                       <Image
                         source={{ uri: resolveAvatarUrl(choice.image_url) }}
                         style={styles.choiceImage}
                         contentFit="contain"
+                      />
+                    ) : choice.vocabularyItem ? (
+                      <ItemVisual
+                        item={choice.vocabularyItem}
+                        size={CHOICE_WIDTH - 28}
+                        style={{ flex: 1 }}
                       />
                     ) : (
                       <Text style={styles.choiceEmoji}>🖼️</Text>

@@ -221,9 +221,13 @@ class CategoryController extends Controller
             if ($isKatamtaman) {
                 // Katamtaman: Question prominently at the top ("Nasaan ang [target]?"), 4 pictures
                 $choices = array_map(function ($choice) {
+                    $img = (string) ($choice['image_url'] ?? '');
+                    if (str_contains($img, 'wikaplay.app')) {
+                        $img = '';
+                    }
                     return [
                         'id' => (string) ($choice['id'] ?? ''),
-                        'image_url' => $choice['image_url'] ?? '',
+                        'image_url' => $img,
                         'text' => (string) ($choice['text'] ?? $choice['filipino_name'] ?? ''),
                     ];
                 }, $choices);
@@ -238,12 +242,17 @@ class CategoryController extends Controller
                 $questionText = $q->question_text;
             }
 
+            $effectiveTargetImg = (string) ($q->effective_image_url ?? '');
+            if (str_contains($effectiveTargetImg, 'wikaplay.app')) {
+                $effectiveTargetImg = '';
+            }
+
             return [
                 'id' => $q->id,
                 'flashcard_id' => $q->flashcard_id,
                 'question_text' => $questionText,
                 'audio_url' => $q->effective_audio_url,
-                'target_image_url' => $q->effective_image_url,
+                'target_image_url' => $effectiveTargetImg,
                 'target_item_name' => $targetName,
                 'choices' => $choices,
                 'correct_answer' => (string) $q->correct_answer,
@@ -280,9 +289,13 @@ class CategoryController extends Controller
                     shuffle($choiceFcs);
 
                     $choices = array_map(function ($f) use ($difficulty) {
+                        $fImg = (string) ($f->image_url ?? '');
+                        if (str_contains($fImg, 'wikaplay.app')) {
+                            $fImg = '';
+                        }
                         return [
                             'id' => (string) $f->id,
-                            'image_url' => $f->image_url,
+                            'image_url' => $fImg,
                             'text' => $f->filipino_name,
                         ];
                     }, $choiceFcs);
@@ -295,12 +308,17 @@ class CategoryController extends Controller
                         ? (string) $targetFc->id
                         : strtoupper($targetFc->filipino_name);
 
+                    $targetFcImg = (string) ($targetFc->image_url ?? '');
+                    if (str_contains($targetFcImg, 'wikaplay.app')) {
+                        $targetFcImg = '';
+                    }
+
                     $formattedQuestions->push([
                         'id' => 10000 + $i,
                         'flashcard_id' => $targetFc->id,
                         'question_text' => $qText,
                         'audio_url' => $targetFc->audio_url,
-                        'target_image_url' => $targetFc->image_url,
+                        'target_image_url' => $targetFcImg,
                         'target_item_name' => strtoupper($targetFc->filipino_name),
                         'choices' => $choices,
                         'correct_answer' => $correctAnswer,

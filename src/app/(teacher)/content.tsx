@@ -35,6 +35,7 @@ import { PressableScale } from '../../components/PressableScale';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { VolumeButton } from '../../components/VolumeButton';
 import { resolveAvatarUrl } from '../../components/UserAvatar';
+import { getQuestionCorrectChoiceIndex } from '../../hooks/use-quiz';
 import { teacherService } from '../../services/api';
 import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
 import { Colors, Shadows, Typography, Radius } from '../../theme';
@@ -2160,42 +2161,8 @@ export default function ContentManagementScreen({
                         {/* 4 Picture Choices Grid preview */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                           {(() => {
-                            const targetWord = (q.target_item_name || '').toLowerCase().trim();
-                            const answerWord = (q.correct_answer || '').toLowerCase().trim();
                             const choicesList = q.choices || [];
-
-                            // Find the single correct choice index using strict priority so each question has EXACTLY 1 checkmark:
-                            // Priority 1: Match by Filipino word (choice text or vocabulary item name equals target or answer word)
-                            let singleCorrectIdx = choicesList.findIndex((ch: any) => {
-                              const chText = (typeof ch === 'string' ? ch : (ch?.text || ch?.filipino_name || '')).toLowerCase().trim();
-                              const vocabText = (ch?.vocabularyItem?.filipino || '').toLowerCase().trim();
-                              return (
-                                (targetWord && chText === targetWord) ||
-                                (targetWord && vocabText === targetWord) ||
-                                (answerWord && chText === answerWord)
-                              );
-                            });
-
-                            // Priority 2: Explicit correct_choice_index
-                            if (singleCorrectIdx === -1 && (q as any).correct_choice_index !== undefined) {
-                              singleCorrectIdx = Number((q as any).correct_choice_index);
-                            }
-
-                            // Priority 3: Match choice.id === answerWord
-                            if (singleCorrectIdx === -1 && answerWord) {
-                              singleCorrectIdx = choicesList.findIndex((ch: any) => {
-                                const chId = ch && typeof ch === 'object' ? String(ch.id || '').toLowerCase().trim() : '';
-                                return chId && chId === answerWord;
-                              });
-                            }
-
-                            // Priority 4: Positional index if answerWord is '1', '2', '3', '4'
-                            if (singleCorrectIdx === -1 && answerWord && /^[1-4]$/.test(answerWord)) {
-                              const num = Number(answerWord) - 1;
-                              if (num >= 0 && num < choicesList.length) {
-                                singleCorrectIdx = num;
-                              }
-                            }
+                            const singleCorrectIdx = getQuestionCorrectChoiceIndex(q);
 
                             return choicesList.map((choice: any, cIdx: number) => {
                               // Filter out broken/invalid default images from wikaplay.app
@@ -2813,11 +2780,11 @@ export default function ContentManagementScreen({
                       const answerWord = (questionModal.question.correct_answer || '').toLowerCase().trim();
                       const choiceNorm = choiceText.toLowerCase().trim();
                       const choiceId = choice && typeof choice === 'object' ? String(choice.id || '') : '';
-                      const isCorrect =
-                        (questionModal.question.correct_choice_index === choiceIndex) ||
-                        (choiceNorm && targetWord && choiceNorm === targetWord) ||
-                        (choiceNorm && answerWord && choiceNorm === answerWord) ||
-                        (choiceId && answerWord && choiceId === answerWord);
+                      const singleCorrectIdx =
+                        questionModal.question.correct_choice_index !== undefined && questionModal.question.correct_choice_index !== null
+                          ? Number(questionModal.question.correct_choice_index)
+                          : getQuestionCorrectChoiceIndex(questionModal.question);
+                      const isCorrect = (choiceIndex === singleCorrectIdx);
                       const choiceImgSource = getQuestionVisualSource(
                         imgUrl,
                         choice.localImageSource || choice.vocabularyItem?.image,
@@ -2911,15 +2878,16 @@ export default function ContentManagementScreen({
                             }}
                             onPress={() => {
                               const choiceIdVal = choice?.id ? String(choice.id) : String(choiceIndex + 1);
+                              const choiceName = choiceText && !/^choice\s*#?\d+$/i.test(choiceText) ? choiceText : '';
                               setQuestionModal((prev) => ({
                                 ...prev,
                                 question: {
                                   ...prev.question,
                                   correct_choice_index: choiceIndex,
-                                  // Store the choice ID as correct_answer so backend/student can match by ID
-                                  correct_answer: choiceIdVal,
-                                  // Only set target_item_name from choice text if teacher hasn't typed one already
-                                  target_item_name: prev.question.target_item_name || choiceText,
+                                  // Store the choice word if named, otherwise choice ID
+                                  correct_answer: choiceName || choiceIdVal,
+                                  // Update target_item_name if a named choice is marked
+                                  target_item_name: choiceName || prev.question.target_item_name || '',
                                 },
                               }));
                             }}

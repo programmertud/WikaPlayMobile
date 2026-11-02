@@ -4,42 +4,75 @@ import { useAnswerFeedback } from './use-answer-feedback';
 import { QuizDifficulty, QuizQuestion } from '../types';
 
 /**
- * Reliably validates whether a given choice is the correct answer for a quiz question.
- * Handles choice IDs, choice text, target item names, target images, and positional indices.
+ * Determines the single correct choice index (0 to 3) for a question using strict priority.
+ * Guaranteed to return exactly ONE index so multiple choices are never marked correct.
+ */
+export function getQuestionCorrectChoiceIndex(q: any): number {
+  if (!q || !q.choices || !Array.isArray(q.choices) || q.choices.length === 0) return -1;
+
+  const choicesList = q.choices;
+  const targetWord = String(q.target_item_name || '').toLowerCase().trim();
+  const answerWord = String(q.correct_answer || '').toLowerCase().trim();
+  const targetImg = String(q.target_image_url || q.targetItem?.imageUri || '').trim();
+
+  // Priority 1: Explicit correct_choice_index if specified
+  if (q.correct_choice_index !== undefined && q.correct_choice_index !== null) {
+    const idx = Number(q.correct_choice_index);
+    if (!isNaN(idx) && idx >= 0 && idx < choicesList.length) {
+      return idx;
+    }
+  }
+
+  // Priority 2: Match by Filipino word if choice text or vocab equals targetWord or answerWord
+  let foundIdx = choicesList.findIndex((ch: any) => {
+    const chText = String(typeof ch === 'string' ? ch : (ch?.text || ch?.filipino_name || '')).toLowerCase().trim();
+    const vocabText = String(ch?.vocabularyItem?.filipino || '').toLowerCase().trim();
+    const isGenericChoice = /^choice\s*#?\d+$/i.test(chText);
+    return (
+      (!isGenericChoice && targetWord && (chText === targetWord || vocabText === targetWord)) ||
+      (!isGenericChoice && answerWord && isNaN(Number(answerWord)) && (chText === answerWord || vocabText === answerWord))
+    );
+  });
+
+  // Priority 3: Match by target image URL (for custom teacher questions where target image was uploaded)
+  if (foundIdx === -1 && targetImg.length > 10 && !targetImg.includes('wikaplay.app')) {
+    foundIdx = choicesList.findIndex((ch: any) => {
+      const chImg = String(ch?.image_url || ch?.vocabularyItem?.imageUri || '').trim();
+      return chImg.length > 10 && chImg === targetImg;
+    });
+  }
+
+  // Priority 4: Positional 1-based index if answerWord is strictly '1', '2', '3', '4'
+  if (foundIdx === -1 && answerWord && /^[1-4]$/.test(answerWord)) {
+    const num = Number(answerWord) - 1;
+    if (num >= 0 && num < choicesList.length) {
+      foundIdx = num;
+    }
+  }
+
+  // Priority 5: Choice ID equals answerWord (e.g. choice.id === answerWord)
+  if (foundIdx === -1 && answerWord) {
+    foundIdx = choicesList.findIndex((ch: any) => {
+      const chId = String(ch && typeof ch === 'object' ? (ch.id ?? '') : '').toLowerCase().trim();
+      return chId && chId === answerWord;
+    });
+  }
+
+  return foundIdx >= 0 ? foundIdx : 0;
+}
+
+/**
+ * Reliably validates whether a given choice is the single correct answer for a quiz question.
  */
 export function checkIsChoiceCorrect(choice: any, q: any, choiceIdx?: number): boolean {
-  if (!choice || !q) return false;
-
-  const choiceIdStr = String(choice.id ?? '').toLowerCase().trim();
-  const choiceText = String(choice.text || choice.vocabularyItem?.filipino || '').toLowerCase().trim();
-  const expectedAnswer = String(q.correct_answer || '').toLowerCase().trim();
-  const targetName = String(q.target_item_name || '').toLowerCase().trim();
-
-  // 1. Direct ID match (e.g. choice.id === "1" and correct_answer === "1")
-  if (choiceIdStr && expectedAnswer && choiceIdStr === expectedAnswer) return true;
-
-  // 2. Choice text matches correct_answer (e.g. "agila" === "agila")
-  if (choiceText && expectedAnswer && choiceText === expectedAnswer) return true;
-
-  // 3. Choice text matches target_item_name (e.g. student taps "agila" and target is "agila")
-  if (choiceText && targetName && choiceText === targetName) return true;
-
-  // 4. Choice ID matches target_item_name (e.g. choice.id is "aso" and target is "aso")
-  if (choiceIdStr && targetName && choiceIdStr === targetName) return true;
-
-  // 5. Index match: if expectedAnswer is "1" and this choice is index 0
-  if (choiceIdx !== undefined && expectedAnswer && (expectedAnswer === String(choiceIdx + 1) || expectedAnswer === String(choiceIdx))) {
-    return true;
+  if (!q) return false;
+  const correctIdx = getQuestionCorrectChoiceIndex(q);
+  if (choiceIdx !== undefined) {
+    return choiceIdx === correctIdx;
   }
-
-  // 6. Image match: if choice image matches target image (e.g. custom teacher-uploaded picture for Agila)
-  const choiceImg = String(choice.image_url || choice.vocabularyItem?.imageUri || '').trim();
-  const targetImg = String(q.target_image_url || q.targetItem?.imageUri || '').trim();
-  if (choiceImg && targetImg && choiceImg.length > 10 && choiceImg === targetImg) {
-    return true;
-  }
-
-  return false;
+  if (!choice || !q.choices || !Array.isArray(q.choices)) return false;
+  const foundIdx = q.choices.findIndex((c: any) => c === choice || String(c?.id ?? '') === String(choice?.id ?? ''));
+  return foundIdx === correctIdx;
 }
 
 interface UseQuizOptions {

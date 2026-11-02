@@ -38,7 +38,7 @@ export const isImageAvatar = (avatar?: string | null): boolean => {
 };
 
 export const resolveAvatarUrl = (avatar?: string | null): string => {
-  if (!avatar) return '';
+  if (!avatar || avatar.includes('wikaplay.app')) return '';
   const trimmed = avatar.trim();
   const baseUrl = ApiClient.getBaseUrl();
   const origin = baseUrl.replace(/\/api\/?$/, '');
