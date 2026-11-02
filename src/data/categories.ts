@@ -288,8 +288,8 @@ export function overrideVocabularyItem(filipinoOrId: string, updates: Partial<Vo
       const itemNorm = item.filipino.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
       if (item.id === filipinoOrId || itemNorm === norm) {
         if (updates.imageUri !== undefined) {
-          // Disallow temporary blob: URLs which expire on navigation/refresh
-          if (!updates.imageUri.startsWith('blob:')) {
+          // Disallow temporary blob: URLs and broken wikaplay.app placeholder URLs
+          if (!updates.imageUri.startsWith('blob:') && !updates.imageUri.includes('wikaplay.app')) {
             item.imageUri = updates.imageUri;
           }
         }
@@ -367,7 +367,8 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
       // Teacher has this flashcard - apply their custom image/audio if they uploaded one
       const isUnsplash = typeof backendFc.image_url === 'string' && backendFc.image_url.includes('images.unsplash.com');
       const isBlobUrl = typeof backendFc.image_url === 'string' && backendFc.image_url.startsWith('blob:');
-      const customImage = backendFc.image_url && !isUnsplash && !isBlobUrl ? backendFc.image_url : undefined;
+      const isPlaceholder = typeof backendFc.image_url === 'string' && (backendFc.image_url.includes('wikaplay.app') || backendFc.image_url.trim().length === 0);
+      const customImage = backendFc.image_url && !isUnsplash && !isBlobUrl && !isPlaceholder ? backendFc.image_url : undefined;
 
       const isRealRemoteAudio = typeof backendFc.audio_url === 'string' &&
         (backendFc.audio_url.startsWith('http://') || backendFc.audio_url.startsWith('https://') || backendFc.audio_url.includes('/storage/'));
@@ -401,7 +402,8 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
     if (!exists && f.filipino_name && !isTestCard) {
       const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
       const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
-      const customImage = f.image_url && !isUnsplash && !isBlobUrl ? f.image_url : undefined;
+      const isPlaceholder = typeof f.image_url === 'string' && (f.image_url.includes('wikaplay.app') || f.image_url.trim().length === 0);
+      const customImage = f.image_url && !isUnsplash && !isBlobUrl && !isPlaceholder ? f.image_url : undefined;
 
       const isRealRemoteAudio = typeof f.audio_url === 'string' &&
         (f.audio_url.startsWith('http://') || f.audio_url.startsWith('https://') || f.audio_url.includes('/storage/'));

@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Fonts, Radius, Shadows } from '../theme';
 import { VocabularyItem } from '../types';
 import { resolveAvatarUrl } from './UserAvatar';
+import { LEARNING_CATEGORIES } from '../data/categories';
 
 interface ItemVisualProps {
   item: VocabularyItem;
@@ -15,14 +16,26 @@ export const ItemVisual: React.FC<ItemVisualProps> = ({ item, size = 180, style 
   const [imageError, setImageError] = React.useState(false);
 
   const resolvedImageUri = React.useMemo(() => {
-    if (!item.imageUri) return undefined;
-    return resolveAvatarUrl(item.imageUri);
+    if (!item.imageUri || item.imageUri.includes('wikaplay.app')) return undefined;
+    const resolved = resolveAvatarUrl(item.imageUri);
+    return resolved && resolved.trim().length > 0 ? resolved : undefined;
   }, [item.imageUri]);
 
   // Reset error state when the image URI changes (e.g., when navigating between flashcards)
   React.useEffect(() => {
     setImageError(false);
   }, [resolvedImageUri]);
+
+  // Resolve bundled fallback asset if remote URI is unavailable or errored
+  const fallbackAsset = item.image || (() => {
+    for (const cat of LEARNING_CATEGORIES) {
+      const match = cat.items.find(
+        (it) => it.id === item.id || it.filipino.toLowerCase().trim() === item.filipino?.toLowerCase()?.trim()
+      );
+      if (match?.image) return match.image;
+    }
+    return undefined;
+  })();
 
   // 1. If explicit imageUri is provided and hasn't errored
   if (resolvedImageUri && !imageError) {
@@ -39,12 +52,12 @@ export const ItemVisual: React.FC<ItemVisualProps> = ({ item, size = 180, style 
     );
   }
 
-  // 2. If explicit bundled image asset is provided
-  if (item.image) {
+  // 2. If bundled image asset is provided or found in LEARNING_CATEGORIES
+  if (fallbackAsset) {
     return (
       <View style={[styles.container, { width: size, height: size }, style]}>
         <Image
-          source={item.image}
+          source={fallbackAsset}
           style={styles.image}
           contentFit="contain"
           transition={200}

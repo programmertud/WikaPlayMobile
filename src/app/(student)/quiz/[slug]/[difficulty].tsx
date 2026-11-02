@@ -699,7 +699,7 @@ export default function QuizGameplayScreen() {
                     ]}
                   >
                     {/* Picture: Render teacher-uploaded image first if provided, else ItemVisual */}
-                    {choice.image_url && !choice.image_url.includes('wikaplay.app') ? (
+                    {choice.image_url && !choice.image_url.includes('wikaplay.app') && resolveAvatarUrl(choice.image_url) ? (
                       <Image
                         source={{ uri: resolveAvatarUrl(choice.image_url) }}
                         style={styles.choiceImage}
