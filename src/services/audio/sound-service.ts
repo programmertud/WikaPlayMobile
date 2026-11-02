@@ -334,9 +334,14 @@ export function resolveAudioSource(source: string | any): any {
   const filename = rawTrim.split('/').pop()?.split('?')[0] || rawTrim;
   const noExt = filename.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase().trim();
 
-  // If source already starts with /audio/ or audio/, return the normalized direct path directly
+  // If source already starts with /audio/ AND includes a known category subdirectory, return directly
+  // e.g. /audio/HAYOP/Aso.mp3 → OK, but /audio/mga-hayop_aso.mp3 → must NOT short-circuit (needs remapping)
   if (rawTrim.startsWith('/audio/') || rawTrim.startsWith('audio/')) {
-    return rawTrim.startsWith('/') ? rawTrim : `/${rawTrim}`;
+    const normalized = rawTrim.startsWith('/') ? rawTrim : `/${rawTrim}`;
+    // Only short-circuit if it already has a proper category subfolder path
+    const hasCategory = /^\/audio\/(HAYOP|PRUTAS|GULAY|KULAY|HUGIS|NUMERO|PARTE NG KATAWAN|MGA BATIAN|VOICE OVERS|BATIAN)\//i.test(normalized);
+    if (hasCategory) return normalized;
+    // Otherwise fall through to VOCABULARY_WEB_PATHS and LOCAL_AUDIO_ASSETS for remapping
   }
 
   // On Web, prefer direct web paths from public/audio to avoid Metro unstable_path 404s

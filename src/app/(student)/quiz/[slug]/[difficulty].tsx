@@ -390,7 +390,16 @@ export default function QuizGameplayScreen() {
         sessionId: sessionIdRef.current,
         answers: answers.map((a) => {
           const q = questions.find((item) => item.id === a.question_id);
-          const isCorrect = q ? String(q.correct_answer) === String(a.selected_answer) : undefined;
+          let isCorrect: boolean | undefined = undefined;
+          if (q) {
+            const selectedId = String(a.selected_answer);
+            const expectedAnswer = String(q.correct_answer);
+            const choiceObj = (q.choices as any[])?.find((c: any) => String(c?.id ?? '') === selectedId);
+            const choiceText = String(choiceObj?.text || choiceObj?.vocabularyItem?.filipino || '');
+            isCorrect =
+              selectedId === expectedAnswer ||
+              (choiceText.length > 0 && choiceText.toLowerCase().trim() === expectedAnswer.toLowerCase().trim());
+          }
           return {
             question_id: a.question_id,
             selected_answer: a.selected_answer,
@@ -429,7 +438,13 @@ export default function QuizGameplayScreen() {
 
   const onChoicePress = (choiceId: string) => {
     if (choicesDisabled || isAnswerLocked || !currentQuestion) return;
-    const isCorrect = String(choiceId) === String(currentQuestion.correct_answer);
+    // Support matching by choice ID (katamtaman stored as ID) or normalized text
+    const correctAnswer = String(currentQuestion.correct_answer);
+    const choiceObj = currentQuestion.choices?.find((c: any) => String(c?.id ?? '') === String(choiceId));
+    const choiceText = choiceObj?.text || choiceObj?.vocabularyItem?.filipino || '';
+    const isCorrect =
+      String(choiceId) === correctAnswer ||
+      (choiceText && choiceText.toLowerCase().trim() === correctAnswer.toLowerCase().trim());
     try {
       if (isCorrect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

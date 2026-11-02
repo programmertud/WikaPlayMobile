@@ -146,81 +146,80 @@ export default function MadaliQuizScreen() {
       await hydrateCategoryOverrides(slug);
       if (mounted) setQuestions((prev) => [...prev]);
 
-      // 2. DO NOT sync flashcards for Madali quiz - this preserves the original vocabulary item IDs
-      // needed for picture questions. The local quiz bank has everything it needs.
-      // try {
-      //   const fcRes = await categoryService.getFlashcards(slug);
-      //   if (mounted && fcRes?.flashcards) {
-      //     syncCategoryFlashcards(slug, fcRes.flashcards);
-      //     setQuestions((prev) => [...prev]);
-      //   }
-      // } catch {}
+      // 2. Fetch teacher-added custom questions from API and append to the local bank
+      try {
+        const res = await categoryService.getQuizQuestions(slug, 'madali');
+        if (!mounted) return;
 
-      // 3. For now, disable API question fetching for Madali
-      // Students will only see the 20 local quiz bank questions
-      // This prevents showing 43 questions when teacher hasn't added custom questions
-      // TODO: Re-enable API fetching when teacher actually adds custom questions
-      // try {
-      //   const res = await categoryService.getQuizQuestions(slug, 'madali');
-      //   if (res.is_locked) {
-      //     router.replace({
-      //       pathname: '/(student)/quiz-locked' as any,
-      //       params: { category: res.category.name || category.name, difficulty: 'madali' },
-      //     } as any);
-      //     return;
-      //   }
-      //
-      //   // Only merge API questions if they exist and we're at the start of the quiz
-      //   // This prevents showing 43 questions when teacher hasn't added anything
-      //   if (mounted && res.questions && res.questions.length > 0 && currentIndex === 0 && answers.length === 0) {
-      //     const localQuestions = getMadaliQuestionsBySlug(slug);
-      //     const letters: AnswerId[] = ['A', 'B', 'C', 'D'];
-      //
-      //     // Map API questions to match local format
-      //     const mappedApiQuestions: MadaliQuestion[] = res.questions.map((apiQ: any, idx: number) => {
-      //       const choices = (apiQ.choices || []).slice(0, 4);
-      //       const textChoices: MadaliTextChoice[] = choices.map((ch: any, cIdx: number) => ({
-      //         id: letters[cIdx],
-      //         text: typeof ch === 'string' ? ch : (ch?.text || ''),
-      //       }));
-      //
-      //       const correctIdx = choices.findIndex((ch: any) => {
-      //         const text = typeof ch === 'string' ? ch : (ch?.text || '');
-      //         const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
-      //         return (
-      //           text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
-      //           idStr === String(apiQ.correct_answer)
-      //         );
-      //       });
-      //       const correctTextId = (correctIdx >= 0 ? letters[correctIdx] : 'A') as AnswerId;
-      //       const hasPic = apiQ.target_image_url && typeof apiQ.target_image_url === 'string' && apiQ.target_image_url.trim().length > 0;
-      //
-      //       return {
-      //         id: `api_${apiQ.id || idx}`,
-      //         categoryId: `cat_${slug}`,
-      //         categorySlug: slug,
-      //         difficulty: 'madali',
-      //         type: hasPic ? 'picture-id' : 'multiple-choice',
-      //         questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
-      //         questionEn: apiQ.question_text || '',
-      //         textChoices,
-      //         correctTextId,
-      //         target_image_url: hasPic ? apiQ.target_image_url : undefined,
-      //         audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) } : undefined,
-      //       };
-      //     });
-      //
-      //     // Only merge if API questions are actual custom questions (not auto-generated ones)
-      //     // Auto-generated questions typically have IDs starting with 10000+
-      //     const customApiQuestions = mappedApiQuestions.filter((q) => !q.id.startsWith('api_10000'));
-      //
-      //     if (customApiQuestions.length > 0) {
-      //       setQuestions([...localQuestions, ...customApiQuestions]);
-      //     }
-      //   }
-      // } catch (err) {
-      //   console.warn('[MadaliQuiz] Failed to fetch API questions, using local bank only:', err);
-      // }
+        if (res.is_locked) {
+          router.replace({
+            pathname: '/(student)/quiz-locked' as any,
+            params: { category: res.category?.name || category.name, difficulty: 'madali' },
+          } as any);
+          return;
+        }
+
+        const apiQuestions: any[] = (res.questions || []).filter(
+          // Only custom teacher questions — IDs below 10000 are real DB rows
+          (q: any) => q.id && Number(q.id) < 10000
+        );
+
+        if (apiQuestions.length > 0 && mounted) {
+          const localQuestions = getMadaliQuestionsBySlug(slug);
+          const letters: AnswerId[] = ['A', 'B', 'C', 'D'];
+
+          const mappedApiQuestions: MadaliQuestion[] = apiQuestions.map((apiQ: any, idx: number) => {
+            const choices = (apiQ.choices || []).slice(0, 4);
+            const textChoices: MadaliTextChoice[] = choices.map((ch: any, cIdx: number) => ({
+              id: letters[cIdx],
+              text: typeof ch === 'string' ? ch : (ch?.text || ''),
+            }));
+
+            const correctIdx = choices.findIndex((ch: any) => {
+              const text = typeof ch === 'string' ? ch : (ch?.text || '');
+              const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
+              return (
+                text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
+                idStr === String(apiQ.correct_answer)
+              );
+            });
+            const correctTextId = (correctIdx >= 0 ? letters[correctIdx] : 'A') as AnswerId;
+            const hasPic =
+              apiQ.target_image_url &&
+              typeof apiQ.target_image_url === 'string' &&
+              apiQ.target_image_url.trim().length > 0 &&
+              !apiQ.target_image_url.includes('wikaplay.app');
+
+            return {
+              id: `api_${apiQ.id || idx}`,
+              categoryId: `cat_${slug}`,
+              categorySlug: slug,
+              difficulty: 'madali',
+              type: hasPic ? 'picture-id' : 'multiple-choice',
+              questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
+              questionEn: apiQ.question_text || '',
+              textChoices,
+              correctTextId,
+              target_image_url: hasPic ? apiQ.target_image_url : undefined,
+              audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) } : undefined,
+            } as MadaliQuestion;
+          });
+
+          // Deduplicate: don't show questions already in the local bank (by target word)
+          const localWords = new Set(
+            localQuestions.map((q) => (q.questionFil || '').toLowerCase().trim())
+          );
+          const newCustom = mappedApiQuestions.filter(
+            (q) => !localWords.has((q.questionFil || '').toLowerCase().trim())
+          );
+
+          if (newCustom.length > 0) {
+            setQuestions(shuffleQuestions([...localQuestions, ...newCustom]));
+          }
+        }
+      } catch (err) {
+        console.warn('[MadaliQuiz] Failed to fetch API questions, using local bank only:', err);
+      }
     };
 
     syncMadaliContent();

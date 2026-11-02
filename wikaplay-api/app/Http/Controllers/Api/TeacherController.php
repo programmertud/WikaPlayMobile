@@ -1138,8 +1138,9 @@ class TeacherController extends Controller
         $question->difficulty = $validated['difficulty'];
         $question->flashcard_id = $validated['flashcard_id'] ?? null;
         $question->question_text = $validated['question_text'] ?? '';
-        $question->target_item_name = $validated['target_item_name'] ?? null;
-        $question->target_image_url = $targetImageUrl;
+        // Use empty string instead of null to avoid PostgreSQL NOT NULL constraint violations
+        $question->target_item_name = !empty($validated['target_item_name']) ? $validated['target_item_name'] : '';
+        $question->target_image_url = !empty($targetImageUrl) ? $targetImageUrl : '';
         $question->audio_url = $audioUrl;
         $question->choices = $choices;
         $question->correct_answer = $validated['correct_answer'];

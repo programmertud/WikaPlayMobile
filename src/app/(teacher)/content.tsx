@@ -2140,7 +2140,9 @@ export default function ContentManagementScreen({
                         {/* 4 Picture Choices Grid preview */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                           {q.choices?.map((choice: any, cIdx: number) => {
-                            const choiceImg = typeof choice === 'object' ? choice.image_url : '';
+                            // Filter out broken/invalid default images from wikaplay.app
+                            const rawChoiceImg = typeof choice === 'object' ? (choice.image_url || '') : '';
+                            const choiceImg = rawChoiceImg.includes('wikaplay.app') ? '' : rawChoiceImg;
                             const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
                             const targetWord = (q.target_item_name || '').toLowerCase().trim();
                             const answerWord = (q.correct_answer || '').toLowerCase().trim();
@@ -2753,7 +2755,9 @@ export default function ContentManagementScreen({
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                     {[0, 1, 2, 3].map((choiceIndex) => {
                       const choice = (questionModal.question.choices || [])[choiceIndex] || {};
-                      const imgUrl = typeof choice === 'object' ? choice.image_url : '';
+                      const rawImgUrl = typeof choice === 'object' ? (choice.image_url || '') : '';
+                      // Filter out broken wikaplay.app default images
+                      const imgUrl = rawImgUrl.includes('wikaplay.app') ? '' : rawImgUrl;
                       const choiceText = typeof choice === 'object' ? (choice.text || '') : (choice || '');
                       const targetWord = (questionModal.question.target_item_name || '').toLowerCase().trim();
                       const answerWord = (questionModal.question.correct_answer || '').toLowerCase().trim();
@@ -2856,12 +2860,15 @@ export default function ContentManagementScreen({
                               alignItems: 'center',
                             }}
                             onPress={() => {
+                              const choiceIdVal = choice?.id ? String(choice.id) : String(choiceIndex + 1);
                               setQuestionModal((prev) => ({
                                 ...prev,
                                 question: {
                                   ...prev.question,
                                   correct_choice_index: choiceIndex,
-                                  correct_answer: choiceText || prev.question.target_item_name,
+                                  // Store the choice ID as correct_answer so backend/student can match by ID
+                                  correct_answer: choiceIdVal,
+                                  // Also set target_item_name from choice text for display/audio
                                   target_item_name: choiceText || prev.question.target_item_name,
                                 },
                               }));

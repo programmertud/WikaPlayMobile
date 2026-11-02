@@ -122,9 +122,15 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
       const normalizedChoice = choiceId.toUpperCase().trim();
       const normalizedExpected = String(currentQuestion.correct_answer).toUpperCase().trim();
       const normalizedTarget = String(currentQuestion.target_item_name || '').toUpperCase().trim();
+      // Also check if the selected choice's text matches the expected answer (for katamtaman questions
+      // where teacher may store correct_answer as an ID like "1" or as the text like "aso")
+      const choiceObj = (currentQuestion.choices as any[])?.find((c: any) => String(c?.id ?? '') === choiceId);
+      const choiceText = String(choiceObj?.text || choiceObj?.vocabularyItem?.filipino || '').toUpperCase().trim();
       const isCorrect =
         normalizedChoice === normalizedExpected ||
-        (normalizedTarget.length > 0 && normalizedChoice === normalizedTarget);
+        (choiceText.length > 0 && choiceText === normalizedExpected) ||
+        (normalizedTarget.length > 0 && normalizedChoice === normalizedTarget) ||
+        (choiceText.length > 0 && normalizedTarget.length > 0 && choiceText === normalizedTarget);
 
       if (isCorrect) {
         setScore((prev) => prev + currentQuestion.points);

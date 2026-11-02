@@ -99,6 +99,27 @@ class QuizController extends Controller
                 if ($q) {
                     $expectedAnswer = trim(mb_strtolower((string)$q->correct_answer));
                     $isCorrect = ($userAnswer === $expectedAnswer);
+
+                    // Also check if userAnswer matches a choice text (for katamtaman where correct_answer may be an ID)
+                    if (!$isCorrect && !empty($q->choices)) {
+                        $choices = is_array($q->choices) ? $q->choices : json_decode($q->choices, true);
+                        if (is_array($choices)) {
+                            foreach ($choices as $ch) {
+                                $chId   = trim(mb_strtolower((string)($ch['id'] ?? '')));
+                                $chText = trim(mb_strtolower((string)($ch['text'] ?? '')));
+                                // userAnswer is the choice ID; correct_answer may be a text label or another ID
+                                if ($chId === $userAnswer && ($chText === $expectedAnswer || $chId === $expectedAnswer)) {
+                                    $isCorrect = true;
+                                    break;
+                                }
+                                // userAnswer is choice text; correct_answer is that same text
+                                if ($chText === $userAnswer && $chText === $expectedAnswer) {
+                                    $isCorrect = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 } elseif (isset($ans['is_correct'])) {
                     $isCorrect = (bool)$ans['is_correct'];
                 } else {
@@ -129,9 +150,9 @@ class QuizController extends Controller
             $passScore = $availability ? $availability->pass_score : ceil($totalQuestions * 0.7);
             $passed = ($correctCount >= $passScore);
 
-            // Rule: 1:1 star reward for correct questions (20 questions = up to 20 stars)
-            // Strict 1:1 star balance update: earning 20 stars adds exactly 20 stars
-            $starsAwarded = min(20, min($totalQuestions, max(0, $correctCount)));
+            // Rule: 1:1 star reward for correct questions (e.g. 23 correct = 23 stars)
+            // No cap at 20 — teachers can add more questions and students earn stars for all of them
+            $starsAwarded = min($totalQuestions, max(0, $correctCount));
 
             $session = QuizSession::create([
                 'user_id' => $user->id,
