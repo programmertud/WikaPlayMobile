@@ -28,7 +28,7 @@ import { resolveAvatarUrl } from '../../../../components/UserAvatar';
 import { getCategoryBySlug, getRandomVocabularyChoices, syncCategoryFlashcards } from '../../../../data/categories';
 import { useAuth } from '../../../../hooks/use-auth';
 import { usePresence } from '../../../../hooks/use-presence';
-import { useQuiz } from '../../../../hooks/use-quiz';
+import { useQuiz, checkIsChoiceCorrect } from '../../../../hooks/use-quiz';
 import { categoryService } from '../../../../services/api';
 import { generateSessionId, submitQuizReward } from '../../../../services/rewards/star-reward-service';
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../../theme';
@@ -393,12 +393,9 @@ export default function QuizGameplayScreen() {
           let isCorrect: boolean | undefined = undefined;
           if (q) {
             const selectedId = String(a.selected_answer);
-            const expectedAnswer = String(q.correct_answer);
-            const choiceObj = (q.choices as any[])?.find((c: any) => String(c?.id ?? '') === selectedId);
-            const choiceText = String(choiceObj?.text || choiceObj?.vocabularyItem?.filipino || '');
-            isCorrect =
-              selectedId === expectedAnswer ||
-              (choiceText.length > 0 && choiceText.toLowerCase().trim() === expectedAnswer.toLowerCase().trim());
+            const choiceIdx = (q.choices as any[])?.findIndex((c: any) => String(c?.id ?? '') === selectedId);
+            const choiceObj = choiceIdx !== undefined && choiceIdx >= 0 ? (q.choices as any[])[choiceIdx] : { id: selectedId };
+            isCorrect = checkIsChoiceCorrect(choiceObj, q, choiceIdx);
           }
           return {
             question_id: a.question_id,
@@ -438,13 +435,9 @@ export default function QuizGameplayScreen() {
 
   const onChoicePress = (choiceId: string) => {
     if (choicesDisabled || isAnswerLocked || !currentQuestion) return;
-    // Support matching by choice ID (katamtaman stored as ID) or normalized text
-    const correctAnswer = String(currentQuestion.correct_answer);
-    const choiceObj = currentQuestion.choices?.find((c: any) => String(c?.id ?? '') === String(choiceId));
-    const choiceText = choiceObj?.text || choiceObj?.vocabularyItem?.filipino || '';
-    const isCorrect =
-      String(choiceId) === correctAnswer ||
-      (choiceText && choiceText.toLowerCase().trim() === correctAnswer.toLowerCase().trim());
+    const choiceIdx = currentQuestion.choices?.findIndex((c: any) => String(c?.id ?? '') === String(choiceId));
+    const choiceObj = choiceIdx !== undefined && choiceIdx >= 0 ? currentQuestion.choices[choiceIdx] : { id: choiceId };
+    const isCorrect = checkIsChoiceCorrect(choiceObj, currentQuestion, choiceIdx);
     try {
       if (isCorrect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -668,7 +661,7 @@ export default function QuizGameplayScreen() {
             <View style={styles.choicesGrid}>
               {currentQuestion?.choices.map((choice: ChoiceItem, idx: number) => {
                 const isSelected = selectedAnswer === choice.id;
-                const isCorrectAnswer = String(choice.id) === String(currentQuestion.correct_answer);
+                const isCorrectAnswer = checkIsChoiceCorrect(choice, currentQuestion, idx);
 
                 let cardBorderStyle = styles.choiceNormalBorder;
                 if (isAnswerLocked) {

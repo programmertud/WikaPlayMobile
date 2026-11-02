@@ -3,6 +3,45 @@ import { playSound, stopCurrentSound } from '../services/audio/sound-service';
 import { useAnswerFeedback } from './use-answer-feedback';
 import { QuizDifficulty, QuizQuestion } from '../types';
 
+/**
+ * Reliably validates whether a given choice is the correct answer for a quiz question.
+ * Handles choice IDs, choice text, target item names, target images, and positional indices.
+ */
+export function checkIsChoiceCorrect(choice: any, q: any, choiceIdx?: number): boolean {
+  if (!choice || !q) return false;
+
+  const choiceIdStr = String(choice.id ?? '').toLowerCase().trim();
+  const choiceText = String(choice.text || choice.vocabularyItem?.filipino || '').toLowerCase().trim();
+  const expectedAnswer = String(q.correct_answer || '').toLowerCase().trim();
+  const targetName = String(q.target_item_name || '').toLowerCase().trim();
+
+  // 1. Direct ID match (e.g. choice.id === "1" and correct_answer === "1")
+  if (choiceIdStr && expectedAnswer && choiceIdStr === expectedAnswer) return true;
+
+  // 2. Choice text matches correct_answer (e.g. "agila" === "agila")
+  if (choiceText && expectedAnswer && choiceText === expectedAnswer) return true;
+
+  // 3. Choice text matches target_item_name (e.g. student taps "agila" and target is "agila")
+  if (choiceText && targetName && choiceText === targetName) return true;
+
+  // 4. Choice ID matches target_item_name (e.g. choice.id is "aso" and target is "aso")
+  if (choiceIdStr && targetName && choiceIdStr === targetName) return true;
+
+  // 5. Index match: if expectedAnswer is "1" and this choice is index 0
+  if (choiceIdx !== undefined && expectedAnswer && (expectedAnswer === String(choiceIdx + 1) || expectedAnswer === String(choiceIdx))) {
+    return true;
+  }
+
+  // 6. Image match: if choice image matches target image (e.g. custom teacher-uploaded picture for Agila)
+  const choiceImg = String(choice.image_url || choice.vocabularyItem?.imageUri || '').trim();
+  const targetImg = String(q.target_image_url || q.targetItem?.imageUri || '').trim();
+  if (choiceImg && targetImg && choiceImg.length > 10 && choiceImg === targetImg) {
+    return true;
+  }
+
+  return false;
+}
+
 interface UseQuizOptions {
   categoryId: number;
   difficulty: QuizDifficulty;
@@ -118,19 +157,19 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
       setChoicesDisabled(true);
       setSelectedAnswer(choiceId);
 
-      // Validate answer (supports both choice IDs and case-insensitive Mahirap jumble words)
-      const normalizedChoice = choiceId.toUpperCase().trim();
-      const normalizedExpected = String(currentQuestion.correct_answer).toUpperCase().trim();
-      const normalizedTarget = String(currentQuestion.target_item_name || '').toUpperCase().trim();
-      // Also check if the selected choice's text matches the expected answer (for katamtaman questions
-      // where teacher may store correct_answer as an ID like "1" or as the text like "aso")
-      const choiceObj = (currentQuestion.choices as any[])?.find((c: any) => String(c?.id ?? '') === choiceId);
-      const choiceText = String(choiceObj?.text || choiceObj?.vocabularyItem?.filipino || '').toUpperCase().trim();
-      const isCorrect =
-        normalizedChoice === normalizedExpected ||
-        (choiceText.length > 0 && choiceText === normalizedExpected) ||
-        (normalizedTarget.length > 0 && normalizedChoice === normalizedTarget) ||
-        (choiceText.length > 0 && normalizedTarget.length > 0 && choiceText === normalizedTarget);
+      let isCorrect = false;
+      if (difficulty === 'mahirap') {
+        const normalizedChoice = choiceId.toUpperCase().trim();
+        const normalizedExpected = String(currentQuestion.correct_answer).toUpperCase().trim();
+        const normalizedTarget = String(currentQuestion.target_item_name || '').toUpperCase().trim();
+        isCorrect =
+          normalizedChoice === normalizedExpected ||
+          (normalizedTarget.length > 0 && normalizedChoice === normalizedTarget);
+      } else {
+        const choiceIdx = (currentQuestion.choices as any[])?.findIndex((c: any) => String(c?.id ?? '') === choiceId);
+        const choiceObj = choiceIdx !== undefined && choiceIdx >= 0 ? (currentQuestion.choices as any[])[choiceIdx] : { id: choiceId };
+        isCorrect = checkIsChoiceCorrect(choiceObj, currentQuestion, choiceIdx);
+      }
 
       if (isCorrect) {
         setScore((prev) => prev + currentQuestion.points);

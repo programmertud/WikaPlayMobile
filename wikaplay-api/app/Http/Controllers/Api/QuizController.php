@@ -98,7 +98,8 @@ class QuizController extends Controller
 
                 if ($q) {
                     $expectedAnswer = trim(mb_strtolower((string)$q->correct_answer));
-                    $isCorrect = ($userAnswer === $expectedAnswer);
+                    $targetItem = trim(mb_strtolower((string)($q->target_item_name ?? '')));
+                    $isCorrect = ($userAnswer === $expectedAnswer) || ($targetItem !== '' && $userAnswer === $targetItem);
 
                     // Also check if userAnswer matches a choice text (for katamtaman where correct_answer may be an ID)
                     if (!$isCorrect && !empty($q->choices)) {
@@ -107,18 +108,25 @@ class QuizController extends Controller
                             foreach ($choices as $ch) {
                                 $chId   = trim(mb_strtolower((string)($ch['id'] ?? '')));
                                 $chText = trim(mb_strtolower((string)($ch['text'] ?? '')));
-                                // userAnswer is the choice ID; correct_answer may be a text label or another ID
-                                if ($chId === $userAnswer && ($chText === $expectedAnswer || $chId === $expectedAnswer)) {
-                                    $isCorrect = true;
-                                    break;
+                                // userAnswer is the choice ID; correct_answer may be a text label, target item name, or another ID
+                                if ($chId === $userAnswer) {
+                                    if ($chText === $expectedAnswer || $chId === $expectedAnswer || ($targetItem !== '' && $chText === $targetItem)) {
+                                        $isCorrect = true;
+                                        break;
+                                    }
                                 }
-                                // userAnswer is choice text; correct_answer is that same text
-                                if ($chText === $userAnswer && $chText === $expectedAnswer) {
+                                // userAnswer is choice text; correct_answer or target is that same text
+                                if ($chText !== '' && $chText === $userAnswer && ($chText === $expectedAnswer || $chText === $targetItem)) {
                                     $isCorrect = true;
                                     break;
                                 }
                             }
                         }
+                    }
+
+                    // If client-side validation already determined answer is correct, trust client assessment
+                    if (!$isCorrect && isset($ans['is_correct']) && $ans['is_correct']) {
+                        $isCorrect = true;
                     }
                 } elseif (isset($ans['is_correct'])) {
                     $isCorrect = (bool)$ans['is_correct'];

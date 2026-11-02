@@ -219,12 +219,12 @@ class CategoryController extends Controller
             $choices = is_array($q->choices) ? $q->choices : json_decode($q->choices, true);
 
             if ($isKatamtaman) {
-                // Katamtaman: Question prominently at the top ("Nasaan ang [target]?"), 4 pictures, no text labels beneath
+                // Katamtaman: Question prominently at the top ("Nasaan ang [target]?"), 4 pictures
                 $choices = array_map(function ($choice) {
                     return [
                         'id' => (string) ($choice['id'] ?? ''),
                         'image_url' => $choice['image_url'] ?? '',
-                        'text' => '', // No names beneath pictures
+                        'text' => (string) ($choice['text'] ?? $choice['filipino_name'] ?? ''),
                     ];
                 }, $choices);
 
@@ -283,7 +283,7 @@ class CategoryController extends Controller
                         return [
                             'id' => (string) $f->id,
                             'image_url' => $f->image_url,
-                            'text' => ($difficulty === 'katamtaman') ? '' : $f->filipino_name,
+                            'text' => $f->filipino_name,
                         ];
                     }, $choiceFcs);
 

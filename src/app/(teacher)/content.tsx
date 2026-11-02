@@ -2159,51 +2159,79 @@ export default function ContentManagementScreen({
 
                         {/* 4 Picture Choices Grid preview */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                          {q.choices?.map((choice: any, cIdx: number) => {
-                            // Filter out broken/invalid default images from wikaplay.app
-                            const rawChoiceImg = typeof choice === 'object' ? (choice.image_url || '') : '';
-                            const choiceImg = rawChoiceImg.includes('wikaplay.app') ? '' : rawChoiceImg;
-                            const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
+                          {(() => {
                             const targetWord = (q.target_item_name || '').toLowerCase().trim();
                             const answerWord = (q.correct_answer || '').toLowerCase().trim();
-                            const choiceNorm = choiceText.toLowerCase().trim();
-                            const choiceId = choice && typeof choice === 'object' ? String(choice.id || '') : '';
-                            const isCorrect = Boolean(
-                              ((q as any).correct_choice_index !== undefined && (q as any).correct_choice_index === cIdx) ||
-                              (answerWord && (answerWord === String(cIdx + 1) || answerWord === String(cIdx))) ||
-                              (answerWord && choiceId && choiceId === answerWord) ||
-                              (targetWord && choiceNorm === targetWord) ||
-                              (answerWord && choiceNorm === answerWord) ||
-                              (choice?.vocabularyItem?.filipino && targetWord && choice.vocabularyItem.filipino.toLowerCase().trim() === targetWord)
-                            );
-                            const choiceImgSource = getQuestionVisualSource(
-                              choiceImg,
-                              choice?.localImageSource || choice?.vocabularyItem?.image,
-                              choiceText || choice?.id,
-                              selectedCategory?.slug,
-                              quizData?.available_flashcards
-                            );
-                            return (
-                              <View
-                                key={`choice_${q.id || idx}_${cIdx}`}
-                                style={{
-                                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                                  paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
-                                  borderWidth: 1.5, borderColor: isCorrect ? Colors.grassGreen : '#E2E8F0',
-                                  backgroundColor: isCorrect ? '#DCFCE7' : '#F8FAFC',
-                                }}
-                              >
-                                {choiceImgSource ? (
-                                  <Image source={choiceImgSource} style={{ width: 28, height: 28, borderRadius: 4 }} resizeMode="cover" />
-                                ) : (
-                                  <Text style={{ fontSize: 14 }}>🖼️</Text>
-                                )}
-                                <Text style={{ fontSize: 11, fontWeight: isCorrect ? 'bold' : 'normal', color: isCorrect ? Colors.grassGreenDark : Colors.text }}>
-                                  {choiceText || `Choice #${cIdx + 1}`} {isCorrect ? '✓' : ''}
-                                </Text>
-                              </View>
-                            );
-                          })}
+                            const choicesList = q.choices || [];
+
+                            // Find the single correct choice index using strict priority so each question has EXACTLY 1 checkmark:
+                            // Priority 1: Match by Filipino word (choice text or vocabulary item name equals target or answer word)
+                            let singleCorrectIdx = choicesList.findIndex((ch: any) => {
+                              const chText = (typeof ch === 'string' ? ch : (ch?.text || ch?.filipino_name || '')).toLowerCase().trim();
+                              const vocabText = (ch?.vocabularyItem?.filipino || '').toLowerCase().trim();
+                              return (
+                                (targetWord && chText === targetWord) ||
+                                (targetWord && vocabText === targetWord) ||
+                                (answerWord && chText === answerWord)
+                              );
+                            });
+
+                            // Priority 2: Explicit correct_choice_index
+                            if (singleCorrectIdx === -1 && (q as any).correct_choice_index !== undefined) {
+                              singleCorrectIdx = Number((q as any).correct_choice_index);
+                            }
+
+                            // Priority 3: Match choice.id === answerWord
+                            if (singleCorrectIdx === -1 && answerWord) {
+                              singleCorrectIdx = choicesList.findIndex((ch: any) => {
+                                const chId = ch && typeof ch === 'object' ? String(ch.id || '').toLowerCase().trim() : '';
+                                return chId && chId === answerWord;
+                              });
+                            }
+
+                            // Priority 4: Positional index if answerWord is '1', '2', '3', '4'
+                            if (singleCorrectIdx === -1 && answerWord && /^[1-4]$/.test(answerWord)) {
+                              const num = Number(answerWord) - 1;
+                              if (num >= 0 && num < choicesList.length) {
+                                singleCorrectIdx = num;
+                              }
+                            }
+
+                            return choicesList.map((choice: any, cIdx: number) => {
+                              // Filter out broken/invalid default images from wikaplay.app
+                              const rawChoiceImg = typeof choice === 'object' ? (choice.image_url || '') : '';
+                              const choiceImg = rawChoiceImg.includes('wikaplay.app') ? '' : rawChoiceImg;
+                              const choiceText = typeof choice === 'string' ? choice : (choice?.text || choice?.filipino_name || '');
+                              const isCorrect = (cIdx === singleCorrectIdx);
+                              const choiceImgSource = getQuestionVisualSource(
+                                choiceImg,
+                                choice?.localImageSource || choice?.vocabularyItem?.image,
+                                choiceText || choice?.id,
+                                selectedCategory?.slug,
+                                quizData?.available_flashcards
+                              );
+                              return (
+                                <View
+                                  key={`choice_${q.id || idx}_${cIdx}`}
+                                  style={{
+                                    flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+                                    borderWidth: 1.5, borderColor: isCorrect ? Colors.grassGreen : '#E2E8F0',
+                                    backgroundColor: isCorrect ? '#DCFCE7' : '#F8FAFC',
+                                  }}
+                                >
+                                  {choiceImgSource ? (
+                                    <Image source={choiceImgSource} style={{ width: 28, height: 28, borderRadius: 4 }} resizeMode="cover" />
+                                  ) : (
+                                    <Text style={{ fontSize: 14 }}>🖼️</Text>
+                                  )}
+                                  <Text style={{ fontSize: 11, fontWeight: isCorrect ? 'bold' : 'normal', color: isCorrect ? Colors.grassGreenDark : Colors.text }}>
+                                    {choiceText || `Choice #${cIdx + 1}`} {isCorrect ? '✓' : ''}
+                                  </Text>
+                                </View>
+                              );
+                            });
+                          })()}
                         </View>
                       </>
                     )}
