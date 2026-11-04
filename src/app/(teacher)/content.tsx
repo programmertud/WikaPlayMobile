@@ -1138,13 +1138,12 @@ export default function ContentManagementScreen({
           choices[choiceIndex] = { ...curr, image_url: res.url, localImageSource: { uri: res.url } };
           return { ...prev, question: { ...prev.question, choices } };
         });
-      } catch {
-        setQuestionModal((prev) => {
-          const choices = [...(prev.question.choices || [{}, {}, {}, {}])];
-          const curr = typeof choices[choiceIndex] === 'object' ? choices[choiceIndex] : { text: choices[choiceIndex] || '' };
-          choices[choiceIndex] = { ...curr, image_url: asset.uri, localImageSource: { uri: asset.uri } };
-          return { ...prev, question: { ...prev.question, choices } };
-        });
+      } catch (uploadErr: any) {
+        console.error('Choice image upload failed:', uploadErr);
+        Alert.alert(
+          'Upload Failed',
+          'Failed to upload choice image to server. Please check your internet connection and try again.'
+        );
       }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to select image.');
@@ -1184,11 +1183,12 @@ export default function ContentManagementScreen({
           ...prev,
           question: { ...prev.question, audio_url: res.url },
         }));
-      } catch {
-        setQuestionModal((prev) => ({
-          ...prev,
-          question: { ...prev.question, audio_url: asset.uri },
-        }));
+      } catch (uploadErr: any) {
+        console.error('Quiz audio upload failed:', uploadErr);
+        Alert.alert(
+          'Upload Failed',
+          'Failed to upload audio to server. Please check your internet connection and try again.'
+        );
       }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to select audio.');
@@ -1239,15 +1239,12 @@ export default function ContentManagementScreen({
             localImageSource: { uri: res.url },
           },
         }));
-      } catch {
-        setQuestionModal((prev) => ({
-          ...prev,
-          question: {
-            ...prev.question,
-            target_image_url: asset.uri,
-            localImageSource: { uri: asset.uri },
-          },
-        }));
+      } catch (uploadErr: any) {
+        console.error('Target image upload failed:', uploadErr);
+        Alert.alert(
+          'Upload Failed',
+          'Failed to upload image to server. Please check your internet connection and try again.'
+        );
       }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to select image.');
@@ -1507,6 +1504,41 @@ export default function ContentManagementScreen({
     }
 
     try {
+      // Guard: never allow saving temporary device URIs (file://, content://, blob:) as they expire and disappear after a few days
+      const isTemporaryUri = (uri?: string) =>
+        typeof uri === 'string' &&
+        (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('blob:'));
+
+      if (isTemporaryUri(q.target_image_url)) {
+        Alert.alert(
+          'Image Upload Incomplete',
+          'The target image has not finished uploading to the server. Please tap the image to upload it to the server so it remains permanent.'
+        );
+        return;
+      }
+
+      if (isTemporaryUri(q.audio_url)) {
+        Alert.alert(
+          'Audio Upload Incomplete',
+          'The audio recording has not finished uploading to the server. Please re-upload it so it remains permanent.'
+        );
+        return;
+      }
+
+      if (Array.isArray(q.choices)) {
+        for (let i = 0; i < q.choices.length; i++) {
+          const ch = q.choices[i];
+          const chImg = typeof ch === 'object' ? ch?.image_url : '';
+          if (isTemporaryUri(chImg)) {
+            Alert.alert(
+              'Choice Image Upload Incomplete',
+              `Choice #${i + 1} has not finished uploading to the server. Please tap it to upload it to the server so it remains permanent.`
+            );
+            return;
+          }
+        }
+      }
+
       // Sanitize choices: support both string[] and object[] formats and extract text cleanly
       const sanitizeChoices = (rawChoices: any[]): any[] => {
         const list = Array.isArray(rawChoices) ? rawChoices : [];
