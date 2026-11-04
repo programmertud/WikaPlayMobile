@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 
 const TOKEN_KEY = 'wikaplay_auth_token';
 const API_URL_KEY = 'wikaplay_custom_api_url';
@@ -207,8 +208,81 @@ export class ApiClient {
   }
 
   /**
+   * Native-safe single-file multipart upload.
+   *
+   * On iOS / Android we use expo-file-system's `uploadAsync` because React
+   * Native's `fetch` + FormData cannot resolve `content://` Media Store URIs
+   * that expo-image-picker and expo-document-picker return on physical devices
+   * running Android.  Using `uploadAsync` avoids the silent "empty body" bug
+   * that causes the server to return 422 / "no file received".
+   *
+   * On Web we fall back to the existing blob-based FormData approach.
+   */
+  public static async uploadFileUri<T = any>(
+    endpoint: string,
+    fileUri: string,
+    fieldName: string,
+    mimeType?: string,
+    fileName?: string
+  ): Promise<T> {
+    const url = endpoint.startsWith('http')
+      ? endpoint
+      : `${this.currentBaseUrl}/${endpoint.replace(/^\/+/, '')}`;
+
+    const authHeaders: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (this.cachedToken) {
+      authHeaders['Authorization'] = `Bearer ${this.cachedToken}`;
+    }
+
+    // ── Web path: fetch blob then post as FormData ──────────────────────────
+    if (Platform.OS === 'web') {
+      const resp = await fetch(fileUri);
+      const blob = await resp.blob();
+      const ext = (mimeType || blob.type || 'application/octet-stream').split('/')[1] || 'bin';
+      const form = new FormData();
+      form.append(fieldName, blob, fileName || `upload.${ext}`);
+      return this.uploadFile<T>(endpoint, form);
+    }
+
+    // ── Native path (Android / iOS): use expo-file-system uploadAsync ───────
+    // This correctly handles  content://  and  file://  URIs on Android.
+    const uploadResult = await FileSystemLegacy.uploadAsync(url, fileUri, {
+      httpMethod: 'POST',
+      uploadType: FileSystemLegacy.FileSystemUploadType.MULTIPART,
+      fieldName,
+      mimeType: mimeType || 'application/octet-stream',
+      headers: authHeaders,
+    });
+
+    let data: any;
+    try {
+      data = JSON.parse(uploadResult.body);
+    } catch {
+      data = { message: uploadResult.body };
+    }
+
+    if (uploadResult.status >= 400) {
+      if (uploadResult.status === 401) {
+        await this.setToken(null);
+        throw new Error('Nag-expire ang iyong sesyon. Mangyaring mag-login muli.');
+      }
+      if (uploadResult.status === 422 && data.errors) {
+        const firstErr = Object.values(data.errors)[0] as string[];
+        throw new Error(firstErr?.[0] || data.message || 'Maling impormasyon.');
+      }
+      throw new Error(data.message || `Nabigong mag-upload ng file (${uploadResult.status}).`);
+    }
+
+    return data as T;
+  }
+
+  /**
    * Multipart Form-Data upload for audio / pictures
    * Uses a generous 90-second timeout to accommodate slow server cold starts (e.g. Render free tier).
+   * NOTE: Prefer uploadFileUri() on native — this method is kept for the web
+   * blob path and for any caller that already has a FormData object.
    */
   public static async uploadFile<T = any>(endpoint: string, formData: FormData): Promise<T> {
     const url = endpoint.startsWith('http')

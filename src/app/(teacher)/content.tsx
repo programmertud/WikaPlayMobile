@@ -815,7 +815,7 @@ export default function ContentManagementScreen({
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -823,32 +823,24 @@ export default function ContentManagementScreen({
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setIsUploadingImage(true);
-      
-      // MUST upload to server - no local file fallback allowed
+
+      // MUST upload to server - no local file fallback allowed.
+      // Use uploadImageUri (expo-file-system uploadAsync) on native so that
+      // Android content:// URIs from the media store are resolved correctly.
+      // fetch+FormData silently drops content:// bodies on Android APKs.
       try {
-        const form = new FormData();
-        if (Platform.OS === 'web') {
-          // Web: convert to blob and append
-          const resp = await fetch(asset.uri);
-          const blob = await resp.blob();
-          form.append('image', blob, asset.fileName || 'image.jpg');
-        } else {
-          // Mobile: use uri-based upload
-          form.append('image', {
-            uri: asset.uri,
-            name: asset.fileName || 'image.jpg',
-            type: asset.mimeType || 'image/jpeg',
-          } as any);
-        }
-        const res = await teacherService.uploadImage(form);
+        const res = await teacherService.uploadImageUri(
+          asset.uri,
+          asset.mimeType || 'image/jpeg',
+          asset.fileName || 'image.jpg'
+        );
         setFlashcardModal((prev) => ({
           ...prev,
           card: { ...prev.card, image_url: res.url, localImageSource: undefined },
         }));
       } catch (uploadErr: any) {
         console.error('Image upload failed:', uploadErr);
-        Alert.alert('Upload Failed', 'Failed to upload image to server. Please check your internet connection and try again.');
-        // Do NOT fallback to local file path - this causes the error you're seeing
+        Alert.alert('Upload Failed', uploadErr?.message || 'Failed to upload image to server. Please check your internet connection and try again.');
         setFlashcardModal((prev) => ({
           ...prev,
           card: { ...prev.card, image_url: '' },
@@ -870,30 +862,22 @@ export default function ContentManagementScreen({
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setIsUploadingAudio(true);
+
+      // Use uploadAudioUri (expo-file-system uploadAsync) on native so that
+      // Android content:// and file:// URIs are resolved correctly.
       try {
-        const form = new FormData();
-        if (Platform.OS === 'web') {
-          // Web: convert to blob and append
-          const resp = await fetch(asset.uri);
-          const blob = await resp.blob();
-          form.append('audio', blob, asset.name || 'audio.mp3');
-        } else {
-          // Mobile: use uri-based upload
-          form.append('audio', {
-            uri: asset.uri,
-            name: asset.name,
-            type: asset.mimeType || 'audio/mpeg',
-          } as any);
-        }
-        const res = await teacherService.uploadAudio(form);
+        const res = await teacherService.uploadAudioUri(
+          asset.uri,
+          asset.mimeType || 'audio/mpeg',
+          asset.name || 'audio.mp3'
+        );
         setFlashcardModal((prev) => ({
           ...prev,
           card: { ...prev.card, audio_url: res.url, localAudioSource: undefined },
         }));
       } catch (uploadErr: any) {
         console.error('Audio upload failed:', uploadErr);
-        Alert.alert('Upload Failed', 'Failed to upload audio to server. Please check your internet connection and try again.');
-        // Do NOT fallback to local file path - this causes the error you're seeing
+        Alert.alert('Upload Failed', uploadErr?.message || 'Failed to upload audio to server. Please check your internet connection and try again.');
         setFlashcardModal((prev) => ({
           ...prev,
           card: { ...prev.card, audio_url: '' },
@@ -1115,23 +1099,13 @@ export default function ContentManagementScreen({
       const asset = result.assets[0];
       setIsUploadingQImage(true);
       try {
-        const form = new FormData();
-        if (Platform.OS === 'web') {
-          const resp = await fetch(asset.uri);
-          const blob = await resp.blob();
-          const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
-          const file = new File([blob], asset.fileName || `choice_${Date.now()}.${ext}`, {
-            type: blob.type || asset.mimeType || 'image/jpeg',
-          });
-          form.append('image', file);
-        } else {
-          form.append('image', {
-            uri: asset.uri,
-            name: asset.fileName || 'choice.jpg',
-            type: asset.mimeType || 'image/jpeg',
-          } as any);
-        }
-        const res = await teacherService.uploadImage(form);
+        // Use native-safe uploadImageUri on all platforms — it handles
+        // content:// Media Store URIs on Android APKs correctly.
+        const res = await teacherService.uploadImageUri(
+          asset.uri,
+          asset.mimeType || 'image/jpeg',
+          asset.fileName || `choice_${Date.now()}.jpg`
+        );
         setQuestionModal((prev) => {
           const choices = [...(prev.question.choices || [{}, {}, {}, {}])];
           const curr = typeof choices[choiceIndex] === 'object' ? choices[choiceIndex] : { text: choices[choiceIndex] || '' };
@@ -1142,7 +1116,7 @@ export default function ContentManagementScreen({
         console.error('Choice image upload failed:', uploadErr);
         Alert.alert(
           'Upload Failed',
-          'Failed to upload choice image to server. Please check your internet connection and try again.'
+          uploadErr?.message || 'Failed to upload choice image to server. Please check your internet connection and try again.'
         );
       }
     } catch (err: any) {
@@ -1162,23 +1136,12 @@ export default function ContentManagementScreen({
       const asset = result.assets[0];
       setIsUploadingQAudio(true);
       try {
-        const form = new FormData();
-        if (Platform.OS === 'web') {
-          const resp = await fetch(asset.uri);
-          const blob = await resp.blob();
-          const ext = (asset.mimeType || blob.type || 'audio/mpeg').split('/')[1] || 'mp3';
-          const file = new File([blob], asset.name || `quiz_voice_${Date.now()}.${ext}`, {
-            type: blob.type || asset.mimeType || 'audio/mpeg',
-          });
-          form.append('audio', file);
-        } else {
-          form.append('audio', {
-            uri: asset.uri,
-            name: asset.name,
-            type: asset.mimeType || 'audio/mpeg',
-          } as any);
-        }
-        const res = await teacherService.uploadAudio(form);
+        // Use native-safe uploadAudioUri on all platforms.
+        const res = await teacherService.uploadAudioUri(
+          asset.uri,
+          asset.mimeType || 'audio/mpeg',
+          asset.name || `quiz_voice_${Date.now()}.mp3`
+        );
         setQuestionModal((prev) => ({
           ...prev,
           question: { ...prev.question, audio_url: res.url },
@@ -1187,7 +1150,7 @@ export default function ContentManagementScreen({
         console.error('Quiz audio upload failed:', uploadErr);
         Alert.alert(
           'Upload Failed',
-          'Failed to upload audio to server. Please check your internet connection and try again.'
+          uploadErr?.message || 'Failed to upload audio to server. Please check your internet connection and try again.'
         );
       }
     } catch (err: any) {
@@ -1214,23 +1177,12 @@ export default function ContentManagementScreen({
       const asset = result.assets[0];
       setIsUploadingQImage(true);
       try {
-        const form = new FormData();
-        if (Platform.OS === 'web') {
-          const resp = await fetch(asset.uri);
-          const blob = await resp.blob();
-          const ext = (asset.mimeType || blob.type || 'image/jpeg').split('/')[1] || 'jpg';
-          const file = new File([blob], asset.fileName || `target_${Date.now()}.${ext}`, {
-            type: blob.type || asset.mimeType || 'image/jpeg',
-          });
-          form.append('image', file);
-        } else {
-          form.append('image', {
-            uri: asset.uri,
-            name: asset.fileName || 'target.jpg',
-            type: asset.mimeType || 'image/jpeg',
-          } as any);
-        }
-        const res = await teacherService.uploadImage(form);
+        // Use native-safe uploadImageUri on all platforms.
+        const res = await teacherService.uploadImageUri(
+          asset.uri,
+          asset.mimeType || 'image/jpeg',
+          asset.fileName || `target_${Date.now()}.jpg`
+        );
         setQuestionModal((prev) => ({
           ...prev,
           question: {
@@ -1243,7 +1195,7 @@ export default function ContentManagementScreen({
         console.error('Target image upload failed:', uploadErr);
         Alert.alert(
           'Upload Failed',
-          'Failed to upload image to server. Please check your internet connection and try again.'
+          uploadErr?.message || 'Failed to upload image to server. Please check your internet connection and try again.'
         );
       }
     } catch (err: any) {

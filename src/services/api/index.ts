@@ -450,6 +450,34 @@ export const teacherService = {
     return ApiClient.uploadFile<{ message: string; path: string; url: string }>('teacher/upload-image', formData);
   },
 
+  /**
+   * Native-safe image upload — resolves content:// URIs on Android APKs.
+   * Use this instead of uploadImage() on native (non-web) platforms.
+   */
+  uploadImageUri: async (fileUri: string, mimeType?: string, fileName?: string) => {
+    return ApiClient.uploadFileUri<{ message: string; path: string; url: string }>(
+      'teacher/upload-image',
+      fileUri,
+      'image',
+      mimeType || 'image/jpeg',
+      fileName
+    );
+  },
+
+  /**
+   * Native-safe audio upload — resolves content:// and file:// URIs on Android APKs.
+   * Use this instead of uploadAudio() on native (non-web) platforms.
+   */
+  uploadAudioUri: async (fileUri: string, mimeType?: string, fileName?: string) => {
+    return ApiClient.uploadFileUri<{ message: string; path: string; url: string }>(
+      'teacher/upload-audio',
+      fileUri,
+      'audio',
+      mimeType || 'audio/mpeg',
+      fileName
+    );
+  },
+
   deleteQuizQuestion: async (id: number) => {
     return ApiClient.delete(`teacher/quizzes/question/${id}`);
   },
