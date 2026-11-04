@@ -177,50 +177,61 @@ export const JumbleWordQuiz: React.FC<JumbleWordQuizProps> = ({
 
       {/* Answer Slots Row */}
       <View style={styles.slotsSection}>
-        <Text style={styles.slotsLabel}>Iyong Sagot:</Text>
+        <Text style={styles.slotsLabel}>
+          {feedbackState === 'wrong' ? 'Tamang Sagot:' : 'Iyong Sagot:'}
+        </Text>
         <View style={styles.slotsRow}>
-          {placedSlots.map((slot, idx) => {
-            let slotStyle: any = styles.slotEmpty;
-            if (slot) {
-              slotStyle = styles.slotFilled;
-            }
-            if (feedbackState === 'correct') {
-              slotStyle = styles.slotCorrect;
-            } else if (feedbackState === 'wrong') {
-              slotStyle = styles.slotWrong;
-            }
-
-            return (
-              <TouchableOpacity
-                key={`slot-${idx}`}
-                onPress={() => handleRemoveFromSlot(idx)}
-                disabled={isLocked || disabled || !slot}
-                activeOpacity={0.75}
-                style={[
-                  styles.slotBox,
-                  slotStyle,
-                  { width: tileSize, height: tileSize + 8 },
-                ]}
-              >
-                <Text
+          {feedbackState === 'wrong'
+            ? /* When wrong + locked: show the CORRECT word letters in neutral/green style */
+              cleanWord.split('').map((char, idx) => (
+                <View
+                  key={`correct-${idx}`}
                   style={[
-                    styles.slotLetterText,
-                    feedbackState === 'correct' && styles.textCorrect,
-                    feedbackState === 'wrong' && styles.textWrong,
+                    styles.slotBox,
+                    styles.slotCorrect,
+                    { width: tileSize, height: tileSize + 8 },
                   ]}
                 >
-                  {slot ? slot.char : ''}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Text style={[styles.slotLetterText, styles.textCorrect]}>
+                    {char}
+                  </Text>
+                </View>
+              ))
+            : placedSlots.map((slot, idx) => {
+                let slotStyle: any = styles.slotEmpty;
+                if (slot) slotStyle = styles.slotFilled;
+                if (feedbackState === 'correct') slotStyle = styles.slotCorrect;
+
+                return (
+                  <TouchableOpacity
+                    key={`slot-${idx}`}
+                    onPress={() => handleRemoveFromSlot(idx)}
+                    disabled={isLocked || disabled || !slot}
+                    activeOpacity={0.75}
+                    style={[
+                      styles.slotBox,
+                      slotStyle,
+                      { width: tileSize, height: tileSize + 8 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.slotLetterText,
+                        feedbackState === 'correct' && styles.textCorrect,
+                      ]}
+                    >
+                      {slot ? slot.char : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
         </View>
 
-        {/* If wrong and locked, show correct word hint */}
+        {/* If wrong and locked, show hint label below */}
         {feedbackState === 'wrong' && (
           <View style={styles.correctWordHint}>
-            <Text style={styles.hintLabel}>Tamang baybay: </Text>
-            <Text style={styles.hintWord}>{cleanWord}</Text>
+            <Ionicons name="checkmark-circle" size={16} color={Colors.grassGreen} />
+            <Text style={styles.hintLabel}>Ito ang tamang baybay ng salita.</Text>
           </View>
         )}
       </View>
@@ -384,20 +395,21 @@ const styles = StyleSheet.create({
   correctWordHint: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     marginTop: 8,
-    backgroundColor: '#FFF1F2',
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: Radius.pill,
   },
   hintLabel: {
     fontSize: 12,
-    color: Colors.coralPinkDark,
+    color: Colors.grassGreenDark,
   },
   hintWord: {
     fontSize: 13,
     fontWeight: Typography.weights.heavy,
-    color: Colors.coralPinkDark,
+    color: Colors.grassGreenDark,
   },
   poolSection: {
     marginBottom: 20,

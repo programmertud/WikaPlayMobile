@@ -208,6 +208,7 @@ export class ApiClient {
 
   /**
    * Multipart Form-Data upload for audio / pictures
+   * Uses a generous 90-second timeout to accommodate slow server cold starts (e.g. Render free tier).
    */
   public static async uploadFile<T = any>(endpoint: string, formData: FormData): Promise<T> {
     const url = endpoint.startsWith('http')
@@ -222,21 +223,46 @@ export class ApiClient {
       headers['Authorization'] = `Bearer ${this.cachedToken}`;
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-    const data = await response.json();
-    if (!response.ok) {
-      if (response.status === 422 && data.errors) {
-        const firstErr = Object.values(data.errors)[0] as string[];
-        throw new Error(firstErr?.[0] || data.message || 'Maling impormasyon.');
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const contentType = response.headers.get('content-type');
+      let data: any = null;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        try { data = JSON.parse(text); } catch { data = { message: text }; }
       }
-      throw new Error(data.message || 'Nabigong mag-upload ng file.');
-    }
 
-    return data;
+      if (!response.ok) {
+        if (response.status === 422 && data.errors) {
+          const firstErr = Object.values(data.errors)[0] as string[];
+          throw new Error(firstErr?.[0] || data.message || 'Maling impormasyon.');
+        }
+        throw new Error(data.message || 'Nabigong mag-upload ng file.');
+      }
+
+      return data;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error('Nag-timeout ang pag-upload. Pakisubukang muli.');
+      }
+      if (err.message && err.message.includes('Network request failed')) {
+        throw new Error('Hindi makakonekta sa server. Pakitiyak na may internet connection.');
+      }
+      throw err;
+    }
   }
 }

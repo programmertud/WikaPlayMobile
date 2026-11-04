@@ -646,7 +646,12 @@ export async function playSound(
     }
 
     // Native mobile playback using expo-audio
-    player = createAudioPlayer(resolvedSource, {
+    // createAudioPlayer requires { uri } object for remote HTTPS URLs — not a bare string
+    let nativeSource = resolvedSource;
+    if (typeof resolvedSource === 'string' && (resolvedSource.startsWith('http://') || resolvedSource.startsWith('https://'))) {
+      nativeSource = { uri: resolvedSource };
+    }
+    player = createAudioPlayer(nativeSource, {
       downloadFirst: true,
     });
     currentActivePlayer = player;
