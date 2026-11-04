@@ -537,7 +537,7 @@ export default function ContentManagementScreen({
               id: `local_${idx}`,
               category_id: catId,
               flashcard_id: null,
-              question_text: `Pakinggan ang audio at piliin ang tamang larawan para sa "${item.filipino}":`,
+              question_text: `Nasaan ang ${item.filipino}?`,
               target_image_url: item.imageUri || '',
               target_item_name: item.filipino,
               targetItem: item,
@@ -613,8 +613,14 @@ export default function ContentManagementScreen({
               });
             }
 
+            const cleanQText =
+              q.question_text && !q.question_text.toLowerCase().includes('pakinggan ang audio') && q.question_text.trim().length > 0
+                ? q.question_text
+                : (targetWord ? `Nasaan ang ${targetWord}?` : (q.question_text || 'Pakinggan ang audio at piliin ang tamang larawan:'));
+
             return {
               ...q,
+              question_text: cleanQText,
               targetItem: target ?? q.targetItem,
               target_item_name: targetWord,
               correct_answer: q.correct_answer || targetWord,
@@ -1361,10 +1367,19 @@ export default function ContentManagementScreen({
         });
       }
 
+      let initialQText = question.question_text || '';
+      if (selectedDiff === 'katamtaman') {
+        const targetWord = question.target_item_name || question.correct_answer || '';
+        if (!initialQText || initialQText.toLowerCase().includes('pakinggan ang audio')) {
+          initialQText = targetWord ? `Nasaan ang ${targetWord}?` : '';
+        }
+      }
+
       setQuestionModal({
         open: true,
         question: {
           ...question,
+          question_text: initialQText,
           category_id: selectedCategory.id,
           difficulty: selectedDiff,
           choices: normChoices,
@@ -1382,7 +1397,7 @@ export default function ContentManagementScreen({
             category_id: selectedCategory.id,
             difficulty: 'katamtaman',
             points: 2,
-            question_text: `Pakinggan ang audio at piliin ang tamang larawan:`,
+            question_text: '',
             target_item_name: '',
             audio_url: '',
             choices: [
@@ -1466,7 +1481,7 @@ export default function ContentManagementScreen({
       if (!q.target_item_name && q.correct_answer) {
         q.target_item_name = q.correct_answer;
       }
-      if (!q.question_text) {
+      if (!q.question_text || q.question_text.trim() === '') {
         q.question_text = `Nasaan ang ${q.target_item_name || q.correct_answer}?`;
       }
       if (!q.target_image_url || q.target_image_url.trim() === '' || q.target_image_url.includes('wikaplay.app')) {
@@ -2122,7 +2137,9 @@ export default function ContentManagementScreen({
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.questionText}>
-                          {q.question_text || `Question #${idx + 1}`}
+                          {selectedDiff === 'katamtaman' && (!q.question_text || q.question_text.toLowerCase().includes('pakinggan ang audio'))
+                            ? (q.target_item_name ? `Nasaan ang ${q.target_item_name}?` : (q.question_text || `Question #${idx + 1}`))
+                            : (q.question_text || `Question #${idx + 1}`)}
                         </Text>
                         <Text style={styles.targetItemText}>
                           Target: <Text style={{ fontWeight: 'bold' }}>{q.target_item_name || q.correct_answer}</Text>
@@ -2705,16 +2722,71 @@ export default function ContentManagementScreen({
               {/* ── KATAMTAMAN (MEDIUM): Voice Audio + 4 Picture Choices ── */}
               {selectedDiff === 'katamtaman' && (
                 <>
-                  <Text style={styles.inputLabel}>Target Word (Filipino):</Text>
+                  <Text style={styles.inputLabel}>Question / Instruction (Tanong):</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="e.g. Aso, Pusa, Mansanas..."
-                    value={questionModal.question.target_item_name || ''}
+                    placeholder="e.g. Nasaan ang agila? o Nasaan ang aso?"
+                    value={questionModal.question.question_text || ''}
                     onChangeText={(val) =>
                       setQuestionModal((prev) => ({
                         ...prev,
-                        question: { ...prev.question, target_item_name: val, correct_answer: prev.question.correct_answer || val },
+                        question: { ...prev.question, question_text: val },
                       }))
+                    }
+                  />
+
+                  {Boolean(questionModal.question.target_item_name?.trim()) && (
+                    <TouchableOpacity
+                      style={{
+                        alignSelf: 'flex-start',
+                        backgroundColor: '#E0F2FE',
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: Radius.pill,
+                        marginTop: -4,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: '#BAE6FD',
+                      }}
+                      onPress={() => {
+                        const word = questionModal.question.target_item_name?.trim();
+                        if (word) {
+                          setQuestionModal((prev) => ({
+                            ...prev,
+                            question: { ...prev.question, question_text: `Nasaan ang ${word}?` },
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: '#0369A1', fontWeight: 'bold' }}>
+                        ✨ Gamitin: "Nasaan ang {questionModal.question.target_item_name?.trim()}?"
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <Text style={styles.inputLabel}>Target Word (Filipino):</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. Aso, Pusa, Agila, Mansanas..."
+                    value={questionModal.question.target_item_name || ''}
+                    onChangeText={(val) =>
+                      setQuestionModal((prev) => {
+                        const currentQText = prev.question.question_text || '';
+                        const shouldAutoFill =
+                          !currentQText ||
+                          currentQText.startsWith('Nasaan ang ') ||
+                          currentQText.toLowerCase().includes('pakinggan ang audio');
+                        const newQText = shouldAutoFill && val.trim() ? `Nasaan ang ${val.trim()}?` : currentQText;
+                        return {
+                          ...prev,
+                          question: {
+                            ...prev.question,
+                            target_item_name: val,
+                            correct_answer: prev.question.correct_answer || val,
+                            question_text: newQText,
+                          },
+                        };
+                      })
                     }
                   />
 

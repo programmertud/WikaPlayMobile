@@ -203,9 +203,17 @@ export default function QuizGameplayScreen() {
 
           // For Katamtaman, prioritize custom teacher audio if uploaded, then bundled audio, then filename
           const effectiveAudio = q.audio_url || target?.audio || (target ? `${target.id}.mp3` : undefined);
+          const targetName = q.target_item_name || target?.filipino || q.correct_answer || '';
+          let effectiveQText = q.question_text;
+          if (difficulty === 'katamtaman') {
+            if (!effectiveQText || effectiveQText.toLowerCase().includes('pakinggan ang audio') || effectiveQText.trim() === '') {
+              effectiveQText = targetName ? `Nasaan ang ${targetName}?` : 'Nasaan ang tamang larawan?';
+            }
+          }
 
           return {
             ...q,
+            question_text: effectiveQText,
             targetItem: target ?? q.targetItem,
             target_image_url: q.target_image_url || target?.imageUri || '',
             audio_url: effectiveAudio,
@@ -632,7 +640,9 @@ export default function QuizGameplayScreen() {
               <View style={styles.katamtamanQuestionHeader}>
                 <Ionicons name="help-circle" size={24} color={Colors.skyBlueDark} />
                 <Text style={styles.katamtamanQuestionTitle}>
-                  {currentQuestion?.question_text || `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
+                  {currentQuestion?.question_text && !currentQuestion.question_text.toLowerCase().includes('pakinggan ang audio')
+                    ? currentQuestion.question_text
+                    : `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
                 </Text>
               </View>
 
