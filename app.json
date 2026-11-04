@@ -7,6 +7,12 @@
     "icon": "./assets/images/wikaplayicon.png",
     "scheme": "wikaplay",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8583c104-faae-4f69-a0fb-5c890380dfd7"
+    },
     "ios": {
       "icon": "./assets/images/wikaplayicon.png",
       "bundleIdentifier": "com.wikaplay.mobile"
