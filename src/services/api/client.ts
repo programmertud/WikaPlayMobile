@@ -6,11 +6,13 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 const TOKEN_KEY = 'wikaplay_auth_token';
 const API_URL_KEY = 'wikaplay_custom_api_url';
 
+export const PRODUCTION_API_URL = 'https://wikaplay-api.onrender.com/api';
+
 /**
  * Automatically determine the default API Base URL based on environment and platform:
- * - Web: http://127.0.0.1:8000/api
- * - Android Emulator: http://10.0.2.2:8000/api
- * - Physical device: uses the IP extracted from hostUri (development machine LAN IP)
+ * - Uses EXPO_PUBLIC_API_URL if configured
+ * - In production APK / standalone builds / EAS updates: always https://wikaplay-api.onrender.com/api
+ * - In local dev (__DEV__) mode with Metro bundler: extracts LAN IP from hostUri
  */
 export function getDefaultApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
@@ -18,25 +20,25 @@ export function getDefaultApiBaseUrl(): string {
   }
 
   if (Platform.OS === 'web') {
-    return 'http://127.0.0.1:8000/api';
+    if (typeof window !== 'undefined' && (window.location?.hostname === 'localhost' || window.location?.hostname === '127.0.0.1')) {
+      return 'http://127.0.0.1:8000/api';
+    }
+    return PRODUCTION_API_URL;
   }
 
-  // Attempt to extract development host IP from Expo manifest (LAN IP for physical device / emulator)
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-      return `http://${ip}:8000/api`;
+  // Development mode only: if running inside local Expo Go or dev client connected to Metro
+  if (__DEV__) {
+    const hostUri = Constants.expoConfig?.hostUri;
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && ip !== '10.0.2.2') {
+        return `http://${ip}:8000/api`;
+      }
     }
   }
 
-  // Default fallback for Android emulator
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api';
-  }
-
-  // Fallback for iOS simulator
-  return 'http://127.0.0.1:8000/api';
+  // Production standalone APK, EAS build, EAS update, or physical device fallback:
+  return PRODUCTION_API_URL;
 }
 
 export class ApiClient {
@@ -48,14 +50,18 @@ export class ApiClient {
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         this.cachedToken = window.localStorage.getItem(TOKEN_KEY);
         const customUrl = window.localStorage.getItem(API_URL_KEY);
-        if (customUrl) {
+        if (customUrl && !customUrl.includes('10.0.2.2') && !customUrl.includes('localhost') && !customUrl.includes('127.0.0.1')) {
           this.currentBaseUrl = customUrl;
+        } else {
+          this.currentBaseUrl = getDefaultApiBaseUrl();
         }
       } else {
         this.cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
         const customUrl = await SecureStore.getItemAsync(API_URL_KEY);
-        if (customUrl) {
+        if (customUrl && !customUrl.includes('10.0.2.2') && !customUrl.includes('localhost') && !customUrl.includes('127.0.0.1')) {
           this.currentBaseUrl = customUrl;
+        } else {
+          this.currentBaseUrl = getDefaultApiBaseUrl();
         }
       }
     } catch {
