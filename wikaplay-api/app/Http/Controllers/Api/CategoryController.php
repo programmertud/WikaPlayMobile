@@ -211,8 +211,23 @@ class CategoryController extends Controller
                 ->values();
         }
 
+        // Helper: resolve a relative storage path to an absolute URL
+        $resolveUrl = function (?string $url): string {
+            if (empty($url)) return '';
+            if (str_contains($url, 'wikaplay.app')) return '';
+            if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+                // Fix any localhost URLs to production server
+                if (str_contains($url, 'localhost') || str_contains($url, '127.0.0.1')) {
+                    $url = preg_replace('#https?://(?:localhost|127\.0\.0\.1)(?::\d+)?/#', 'https://wikaplay-api.onrender.com/', $url);
+                }
+                return $url;
+            }
+            // Relative path: /storage/... or storage/...
+            return url('storage/'.ltrim(preg_replace('#^/?storage/?#', '', $url), '/'));
+        };
+
         // 3. Format questions according to difficulty requirements
-        $formattedQuestions = $questions->map(function ($q) use ($difficulty) {
+        $formattedQuestions = $questions->map(function ($q) use ($difficulty, $resolveUrl) {
             $isKatamtaman = ($difficulty === 'katamtaman');
 
             // Format choices
@@ -220,11 +235,8 @@ class CategoryController extends Controller
 
             if ($isKatamtaman) {
                 // Katamtaman: Question prominently at the top ("Nasaan ang [target]?"), 4 pictures
-                $choices = array_map(function ($choice) {
-                    $img = (string) ($choice['image_url'] ?? '');
-                    if (str_contains($img, 'wikaplay.app')) {
-                        $img = '';
-                    }
+                $choices = array_map(function ($choice) use ($resolveUrl) {
+                    $img = $resolveUrl((string) ($choice['image_url'] ?? ''));
                     return [
                         'id' => (string) ($choice['id'] ?? ''),
                         'image_url' => $img,
@@ -242,16 +254,14 @@ class CategoryController extends Controller
                 $questionText = $q->question_text;
             }
 
-            $effectiveTargetImg = (string) ($q->effective_image_url ?? '');
-            if (str_contains($effectiveTargetImg, 'wikaplay.app')) {
-                $effectiveTargetImg = '';
-            }
+            $effectiveTargetImg = $resolveUrl((string) ($q->effective_image_url ?? ''));
+            $effectiveAudioUrl = $resolveUrl((string) ($q->effective_audio_url ?? ''));
 
             return [
                 'id' => $q->id,
                 'flashcard_id' => $q->flashcard_id,
                 'question_text' => $questionText,
-                'audio_url' => $q->effective_audio_url,
+                'audio_url' => $effectiveAudioUrl ?: null,
                 'target_image_url' => $effectiveTargetImg,
                 'target_item_name' => $targetName,
                 'choices' => $choices,
@@ -288,14 +298,10 @@ class CategoryController extends Controller
                     $choiceFcs = array_merge([$targetFc], array_slice($otherFcs, 0, min(3, count($otherFcs))));
                     shuffle($choiceFcs);
 
-                    $choices = array_map(function ($f) use ($difficulty) {
-                        $fImg = (string) ($f->image_url ?? '');
-                        if (str_contains($fImg, 'wikaplay.app')) {
-                            $fImg = '';
-                        }
+                    $choices = array_map(function ($f) use ($resolveUrl) {
                         return [
                             'id' => (string) $f->id,
-                            'image_url' => $fImg,
+                            'image_url' => $resolveUrl((string) ($f->image_url ?? '')),
                             'text' => $f->filipino_name,
                         ];
                     }, $choiceFcs);
@@ -308,17 +314,12 @@ class CategoryController extends Controller
                         ? (string) $targetFc->id
                         : strtoupper($targetFc->filipino_name);
 
-                    $targetFcImg = (string) ($targetFc->image_url ?? '');
-                    if (str_contains($targetFcImg, 'wikaplay.app')) {
-                        $targetFcImg = '';
-                    }
-
                     $formattedQuestions->push([
                         'id' => 10000 + $i,
                         'flashcard_id' => $targetFc->id,
                         'question_text' => $qText,
-                        'audio_url' => $targetFc->audio_url,
-                        'target_image_url' => $targetFcImg,
+                        'audio_url' => $resolveUrl((string) ($targetFc->audio_url ?? '')),
+                        'target_image_url' => $resolveUrl((string) ($targetFc->image_url ?? '')),
                         'target_item_name' => strtoupper($targetFc->filipino_name),
                         'choices' => $choices,
                         'correct_answer' => $correctAnswer,

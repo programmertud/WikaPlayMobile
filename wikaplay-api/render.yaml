@@ -5,6 +5,10 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /up
+    disk:
+      name: wikaplay-storage
+      mountPath: /var/www/html/storage/app/public
+      sizeGB: 1
     envVars:
       - key: APP_NAME
         value: WikaPlay

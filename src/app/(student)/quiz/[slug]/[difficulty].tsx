@@ -144,7 +144,9 @@ export default function QuizGameplayScreen() {
 
           const enrichedChoices = q.choices.map((ch) => {
             const rawImg = ch.image_url || '';
-            const choiceImg = rawImg.includes('wikaplay.app') ? '' : rawImg;
+            // Resolve relative storage paths to absolute URLs before checking for custom image
+            const resolvedImg = resolveAvatarUrl(rawImg) || rawImg;
+            const choiceImg = resolvedImg.includes('wikaplay.app') ? '' : resolvedImg;
             const hasCustomImage = Boolean(choiceImg && choiceImg.trim().length > 0);
 
             let localMatch: VocabularyItem | undefined;
@@ -202,7 +204,11 @@ export default function QuizGameplayScreen() {
           });
 
           // For Katamtaman, prioritize custom teacher audio if uploaded, then bundled audio, then filename
-          const effectiveAudio = q.audio_url || target?.audio || (target ? `${target.id}.mp3` : undefined);
+          const rawAudio = q.audio_url || '';
+          const resolvedAudio = resolveAvatarUrl(rawAudio) || rawAudio || target?.audio || (target ? `${target.id}.mp3` : undefined);
+          const effectiveAudio = resolvedAudio;
+          const rawTargetImg = q.target_image_url || '';
+          const resolvedTargetImg = resolveAvatarUrl(rawTargetImg) || rawTargetImg || target?.imageUri || '';
           const targetName = q.target_item_name || target?.filipino || q.correct_answer || '';
           let effectiveQText = q.question_text;
           if (difficulty === 'katamtaman') {
@@ -215,7 +221,7 @@ export default function QuizGameplayScreen() {
             ...q,
             question_text: effectiveQText,
             targetItem: target ?? q.targetItem,
-            target_image_url: q.target_image_url || target?.imageUri || '',
+            target_image_url: resolvedTargetImg,
             audio_url: effectiveAudio,
             choices: enrichedChoices,
           };

@@ -190,6 +190,10 @@ export default function MadaliQuizScreen() {
               apiQ.target_image_url.trim().length > 0 &&
               !apiQ.target_image_url.includes('wikaplay.app');
 
+            const resolvedTargetImg = hasPic
+              ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url)
+              : undefined;
+
             return {
               id: `api_${apiQ.id || idx}`,
               categoryId: `cat_${slug}`,
@@ -200,8 +204,8 @@ export default function MadaliQuizScreen() {
               questionEn: apiQ.question_text || '',
               textChoices,
               correctTextId,
-              target_image_url: hasPic ? apiQ.target_image_url : undefined,
-              audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) } : undefined,
+              target_image_url: resolvedTargetImg,
+              audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url } : undefined,
             } as MadaliQuestion;
           });
 
