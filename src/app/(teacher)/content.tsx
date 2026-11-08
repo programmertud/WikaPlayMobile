@@ -35,6 +35,7 @@ import { PressableScale } from '../../components/PressableScale';
 import { AnimatedBackground } from '../../components/AnimatedBackground';
 import { VolumeButton } from '../../components/VolumeButton';
 import { resolveAvatarUrl } from '../../components/UserAvatar';
+import { AudioRecorderButton } from '../../components/AudioRecorderButton';
 import { getQuestionCorrectChoiceIndex } from '../../hooks/use-quiz';
 import { teacherService } from '../../services/api';
 import { playSound, stopCurrentSound } from '../../services/audio/sound-service';
@@ -1155,6 +1156,40 @@ export default function ContentManagementScreen({
       }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to select audio.');
+    } finally {
+      setIsUploadingQAudio(false);
+    }
+  };
+
+  // Handler: in-app recording → upload → set audio_url on flashcard
+  const handleRecordFlashcardAudio = async (uri: string, mimeType: string, filename: string) => {
+    setIsUploadingAudio(true);
+    try {
+      const res = await teacherService.uploadAudioUri(uri, mimeType, filename);
+      setFlashcardModal((prev) => ({
+        ...prev,
+        card: { ...prev.card, audio_url: res.url, localAudioSource: undefined },
+      }));
+    } catch (err: any) {
+      console.error('Flashcard record upload failed:', err);
+      Alert.alert('Upload Failed', err?.message || 'Hindi ma-upload ang recording. Subukan muli.');
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  };
+
+  // Handler: in-app recording → upload → set audio_url on quiz question
+  const handleRecordQuizAudio = async (uri: string, mimeType: string, filename: string) => {
+    setIsUploadingQAudio(true);
+    try {
+      const res = await teacherService.uploadAudioUri(uri, mimeType, filename);
+      setQuestionModal((prev) => ({
+        ...prev,
+        question: { ...prev.question, audio_url: res.url },
+      }));
+    } catch (err: any) {
+      console.error('Quiz record upload failed:', err);
+      Alert.alert('Upload Failed', err?.message || 'Hindi ma-upload ang recording. Subukan muli.');
     } finally {
       setIsUploadingQAudio(false);
     }
@@ -2570,7 +2605,7 @@ export default function ContentManagementScreen({
               )}
 
               {/* Audio Picker */}
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Audio Recording:</Text>
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>🎙️ Audio Recording:</Text>
               {flashcardModal.card.audio_url || (flashcardModal.card as any)?.localAudioSource ? (
                 <View style={styles.audioPickedRow}>
                   <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
@@ -2586,32 +2621,30 @@ export default function ContentManagementScreen({
                     <Ionicons name="play" size={14} color={Colors.white} />
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={handlePickAudio}
-                    disabled={isUploadingAudio}
+                    onPress={() => setFlashcardModal((prev) => ({ ...prev, card: { ...prev.card, audio_url: '', localAudioSource: undefined } }))}
                     style={styles.audioReplaceBtn}
                   >
-                    {isUploadingAudio ? (
-                      <ActivityIndicator size="small" color={Colors.teacherPurple} />
-                    ) : (
-                      <Text style={styles.audioReplaceBtnText}>Replace</Text>
-                    )}
+                    <Text style={styles.audioReplaceBtnText}>Tanggalin</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity
-                  style={styles.pickMediaBtn}
-                  onPress={handlePickAudio}
-                  disabled={isUploadingAudio}
-                >
-                  {isUploadingAudio ? (
-                    <ActivityIndicator size="small" color={Colors.teacherPurple} />
-                  ) : (
-                    <Ionicons name="mic-outline" size={22} color={Colors.teacherPurple} />
-                  )}
-                  <Text style={styles.pickMediaBtnText}>
-                    {isUploadingAudio ? 'Uploading...' : 'Choose Audio from Device/Computer'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <AudioRecorderButton
+                    onRecordingComplete={handleRecordFlashcardAudio}
+                    isUploading={isUploadingAudio}
+                    disabled={isUploadingAudio}
+                  />
+                  <TouchableOpacity
+                    style={[styles.pickMediaBtn, { flex: 1 }]}
+                    onPress={handlePickAudio}
+                    disabled={isUploadingAudio}
+                  >
+                    <Ionicons name="folder-open-outline" size={20} color={Colors.teacherPurple} />
+                    <Text style={styles.pickMediaBtnText}>
+                      {isUploadingAudio ? 'Uploading...' : 'I-upload mula sa Device'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </ScrollView>
 
@@ -2789,32 +2822,30 @@ export default function ContentManagementScreen({
                         <Ionicons name="play" size={14} color={Colors.white} />
                       </TouchableOpacity>
                       <TouchableOpacity
-                        onPress={handlePickQuizAudio}
-                        disabled={isUploadingQAudio}
+                        onPress={() => setQuestionModal((prev) => ({ ...prev, question: { ...prev.question, audio_url: '' } }))}
                         style={styles.audioReplaceBtn}
                       >
-                        {isUploadingQAudio ? (
-                          <ActivityIndicator size="small" color={Colors.teacherPurple} />
-                        ) : (
-                          <Text style={styles.audioReplaceBtnText}>Replace</Text>
-                        )}
+                        <Text style={styles.audioReplaceBtnText}>Tanggalin</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <TouchableOpacity
-                      style={styles.pickMediaBtn}
-                      onPress={handlePickQuizAudio}
-                      disabled={isUploadingQAudio}
-                    >
-                      {isUploadingQAudio ? (
-                        <ActivityIndicator size="small" color={Colors.teacherPurple} />
-                      ) : (
-                        <Ionicons name="mic-outline" size={22} color={Colors.teacherPurple} />
-                      )}
-                      <Text style={styles.pickMediaBtnText}>
-                        {isUploadingQAudio ? 'Uploading Voice Audio...' : 'Choose / Upload Audio from Device'}
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <AudioRecorderButton
+                        onRecordingComplete={handleRecordQuizAudio}
+                        isUploading={isUploadingQAudio}
+                        disabled={isUploadingQAudio}
+                      />
+                      <TouchableOpacity
+                        style={[styles.pickMediaBtn, { flex: 1 }]}
+                        onPress={handlePickQuizAudio}
+                        disabled={isUploadingQAudio}
+                      >
+                        <Ionicons name="folder-open-outline" size={20} color={Colors.teacherPurple} />
+                        <Text style={styles.pickMediaBtnText}>
+                          {isUploadingQAudio ? 'Uploading...' : 'I-upload mula sa Device'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
 
                   {/* 4 Picture Choices */}
@@ -3099,6 +3130,47 @@ export default function ContentManagementScreen({
                         }))
                       }
                     />
+
+                    {/* Voice Audio for Mahirap */}
+                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>🔊 Voice Audio (Optional):</Text>
+                    {questionModal.question.audio_url ? (
+                      <View style={styles.audioPickedRow}>
+                        <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
+                        <Text style={styles.audioPickedText} numberOfLines={1}>
+                          {questionModal.question.audio_url.split('/').pop() || 'voice_recording.m4a'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handlePlayAudioPreview(questionModal.question.audio_url || questionModal.question.target_item_name)}
+                          style={styles.audioPlayTestBtn}
+                        >
+                          <Ionicons name="play" size={14} color={Colors.white} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setQuestionModal((prev) => ({ ...prev, question: { ...prev.question, audio_url: '' } }))}
+                          style={styles.audioReplaceBtn}
+                        >
+                          <Text style={styles.audioReplaceBtnText}>Tanggalin</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <AudioRecorderButton
+                          onRecordingComplete={handleRecordQuizAudio}
+                          isUploading={isUploadingQAudio}
+                          disabled={isUploadingQAudio}
+                        />
+                        <TouchableOpacity
+                          style={[styles.pickMediaBtn, { flex: 1 }]}
+                          onPress={handlePickQuizAudio}
+                          disabled={isUploadingQAudio}
+                        >
+                          <Ionicons name="folder-open-outline" size={20} color={Colors.teacherPurple} />
+                          <Text style={styles.pickMediaBtnText}>
+                            {isUploadingQAudio ? 'Uploading...' : 'I-upload mula sa Device'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </>
                 );
               })()}
@@ -3185,6 +3257,47 @@ export default function ContentManagementScreen({
                         }))
                       }
                     />
+
+                    {/* Voice Audio for Madali */}
+                    <Text style={[styles.inputLabel, { marginTop: 10 }]}>🔊 Voice Audio (Optional):</Text>
+                    {questionModal.question.audio_url ? (
+                      <View style={styles.audioPickedRow}>
+                        <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
+                        <Text style={styles.audioPickedText} numberOfLines={1}>
+                          {questionModal.question.audio_url.split('/').pop() || 'voice_recording.m4a'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handlePlayAudioPreview(questionModal.question.audio_url || questionModal.question.target_item_name)}
+                          style={styles.audioPlayTestBtn}
+                        >
+                          <Ionicons name="play" size={14} color={Colors.white} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setQuestionModal((prev) => ({ ...prev, question: { ...prev.question, audio_url: '' } }))}
+                          style={styles.audioReplaceBtn}
+                        >
+                          <Text style={styles.audioReplaceBtnText}>Tanggalin</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <AudioRecorderButton
+                          onRecordingComplete={handleRecordQuizAudio}
+                          isUploading={isUploadingQAudio}
+                          disabled={isUploadingQAudio}
+                        />
+                        <TouchableOpacity
+                          style={[styles.pickMediaBtn, { flex: 1 }]}
+                          onPress={handlePickQuizAudio}
+                          disabled={isUploadingQAudio}
+                        >
+                          <Ionicons name="folder-open-outline" size={20} color={Colors.teacherPurple} />
+                          <Text style={styles.pickMediaBtnText}>
+                            {isUploadingQAudio ? 'Uploading...' : 'I-upload mula sa Device'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
                     <Text style={styles.inputLabel}>Correct Answer:</Text>
                     <TextInput
