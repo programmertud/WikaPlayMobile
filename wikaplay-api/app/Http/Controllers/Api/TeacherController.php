@@ -1200,17 +1200,29 @@ class TeacherController extends Controller
                 'audio' => 'required|file|max:20480', // 20MB max
             ]);
 
-            $path = $request->file('audio')->store('audio', 'public');
+            $file = $request->file('audio');
+            $extension = $file->getClientOriginalExtension() ?: 'mp3';
+            $filename = 'audio/' . uniqid('audio_') . '.' . $extension;
+            $mimeType = $file->getMimeType() ?: 'audio/mpeg';
+            $fileContent = file_get_contents($file->getRealPath());
+
+            // 1. Primary: Upload to Supabase Storage (permanent CDN)
+            $supabaseUrl = \App\Services\SupabaseStorage::upload($fileContent, $filename, $mimeType);
+
+            // 2. Fallback / local backup: Save to Laravel public disk
+            $path = $file->store('audio', 'public');
             $baseUrl = config('app.url');
             if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                 $baseUrl = 'https://wikaplay-api.onrender.com';
             }
-            $storageUrl = rtrim($baseUrl, '/').'/storage/'.$path;
+            $localUrl = rtrim($baseUrl, '/').'/storage/'.$path;
+
+            $finalUrl = $supabaseUrl ?: $localUrl;
 
             return response()->json([
                 'message' => 'Matagumpay na nai-upload ang audio!',
-                'path' => $path,
-                'url' => $storageUrl,
+                'path' => $filename,
+                'url' => $finalUrl,
             ]);
         }
 
@@ -1232,18 +1244,29 @@ class TeacherController extends Controller
                 'image' => 'required|file|max:15360', // 15MB max
             ]);
 
-            $path = $request->file('image')->store('images', 'public');
-            // Build an absolute URL that works from both localhost web and physical mobile devices
+            $file = $request->file('image');
+            $extension = $file->getClientOriginalExtension() ?: 'jpg';
+            $filename = 'images/' . uniqid('img_') . '.' . $extension;
+            $mimeType = $file->getMimeType() ?: 'image/jpeg';
+            $fileContent = file_get_contents($file->getRealPath());
+
+            // 1. Primary: Upload to Supabase Storage (permanent CDN)
+            $supabaseUrl = \App\Services\SupabaseStorage::upload($fileContent, $filename, $mimeType);
+
+            // 2. Fallback / local backup: Save to Laravel public disk
+            $path = $file->store('images', 'public');
             $baseUrl = config('app.url');
             if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                 $baseUrl = 'https://wikaplay-api.onrender.com';
             }
-            $storageUrl = rtrim($baseUrl, '/').'/storage/'.$path;
+            $localUrl = rtrim($baseUrl, '/').'/storage/'.$path;
+
+            $finalUrl = $supabaseUrl ?: $localUrl;
 
             return response()->json([
                 'message' => 'Matagumpay na nai-upload ang larawan!',
-                'path' => $path,
-                'url' => $storageUrl,
+                'path' => $filename,
+                'url' => $finalUrl,
             ]);
         }
 
@@ -1253,20 +1276,27 @@ class TeacherController extends Controller
             if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
                 $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
                 $type = strtolower($type[1]);
-                $base64Data = base64_decode($base64Data);
-                $filename = 'images/'.uniqid().'.'.$type;
-                Storage::disk('public')->put($filename, $base64Data);
+                $binary = base64_decode($base64Data);
+                $filename = 'images/'.uniqid('img_').'.'.$type;
+                $mimeType = 'image/' . ($type === 'jpg' ? 'jpeg' : $type);
 
+                // 1. Primary: Upload to Supabase Storage
+                $supabaseUrl = \App\Services\SupabaseStorage::upload($binary, $filename, $mimeType);
+
+                // 2. Local backup
+                Storage::disk('public')->put($filename, $binary);
                 $baseUrl = config('app.url');
                 if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                     $baseUrl = 'https://wikaplay-api.onrender.com';
                 }
-                $url = rtrim($baseUrl, '/').'/storage/'.$filename;
+                $localUrl = rtrim($baseUrl, '/').'/storage/'.$filename;
+
+                $finalUrl = $supabaseUrl ?: $localUrl;
 
                 return response()->json([
                     'message' => 'Matagumpay na nai-upload ang larawan!',
                     'path' => $filename,
-                    'url' => $url,
+                    'url' => $finalUrl,
                 ]);
             }
         }

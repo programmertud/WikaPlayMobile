@@ -42,3 +42,9 @@ services:
         value: database
       - key: CACHE_STORE
         value: database
+      - key: SUPABASE_URL
+        value: "https://xkkxbuulfvyblfvbhccs.supabase.co"
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: "wikaplay"

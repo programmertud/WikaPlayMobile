@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'supabase' => [
+        'url' => env('SUPABASE_URL', 'https://xkkxbuulfvyblfvbhccs.supabase.co'),
+        'key' => env('SUPABASE_KEY'),
+        'bucket' => env('SUPABASE_BUCKET', 'wikaplay'),
+    ],
+
 ];
