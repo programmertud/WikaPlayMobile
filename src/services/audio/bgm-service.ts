@@ -295,6 +295,43 @@ class BackgroundMusicManager {
     }
   }
 
+  private isPausedForRecording = false;
+
+  /**
+   * Temporarily pause background music (happy.mp3) while recording voice audio
+   * so the microphone input is clear without background music bleeding in.
+   */
+  public pauseForRecording() {
+    this.isPausedForRecording = true;
+    if (Platform.OS === 'web' && this.webAudio) {
+      try {
+        this.webAudio.pause();
+      } catch {}
+    } else if (this.nativePlayer) {
+      try {
+        this.nativePlayer.pause();
+      } catch {}
+    }
+  }
+
+  /**
+   * Resume background music after recording completes or cancels
+   * (only if music was active and not muted before recording).
+   */
+  public resumeAfterRecording() {
+    if (!this.isPausedForRecording) return;
+    this.isPausedForRecording = false;
+    if (this.isPlaying && !this.isMuted) {
+      if (Platform.OS === 'web' && this.webAudio) {
+        this.webAudio.play().catch(() => {});
+      } else if (this.nativePlayer) {
+        try {
+          this.nativePlayer.play();
+        } catch {}
+      }
+    }
+  }
+
   public stop() {
     this.isPlaying = false;
     if (Platform.OS === 'web' && this.webAudio) {

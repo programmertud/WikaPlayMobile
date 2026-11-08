@@ -24,6 +24,8 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
 } from 'expo-audio';
+import { bgm } from '../services/audio/bgm-service';
+import { stopCurrentSound } from '../services/audio/sound-service';
 import { Colors, Radius } from '../theme';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,10 +54,11 @@ export function AudioRecorderButton({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Clear interval on unmount
+  // Clear interval and resume BGM if unmounted during recording
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      bgm.resumeAfterRecording();
     };
   }, []);
 
@@ -79,10 +82,15 @@ export function AudioRecorderButton({
         return;
       }
 
-      // 2. Set audio mode to allow recording
+      // 2. Stop any current preview sound & pause happy.mp3 background music
+      // so the voice recording is crystal clear with no music bleeding in
+      stopCurrentSound();
+      bgm.pauseForRecording();
+
+      // 3. Set audio mode to allow recording
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
 
-      // 3. Prepare & start
+      // 4. Prepare & start
       await recorder.prepareToRecordAsync();
       recorder.record();
 
@@ -93,6 +101,7 @@ export function AudioRecorderButton({
       }, 1000);
     } catch (err: any) {
       console.error('AudioRecorderButton startRecording error:', err);
+      bgm.resumeAfterRecording();
       Alert.alert('Recording Error', err?.message || 'Hindi makapag-record. Subukan muli.');
     }
   }, [recorder]);
@@ -111,6 +120,9 @@ export function AudioRecorderButton({
       // Restore audio mode
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
 
+      // Resume background music (happy.mp3) now that recording is finished
+      bgm.resumeAfterRecording();
+
       const uri = recorder.uri;
       if (!uri) {
         Alert.alert('Recording Error', 'Walang nakuhang recording. Subukan muli.');
@@ -122,6 +134,7 @@ export function AudioRecorderButton({
     } catch (err: any) {
       console.error('AudioRecorderButton stopRecording error:', err);
       setIsRecording(false);
+      bgm.resumeAfterRecording();
       Alert.alert('Recording Error', err?.message || 'May error sa pag-stop ng recording.');
     }
   }, [recorder, onRecordingComplete]);
