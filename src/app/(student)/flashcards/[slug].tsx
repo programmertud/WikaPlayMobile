@@ -48,21 +48,26 @@ export default function FlashcardsViewerScreen() {
     const loadCategoryFlashcards = async () => {
       if (!slug) return;
 
-      // Step 1: Apply locally cached overrides immediately for perceived performance
+      // Step 1: Apply locally cached overrides and custom teacher flashcards immediately
       try {
         const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
-        if (cachedRaw && isMounted) {
-          const cachedMap: Record<string, { imageUri?: string; audioUri?: string }> = JSON.parse(cachedRaw);
+        const customRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
+        const customItems: VocabularyItem[] = customRaw ? JSON.parse(customRaw) : [];
+
+        if ((cachedRaw || customItems.length > 0) && isMounted) {
+          const cachedMap: Record<string, { imageUri?: string; audioUri?: string }> = cachedRaw ? JSON.parse(cachedRaw) : {};
           // Purge legacy test artifacts with repeated letters (e.g. "agilasssss")
           Object.keys(cachedMap).forEach((k) => {
             if (/s{3,}/i.test(k)) {
               delete cachedMap[k];
             }
           });
-          storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(cachedMap)).catch(() => {});
+          if (cachedRaw) {
+            storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(cachedMap)).catch(() => {});
+          }
 
-          setItems((prev) =>
-            prev
+          setItems((prev) => {
+            const updated = prev
               .filter((item) => !/s{3,}/i.test(item.filipino))
               .map((item) => {
                 const norm = item.filipino.toLowerCase().trim();
@@ -76,8 +81,18 @@ export default function FlashcardsViewerScreen() {
                   };
                 }
                 return item;
-              })
-          );
+              });
+
+            // Append cached custom flashcards so newly added cards are visible offline
+            customItems.forEach((ci) => {
+              const ciNorm = ci.filipino.toLowerCase().trim();
+              if (!updated.some((it) => it.filipino.toLowerCase().trim() === ciNorm)) {
+                updated.push(ci);
+              }
+            });
+
+            return updated;
+          });
         }
       } catch {}
 
@@ -132,6 +147,7 @@ export default function FlashcardsViewerScreen() {
 
             // Append any extra teacher-added flashcards not in the local curriculum
             // Only include published flashcards (is_published !== false)
+            const newlyAddedCustom: VocabularyItem[] = [];
             res.flashcards.forEach((f) => {
               const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
               const exists = updated.some((it) => {
@@ -157,6 +173,7 @@ export default function FlashcardsViewerScreen() {
                   emoji: '⭐',
                 };
                 updated.push(customItem);
+                newlyAddedCustom.push(customItem);
                 overridesMap[fNorm] = {
                   imageUri: customItem.imageUri,
                   audioUri: customItem.audioUri,
@@ -169,8 +186,9 @@ export default function FlashcardsViewerScreen() {
               (item) => !/s{3,}/i.test(item.filipino)
             );
 
-            // Persist the latest overrides to local cache for next session
+            // Persist the latest overrides and custom flashcards to local cache for offline use
             storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap)).catch(() => {});
+            storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(newlyAddedCustom)).catch(() => {});
             return cleanUpdated;
           });
         }

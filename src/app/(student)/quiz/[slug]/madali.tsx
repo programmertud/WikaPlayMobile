@@ -57,6 +57,7 @@ import { useBgmDuck } from '../../../../services/audio/bgm-service';
 import { generateSessionId, submitQuizReward } from '../../../../services/rewards/star-reward-service';
 import { Colors, Gradients, Radius, Shadows, Typography } from '../../../../theme';
 import { VocabularyItem } from '../../../../types';
+import { storage } from '../../../../utils/storage';
 
 const { width } = Dimensions.get('window');
 const CHOICE_WIDTH = (width - 48) / 2;
@@ -142,8 +143,26 @@ export default function MadaliQuizScreen() {
     let mounted = true;
 
     const syncMadaliContent = async () => {
-      // 1. Hydrate cached local overrides
+      // 1. Hydrate cached local overrides and cached custom questions for offline use
       await hydrateCategoryOverrides(slug);
+      try {
+        const cachedCustomRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
+        if (cachedCustomRaw && mounted) {
+          const cachedCustom: MadaliQuestion[] = JSON.parse(cachedCustomRaw);
+          if (Array.isArray(cachedCustom) && cachedCustom.length > 0) {
+            const localQuestions = getMadaliQuestionsBySlug(slug);
+            const localWords = new Set(
+              localQuestions.map((q) => (q.questionFil || '').toLowerCase().trim())
+            );
+            const validCustom = cachedCustom.filter(
+              (q) => !localWords.has((q.questionFil || '').toLowerCase().trim())
+            );
+            if (validCustom.length > 0) {
+              setQuestions(shuffleQuestions([...localQuestions, ...validCustom]));
+            }
+          }
+        }
+      } catch {}
       if (mounted) setQuestions((prev) => [...prev]);
 
       // 2. Fetch teacher-added custom questions from API and append to the local bank
@@ -219,6 +238,7 @@ export default function MadaliQuizScreen() {
 
           if (newCustom.length > 0) {
             setQuestions(shuffleQuestions([...localQuestions, ...newCustom]));
+            storage.setItem(`@wikaplay_cached_madali_custom_${slug}`, JSON.stringify(newCustom)).catch(() => {});
           }
         }
       } catch (err) {

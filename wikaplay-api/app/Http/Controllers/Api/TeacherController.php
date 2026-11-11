@@ -1147,7 +1147,12 @@ class TeacherController extends Controller
         $question->points = $validated['points'] ?? 1;
 
         if (Schema::hasColumn('quiz_questions', 'section_id')) {
-            $question->section_id = $sectionId;
+            // Keep base curriculum questions global (section_id = null) so they remain available to all teachers and students
+            if ($question->exists && is_null($question->getOriginal('section_id'))) {
+                $question->section_id = null;
+            } else {
+                $question->section_id = $sectionId;
+            }
         }
 
         $question->save();

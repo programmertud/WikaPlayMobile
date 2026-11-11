@@ -34,6 +34,7 @@ import { generateSessionId, submitQuizReward } from '../../../../services/reward
 import { Colors, Gradients, Shadows, Typography, Radius } from '../../../../theme';
 import { stopCurrentSound, useBgmDuck } from '../../../../services/audio/sound-service';
 import { ChoiceItem, QuizDifficulty, QuizQuestion, QuizResultSession, VocabularyItem } from '../../../../types';
+import { storage } from '../../../../utils/storage';
 
 const { width } = Dimensions.get('window');
 const CHOICE_WIDTH = (width - 48) / 2;
@@ -339,7 +340,29 @@ export default function QuizGameplayScreen() {
       // Shuffle questions to ensure variety
       const shuffledQuestions = [...fetchedQuestions].sort(() => 0.5 - Math.random());
       setQuestions(shuffledQuestions);
+      // Cache questions to local storage for offline use (preserves teacher-added questions & customizations)
+      storage.setItem(`@wikaplay_cached_quiz_${slug}_${difficulty}`, JSON.stringify(fetchedQuestions)).catch(() => {});
     } catch (err: any) {
+      // 1. Offline fallback: check if we have cached questions from previous teacher sync!
+      try {
+        const cachedRaw = await storage.getItem(`@wikaplay_cached_quiz_${slug}_${difficulty}`);
+        if (cachedRaw) {
+          const cachedList: QuizQuestion[] = JSON.parse(cachedRaw);
+          if (Array.isArray(cachedList) && cachedList.length > 0) {
+            const cat = getCategoryBySlug(slug);
+            if (cat) {
+              setCategoryName(cat.name);
+              setCategoryId(Number(cat.id.replace(/\D/g, '')) || 1);
+              setCategoryColor(cat.color || Colors.skyBlue);
+            }
+            const shuffledCached = [...cachedList].sort(() => 0.5 - Math.random());
+            setQuestions(shuffledCached);
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to bundled local items if no cache is present
       const cat = getCategoryBySlug(slug);
       if (cat && cat.items && cat.items.length > 0) {
         setCategoryName(cat.name);

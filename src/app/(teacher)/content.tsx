@@ -502,18 +502,7 @@ export default function ContentManagementScreen({
             (it) => it.filipino.toLowerCase().trim() === targetWord || it.id.toLowerCase() === targetWord
           );
 
-          if (catSlug === 'mga-hayop') {
-            // Delete duplicate questions (21-43) from server in the background
-            if (isBaseCurriculumItem && apiQ.id && typeof apiQ.id === 'number') {
-              teacherService.deleteQuizQuestion(apiQ.id).catch(() => {});
-            }
-            if (isBaseCurriculumItem) return;
-          }
-
           if (isBaseCurriculumItem && !apiQ.section_id) {
-            if (apiQ.id && typeof apiQ.id === 'number') {
-              teacherService.deleteQuizQuestion(apiQ.id).catch(() => {});
-            }
             return;
           }
 
