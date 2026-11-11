@@ -698,6 +698,27 @@ export default function ContentManagementScreen({
           };
         });
       }
+
+      // Deduplicate katamtaman / mahirap by target_item_name to guard against duplicate DB rows.
+      // Prefer the question that belongs to the teacher's section over a global one; otherwise keep the first seen.
+      if (diff === 'katamtaman' || diff === 'mahirap') {
+        const seen = new Map<string, any>();
+        questions.forEach((q: any) => {
+          const key = (q.target_item_name || q.correct_answer || '').toLowerCase().trim();
+          if (!key) return; // keep unknowns as-is
+          if (!seen.has(key)) {
+            seen.set(key, q);
+          } else {
+            // Prefer section-specific over global (section_id truthy wins)
+            const existing = seen.get(key);
+            if (q.section_id && !existing.section_id) {
+              seen.set(key, q);
+            }
+          }
+        });
+        questions = Array.from(seen.values()).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+      }
+
       setQuizData({
         availability,
         questions,
