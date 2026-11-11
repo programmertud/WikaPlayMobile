@@ -395,7 +395,7 @@ export default function QuizGameplayScreen() {
         setCategoryId(Number(cat.id.replace(/\D/g, '')) || 1);
         setCategoryColor(cat.color || Colors.skyBlue);
 
-        const targetCount = (difficulty === 'katamtaman' || difficulty === 'mahirap') ? 20 : 10;
+        const targetCount = Math.max((difficulty === 'katamtaman' || difficulty === 'mahirap') ? 20 : 10, cat.items.length);
         const selectedTargets: VocabularyItem[] = [];
         const shuffled = [...cat.items].sort(() => 0.5 - Math.random());
         for (let i = 0; i < targetCount; i++) {

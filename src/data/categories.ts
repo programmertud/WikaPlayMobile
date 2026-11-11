@@ -430,6 +430,26 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
 export async function hydrateCategoryOverrides(slug: string) {
   if (!slug) return;
   try {
+    const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
+    const fullRaw = await storage.getItem(`@wikaplay_full_items_${slug}`);
+    if (fullRaw && cat) {
+      const fullItems: VocabularyItem[] = JSON.parse(fullRaw);
+      if (Array.isArray(fullItems) && fullItems.length > 0) {
+        cat.items = fullItems.map((fi) => {
+          if (!fi.image) {
+            const bundled = cat.items.find((bi) => bi.id === fi.id || normalizeWord(bi.filipino) === normalizeWord(fi.filipino));
+            if (bundled?.image) fi.image = bundled.image;
+          }
+          if (!fi.audio) {
+            const bundled = cat.items.find((bi) => bi.id === fi.id || normalizeWord(bi.filipino) === normalizeWord(fi.filipino));
+            if (bundled?.audio) fi.audio = bundled.audio;
+          }
+          return fi;
+        });
+        return;
+      }
+    }
+
     const raw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
     if (raw) {
       const overrides = JSON.parse(raw);
@@ -438,10 +458,9 @@ export async function hydrateCategoryOverrides(slug: string) {
       });
     }
     const customRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
-    if (customRaw) {
+    if (customRaw && cat) {
       const customItems: VocabularyItem[] = JSON.parse(customRaw);
-      const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
-      if (cat && Array.isArray(customItems)) {
+      if (Array.isArray(customItems)) {
         customItems.forEach((ci) => {
           const norm = normalizeWord(ci.filipino);
           if (!cat.items.some((it) => normalizeWord(it.filipino) === norm)) {

@@ -146,19 +146,19 @@ export default function MadaliQuizScreen() {
       // 1. Hydrate cached local overrides and cached custom questions for offline use
       await hydrateCategoryOverrides(slug);
       try {
-        const cachedCustomRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
-        if (cachedCustomRaw && mounted) {
-          const cachedCustom: MadaliQuestion[] = JSON.parse(cachedCustomRaw);
-          if (Array.isArray(cachedCustom) && cachedCustom.length > 0) {
-            const localQuestions = getMadaliQuestionsBySlug(slug);
-            const localWords = new Set(
-              localQuestions.map((q) => (q.questionFil || '').toLowerCase().trim())
-            );
-            const validCustom = cachedCustom.filter(
-              (q) => !localWords.has((q.questionFil || '').toLowerCase().trim())
-            );
-            if (validCustom.length > 0) {
-              setQuestions(shuffleQuestions([...localQuestions, ...validCustom]));
+        const fullCachedRaw = await storage.getItem(`@wikaplay_cached_madali_full_${slug}`);
+        if (fullCachedRaw && mounted) {
+          const fullList: MadaliQuestion[] = JSON.parse(fullCachedRaw);
+          if (Array.isArray(fullList) && fullList.length > 0) {
+            setQuestions(shuffleQuestions(fullList));
+          }
+        } else {
+          const cachedCustomRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
+          if (cachedCustomRaw && mounted) {
+            const cachedCustom: MadaliQuestion[] = JSON.parse(cachedCustomRaw);
+            if (Array.isArray(cachedCustom) && cachedCustom.length > 0) {
+              const localQuestions = getMadaliQuestionsBySlug(slug);
+              setQuestions(shuffleQuestions([...localQuestions, ...cachedCustom]));
             }
           }
         }
@@ -243,10 +243,12 @@ export default function MadaliQuizScreen() {
             return ans && !localAnswers.has(ans);
           });
 
+          const allMadaliQuestions = [...localQuestions, ...newCustom];
           if (newCustom.length > 0) {
-            setQuestions(shuffleQuestions([...localQuestions, ...newCustom]));
+            setQuestions(shuffleQuestions(allMadaliQuestions));
           }
-          // Always persist the full merged custom list for offline use
+          // Always persist the full combined question list for offline use
+          storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(allMadaliQuestions)).catch(() => {});
           if (newCustom.length > 0) {
             (async () => {
               try {

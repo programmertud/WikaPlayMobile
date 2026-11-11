@@ -10,6 +10,7 @@
  */
 
 import { LEARNING_CATEGORIES, syncCategoryFlashcards } from '../../data/categories';
+import { getMadaliQuestionsBySlug } from '../../data/quiz-bank-madali';
 import { categoryService } from '../api';
 import { storage } from '../../utils/storage';
 import { resolveAvatarUrl } from '../../components/UserAvatar';
@@ -31,12 +32,15 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
         if (fcRes?.flashcards && Array.isArray(fcRes.flashcards)) {
           syncCategoryFlashcards(slug, fcRes.flashcards);
 
+          // Save the full updated category items directly for offline recovery
+          await storage.setItem(`@wikaplay_full_items_${slug}`, JSON.stringify(cat.items));
+
           const overridesMap: Record<string, { imageUri?: string; audioUri?: string }> = {};
           const customItems: VocabularyItem[] = [];
 
           fcRes.flashcards.forEach((f) => {
             const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
-            const isBaseItem = cat.items.some(
+            const isBaseItem = cat.items.slice(0, 20).some(
               (it) => it.filipino.toLowerCase().trim() === fNorm
             );
             const isTestCard = f.id === 155 || /s{3,}/i.test(fNorm) || /s{3,}/i.test(f.english_name || '');
@@ -94,45 +98,49 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
       try {
         const madaliRes = await categoryService.getQuizQuestions(slug, 'madali', sectionId);
         if (madaliRes?.questions && Array.isArray(madaliRes.questions)) {
+          const localQuestions = getMadaliQuestionsBySlug(slug);
           const customQuestions = madaliRes.questions.filter((q: any) => {
             if (q.section_id) return true;
             const targetWord = (q.target_item_name || q.correct_answer || '').toLowerCase().trim();
-            const isBase = cat.items.some((it) => it.filipino.toLowerCase().trim() === targetWord);
+            const isBase = cat.items.slice(0, 20).some((it) => it.filipino.toLowerCase().trim() === targetWord);
             return !isBase;
           });
 
-          if (customQuestions.length > 0) {
-            const letters = ['A', 'B', 'C', 'D'];
-            const mapped = customQuestions.map((apiQ: any, idx: number) => {
-              const choices = (apiQ.choices || []).slice(0, 4);
-              const textChoices = choices.map((ch: any, cIdx: number) => ({
-                id: letters[cIdx],
-                text: typeof ch === 'string' ? ch : (ch?.text || ''),
-              }));
-              const correctIdx = choices.findIndex((ch: any) => {
-                const text = typeof ch === 'string' ? ch : (ch?.text || '');
-                const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
-                return (
-                  text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
-                  idStr === String(apiQ.correct_answer)
-                );
-              });
-              const hasPic = Boolean(apiQ.target_image_url && !apiQ.target_image_url.includes('wikaplay.app'));
-              return {
-                id: `api_${apiQ.id || idx}`,
-                categoryId: `cat_${slug}`,
-                categorySlug: slug,
-                difficulty: 'madali',
-                type: hasPic ? 'picture-id' : 'multiple-choice',
-                questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
-                questionEn: apiQ.question_text || '',
-                textChoices,
-                correctTextId: (correctIdx >= 0 ? letters[correctIdx] : 'A'),
-                target_image_url: hasPic ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url) : undefined,
-                audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url } : undefined,
-              };
+          const letters = ['A', 'B', 'C', 'D'];
+          const mapped = customQuestions.map((apiQ: any, idx: number) => {
+            const choices = (apiQ.choices || []).slice(0, 4);
+            const textChoices = choices.map((ch: any, cIdx: number) => ({
+              id: letters[cIdx],
+              text: typeof ch === 'string' ? ch : (ch?.text || ''),
+            }));
+            const correctIdx = choices.findIndex((ch: any) => {
+              const text = typeof ch === 'string' ? ch : (ch?.text || '');
+              const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
+              return (
+                text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
+                idStr === String(apiQ.correct_answer)
+              );
             });
+            const hasPic = Boolean(apiQ.target_image_url && !apiQ.target_image_url.includes('wikaplay.app'));
+            return {
+              id: `api_${apiQ.id || idx}`,
+              categoryId: `cat_${slug}`,
+              categorySlug: slug,
+              difficulty: 'madali',
+              type: hasPic ? 'picture-id' : 'multiple-choice',
+              questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
+              questionEn: apiQ.question_text || '',
+              textChoices,
+              correctTextId: (correctIdx >= 0 ? letters[correctIdx] : 'A'),
+              target_image_url: hasPic ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url) : undefined,
+              audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url } : undefined,
+            };
+          });
 
+          const fullMadaliList = [...localQuestions, ...mapped];
+          await storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(fullMadaliList));
+
+          if (customQuestions.length > 0) {
             const prevRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
             const prevList = prevRaw ? JSON.parse(prevRaw) : [];
             const mergedMap = new Map<string, any>();
