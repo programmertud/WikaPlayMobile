@@ -55,7 +55,18 @@ export default function FlashcardsViewerScreen() {
         if (fullCachedRaw) {
           const fullCached: VocabularyItem[] = JSON.parse(fullCachedRaw);
           if (Array.isArray(fullCached) && fullCached.length > 0 && isMounted) {
-            setItems(fullCached);
+            // Restore bundled image and audio requires from category.items for bundled items
+            const restored = fullCached.map((item) => {
+              const base = category.items.find(
+                (bi) => bi.id === item.id || bi.filipino.toLowerCase().trim() === item.filipino.toLowerCase().trim()
+              );
+              return {
+                ...item,
+                image: item.imageUri ? undefined : (base?.image ?? item.image),
+                audio: item.audioUri ? undefined : (base?.audio ?? item.audio),
+              };
+            });
+            setItems(restored);
           }
         } else {
           const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
@@ -83,7 +94,6 @@ export default function FlashcardsViewerScreen() {
                   if (cached) {
                     return {
                       ...item,
-                      // Only override if cache has a real (non-blob) URL
                       imageUri: (cached.imageUri && !cached.imageUri.startsWith('blob:')) ? cached.imageUri : item.imageUri,
                       audioUri: cached.audioUri || item.audioUri,
                     };
@@ -108,122 +118,116 @@ export default function FlashcardsViewerScreen() {
       // Step 2: Always fetch from the live backend API — teacher updates must appear immediately
       try {
         const res = await categoryService.getFlashcards(slug, user?.section_id);
-        if (res?.flashcards && isMounted) {
+        if (res?.flashcards && Array.isArray(res.flashcards) && isMounted) {
           syncCategoryFlashcards(slug, res.flashcards);
           const overridesMap: Record<string, { imageUri?: string; audioUri?: string }> = {};
 
-          setItems((prev) => {
-            const updated = prev.map((item) => {
-              const norm = item.filipino.toLowerCase().trim();
-              const match = res.flashcards.find((f) => {
-                const fn = (f.filipino_name || f.name || '').toLowerCase().trim();
-                return fn === norm || (norm === 'buko' && fn === 'niyog') || (norm === 'niyog' && fn === 'buko');
-              });
-
-              if (match) {
-                const isUnsplash = typeof match.image_url === 'string' && match.image_url.includes('images.unsplash.com');
-                const isBlobUrl = typeof match.image_url === 'string' && match.image_url.startsWith('blob:');
-                const isLocalFile = typeof match.image_url === 'string' && match.image_url.startsWith('file://');
-                // Accept any valid non-placeholder, non-blob, non-local-file server URL
-                const normalizedImg = match.image_url ? resolveAvatarUrl(match.image_url) : undefined;
-                const isPlaceholder = normalizedImg?.includes('wikaplay.app');
-                const validImage = normalizedImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder
-                  ? normalizedImg
-                  : undefined;
-                // Only treat as valid audio override if it's an actual remote upload (http/storage)
-                const isRealRemoteAudio = typeof match.audio_url === 'string' &&
-                  (match.audio_url.startsWith('http://') || match.audio_url.startsWith('https://') || match.audio_url.includes('/storage/'));
-                const isLocalAudioFile = typeof match.audio_url === 'string' && match.audio_url.startsWith('file://');
-                const validAudio = typeof match.audio_url === 'string' && isRealRemoteAudio && !match.audio_url.startsWith('blob:') && !isLocalAudioFile
-                  ? match.audio_url
-                  : undefined;
-
-                // Always update overrides map so we can cache the latest state
-                overridesMap[norm] = {
-                  imageUri: validImage,
-                  audioUri: validAudio || item.audioUri,
-                };
-
-                return {
-                  ...item,
-                  // Teacher image takes priority over bundled local image
-                  imageUri: validImage ?? item.imageUri,
-                  audioUri: validAudio || item.audioUri,
-                };
-              }
-              return item;
+          // Start from fresh category items
+          const updated = category.items.map((item) => {
+            const norm = item.filipino.toLowerCase().trim();
+            const match = res.flashcards.find((f: any) => {
+              const fn = (f.filipino_name || f.name || '').toLowerCase().trim();
+              return fn === norm || (norm === 'buko' && fn === 'niyog') || (norm === 'niyog' && fn === 'buko');
             });
 
-            // Append any extra teacher-added flashcards not in the local curriculum
-            // Only include published flashcards (is_published !== false)
-            const newlyAddedCustom: VocabularyItem[] = [];
-            res.flashcards.forEach((f) => {
-              const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
-              const alreadyInUpdated = updated.some((it) => {
-                const itNorm = it.filipino.toLowerCase().trim();
-                return itNorm === fNorm || (fNorm === 'buko' && itNorm === 'niyog') || (fNorm === 'niyog' && itNorm === 'buko');
-              });
-              const isTestCard = f.id === 155 || /s{3,}/i.test(fNorm) || /s{3,}/i.test(f.english_name || '');
-              
-              if (f.filipino_name && f.is_published !== false && !isTestCard) {
-                const normalizedFImg = f.image_url ? resolveAvatarUrl(f.image_url) : undefined;
-                const isUnsplash = typeof normalizedFImg === 'string' && normalizedFImg.includes('images.unsplash.com');
-                const isBlobUrl = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('blob:');
-                const isLocalFile = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('file://');
-                const isPlaceholder = typeof normalizedFImg === 'string' && normalizedFImg.includes('wikaplay.app');
-                const isLocalAudioFile = typeof f.audio_url === 'string' && f.audio_url.startsWith('file://');
-                const customItem: VocabularyItem = {
-                  id: `fc_${f.id}`,
-                  categoryId: category.id,
-                  filipino: f.filipino_name,
-                  english: f.english_name || '',
-                  imageUri: normalizedFImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder ? normalizedFImg : undefined,
-                  audioUri: f.audio_url && !isLocalAudioFile ? f.audio_url : undefined,
-                  emoji: '⭐',
-                };
+            if (match) {
+              const isUnsplash = typeof match.image_url === 'string' && match.image_url.includes('images.unsplash.com');
+              const isBlobUrl = typeof match.image_url === 'string' && match.image_url.startsWith('blob:');
+              const isLocalFile = typeof match.image_url === 'string' && match.image_url.startsWith('file://');
+              const normalizedImg = match.image_url ? resolveAvatarUrl(match.image_url) : undefined;
+              const isPlaceholder = normalizedImg?.includes('wikaplay.app');
+              const validImage = normalizedImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder
+                ? normalizedImg
+                : undefined;
 
-                // Add to list if not yet present
-                if (!alreadyInUpdated) {
-                  updated.push(customItem);
-                }
+              const isRealRemoteAudio = typeof match.audio_url === 'string' &&
+                (match.audio_url.startsWith('http://') || match.audio_url.startsWith('https://') || match.audio_url.includes('/storage/'));
+              const isLocalAudioFile = typeof match.audio_url === 'string' && match.audio_url.startsWith('file://');
+              const validAudio = typeof match.audio_url === 'string' && isRealRemoteAudio && !match.audio_url.startsWith('blob:') && !isLocalAudioFile
+                ? match.audio_url
+                : undefined;
 
-                // Check if this item is a custom addition beyond the original 20 base items
-                const isOriginalBaseItem = category.items.slice(0, 20).some(
-                  (it) => it.filipino.toLowerCase().trim() === fNorm
-                );
-                if (!isOriginalBaseItem) {
-                  newlyAddedCustom.push(customItem);
-                }
+              overridesMap[norm] = {
+                imageUri: validImage,
+                audioUri: validAudio || item.audioUri,
+              };
 
-                overridesMap[fNorm] = {
-                  imageUri: customItem.imageUri,
-                  audioUri: customItem.audioUri,
-                };
-              }
-            });
-
-            // Filter out any unwanted test cards with 3+ repeated letters
-            const cleanUpdated = updated.filter(
-              (item) => !/s{3,}/i.test(item.filipino)
-            );
-
-            // Persist both full items array and individual cache keys for bulletproof offline recovery
-            storage.setItem(`@wikaplay_full_items_${slug}`, JSON.stringify(cleanUpdated)).catch(() => {});
-            storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap)).catch(() => {});
-            (async () => {
-              try {
-                const prevRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
-                const prevCustom: VocabularyItem[] = prevRaw ? JSON.parse(prevRaw) : [];
-                // Merge: start with previous cached, upsert anything from this session
-                const mergedMap = new Map<string, VocabularyItem>();
-                prevCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
-                newlyAddedCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
-                const merged = Array.from(mergedMap.values());
-                await storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(merged));
-              } catch {}
-            })();
-            return cleanUpdated;
+              return {
+                ...item,
+                imageUri: validImage ?? item.imageUri,
+                audioUri: validAudio || item.audioUri,
+              };
+            }
+            return item;
           });
+
+          // Append any extra teacher-added flashcards not in the local curriculum
+          const newlyAddedCustom: VocabularyItem[] = [];
+          res.flashcards.forEach((f: any) => {
+            const fNorm = (f.filipino_name || f.name || '').toLowerCase().trim();
+            const alreadyInUpdated = updated.some((it) => {
+              const itNorm = it.filipino.toLowerCase().trim();
+              return itNorm === fNorm || (fNorm === 'buko' && itNorm === 'niyog') || (fNorm === 'niyog' && itNorm === 'buko');
+            });
+            const isTestCard = f.id === 155 || /s{3,}/i.test(fNorm) || /s{3,}/i.test(f.english_name || '');
+
+            if (f.filipino_name && f.is_published !== false && !isTestCard) {
+              const normalizedFImg = f.image_url ? resolveAvatarUrl(f.image_url) : undefined;
+              const isUnsplash = typeof normalizedFImg === 'string' && normalizedFImg.includes('images.unsplash.com');
+              const isBlobUrl = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('blob:');
+              const isLocalFile = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('file://');
+              const isPlaceholder = typeof normalizedFImg === 'string' && normalizedFImg.includes('wikaplay.app');
+              const isLocalAudioFile = typeof f.audio_url === 'string' && f.audio_url.startsWith('file://');
+              const customItem: VocabularyItem = {
+                id: `fc_${f.id}`,
+                categoryId: category.id,
+                filipino: f.filipino_name,
+                english: f.english_name || '',
+                imageUri: normalizedFImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder ? normalizedFImg : undefined,
+                audioUri: f.audio_url && !isLocalAudioFile ? f.audio_url : undefined,
+                emoji: '⭐',
+              };
+
+              if (!alreadyInUpdated) {
+                updated.push(customItem);
+              }
+
+              const isOriginalBaseItem = category.items.slice(0, 20).some(
+                (it) => it.filipino.toLowerCase().trim() === fNorm
+              );
+              if (!isOriginalBaseItem) {
+                newlyAddedCustom.push(customItem);
+              }
+
+              overridesMap[fNorm] = {
+                imageUri: customItem.imageUri,
+                audioUri: customItem.audioUri,
+              };
+            }
+          });
+
+          // Filter out test cards with 3+ repeated letters
+          const cleanUpdated = updated.filter(
+            (item) => !/s{3,}/i.test(item.filipino)
+          );
+
+          // Await writes to storage outside of setState
+          await storage.setItem(`@wikaplay_full_items_${slug}`, JSON.stringify(cleanUpdated));
+          await storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap));
+
+          try {
+            const prevRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
+            const prevCustom: VocabularyItem[] = prevRaw ? JSON.parse(prevRaw) : [];
+            const mergedMap = new Map<string, VocabularyItem>();
+            prevCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
+            newlyAddedCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
+            const merged = Array.from(mergedMap.values());
+            await storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(merged));
+          } catch {}
+
+          if (isMounted) {
+            setItems(cleanUpdated);
+          }
         }
       } catch {
         // Safe offline fallback — cached local data stays

@@ -1,5 +1,6 @@
 import { LearningCategory, VocabularyItem } from '../types';
 import { storage } from '../utils/storage';
+import { resolveAvatarUrl } from '../components/UserAvatar';
 
 export const LEARNING_CATEGORIES: LearningCategory[] = [
   {
@@ -365,10 +366,11 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
 
     if (backendFc) {
       // Teacher has this flashcard - apply their custom image/audio if they uploaded one
-      const isUnsplash = typeof backendFc.image_url === 'string' && backendFc.image_url.includes('images.unsplash.com');
-      const isBlobUrl = typeof backendFc.image_url === 'string' && backendFc.image_url.startsWith('blob:');
-      const isPlaceholder = typeof backendFc.image_url === 'string' && (backendFc.image_url.includes('wikaplay.app') || backendFc.image_url.trim().length === 0);
-      const customImage = backendFc.image_url && !isUnsplash && !isBlobUrl && !isPlaceholder ? backendFc.image_url : undefined;
+      const normalizedImg = backendFc.image_url ? resolveAvatarUrl(backendFc.image_url) : undefined;
+      const isUnsplash = typeof normalizedImg === 'string' && normalizedImg.includes('images.unsplash.com');
+      const isBlobUrl = typeof normalizedImg === 'string' && normalizedImg.startsWith('blob:');
+      const isPlaceholder = typeof normalizedImg === 'string' && (normalizedImg.includes('wikaplay.app') || normalizedImg.trim().length === 0);
+      const customImage = normalizedImg && !isUnsplash && !isBlobUrl && !isPlaceholder ? normalizedImg : undefined;
 
       const isRealRemoteAudio = typeof backendFc.audio_url === 'string' &&
         (backendFc.audio_url.startsWith('http://') || backendFc.audio_url.startsWith('https://') || backendFc.audio_url.includes('/storage/'));
@@ -400,10 +402,11 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
     // Ignore test/duplicate cards with repeated letters (e.g. "agilasssss")
     const isTestCard = f.id === 155 || /s{3,}/i.test(norm) || /s{3,}/i.test(f.english_name || '');
     if (!exists && f.filipino_name && !isTestCard) {
-      const isUnsplash = typeof f.image_url === 'string' && f.image_url.includes('images.unsplash.com');
-      const isBlobUrl = typeof f.image_url === 'string' && f.image_url.startsWith('blob:');
-      const isPlaceholder = typeof f.image_url === 'string' && (f.image_url.includes('wikaplay.app') || f.image_url.trim().length === 0);
-      const customImage = f.image_url && !isUnsplash && !isBlobUrl && !isPlaceholder ? f.image_url : undefined;
+      const normalizedFImg = f.image_url ? resolveAvatarUrl(f.image_url) : undefined;
+      const isUnsplash = typeof normalizedFImg === 'string' && normalizedFImg.includes('images.unsplash.com');
+      const isBlobUrl = typeof normalizedFImg === 'string' && normalizedFImg.startsWith('blob:');
+      const isPlaceholder = typeof normalizedFImg === 'string' && (normalizedFImg.includes('wikaplay.app') || normalizedFImg.trim().length === 0);
+      const customImage = normalizedFImg && !isUnsplash && !isBlobUrl && !isPlaceholder ? normalizedFImg : undefined;
 
       const isRealRemoteAudio = typeof f.audio_url === 'string' &&
         (f.audio_url.startsWith('http://') || f.audio_url.startsWith('https://') || f.audio_url.includes('/storage/'));
@@ -431,20 +434,20 @@ export async function hydrateCategoryOverrides(slug: string) {
   if (!slug) return;
   try {
     const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
+    if (!cat) return;
+    const baseItems = [...cat.items];
+
     const fullRaw = await storage.getItem(`@wikaplay_full_items_${slug}`);
-    if (fullRaw && cat) {
+    if (fullRaw) {
       const fullItems: VocabularyItem[] = JSON.parse(fullRaw);
       if (Array.isArray(fullItems) && fullItems.length > 0) {
         cat.items = fullItems.map((fi) => {
-          if (!fi.image) {
-            const bundled = cat.items.find((bi) => bi.id === fi.id || normalizeWord(bi.filipino) === normalizeWord(fi.filipino));
-            if (bundled?.image) fi.image = bundled.image;
-          }
-          if (!fi.audio) {
-            const bundled = cat.items.find((bi) => bi.id === fi.id || normalizeWord(bi.filipino) === normalizeWord(fi.filipino));
-            if (bundled?.audio) fi.audio = bundled.audio;
-          }
-          return fi;
+          const bundled = baseItems.find((bi) => bi.id === fi.id || normalizeWord(bi.filipino) === normalizeWord(fi.filipino));
+          return {
+            ...fi,
+            image: fi.imageUri ? undefined : (bundled?.image ?? fi.image),
+            audio: fi.audioUri ? undefined : (bundled?.audio ?? fi.audio),
+          };
         });
         return;
       }
@@ -458,7 +461,7 @@ export async function hydrateCategoryOverrides(slug: string) {
       });
     }
     const customRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
-    if (customRaw && cat) {
+    if (customRaw) {
       const customItems: VocabularyItem[] = JSON.parse(customRaw);
       if (Array.isArray(customItems)) {
         customItems.forEach((ci) => {
