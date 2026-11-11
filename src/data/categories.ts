@@ -437,6 +437,19 @@ export async function hydrateCategoryOverrides(slug: string) {
         overrideVocabularyItem(word, update, slug);
       });
     }
+    const customRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
+    if (customRaw) {
+      const customItems: VocabularyItem[] = JSON.parse(customRaw);
+      const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
+      if (cat && Array.isArray(customItems)) {
+        customItems.forEach((ci) => {
+          const norm = normalizeWord(ci.filipino);
+          if (!cat.items.some((it) => normalizeWord(it.filipino) === norm)) {
+            cat.items.push(ci);
+          }
+        });
+      }
+    }
   } catch {}
 }
 

@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
-import { getCategoryBySlug } from '../../../data/categories';
+import { getCategoryBySlug, hydrateCategoryOverrides } from '../../../data/categories';
 import { usePresence } from '../../../hooks/use-presence';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
 import { stopCurrentSound } from '../../../services/audio/sound-service';
@@ -35,6 +35,7 @@ export default function CategoryDetailScreen() {
 
   useEffect(() => {
     let mounted = true;
+    if (slug) hydrateCategoryOverrides(slug);
     categoryService.getAll().then((cats) => {
       const current = cats.find((item) => item.slug === slug) as any;
       const availabilities = current?.quiz_availabilities || current?.category?.quiz_availabilities;

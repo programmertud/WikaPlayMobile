@@ -21,7 +21,7 @@ import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
 import { resolveAvatarUrl } from '../../../components/UserAvatar';
-import { getCategoryBySlug, syncCategoryFlashcards } from '../../../data/categories';
+import { getCategoryBySlug, hydrateCategoryOverrides, syncCategoryFlashcards } from '../../../data/categories';
 import { useAuth } from '../../../hooks/use-auth';
 import { usePresence } from '../../../hooks/use-presence';
 import { AnimatedBackground } from '../../../components/AnimatedBackground';
@@ -50,6 +50,7 @@ export default function FlashcardsViewerScreen() {
 
       // Step 1: Apply locally cached overrides and custom teacher flashcards immediately
       try {
+        await hydrateCategoryOverrides(slug);
         const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
         const customRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
         const customItems: VocabularyItem[] = customRaw ? JSON.parse(customRaw) : [];
@@ -186,9 +187,21 @@ export default function FlashcardsViewerScreen() {
               (item) => !/s{3,}/i.test(item.filipino)
             );
 
-            // Persist the latest overrides and custom flashcards to local cache for offline use
+            // Persist the latest overrides and custom flashcards to local cache for offline use.
+            // Merge with previously cached custom items so ALL teacher-added cards survive offline.
             storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap)).catch(() => {});
-            storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(newlyAddedCustom)).catch(() => {});
+            (async () => {
+              try {
+                const prevRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
+                const prevCustom: VocabularyItem[] = prevRaw ? JSON.parse(prevRaw) : [];
+                // Merge: start with previous cached, upsert anything from this session
+                const mergedMap = new Map<string, VocabularyItem>();
+                prevCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
+                newlyAddedCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
+                const merged = Array.from(mergedMap.values());
+                await storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(merged));
+              } catch {}
+            })();
             return cleanUpdated;
           });
         }

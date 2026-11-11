@@ -31,6 +31,7 @@ import { LEARNING_CATEGORIES } from '../../../data/categories';
 import { Category } from '../../../types';
 import { bgm } from '../../../services/audio/bgm-service';
 import { rewardService } from '../../../services/api';
+import { prefetchAndCacheOfflineContent } from '../../../services/offline/offline-content-sync';
 
 export default function StudentDashboardScreen() {
   const { user, updateUserStars } = useAuth();
@@ -69,6 +70,9 @@ export default function StudentDashboardScreen() {
         // Also sync the auth context so other screens are consistent
         updateUserStars(serverBalance);
       }
+
+      // Background prefetch all teacher flashcards and quizzes so they are available offline
+      prefetchAndCacheOfflineContent(user?.section_id).catch(() => {});
     } catch {
       // Offline: fall back to auth context value (no update)
     } finally {

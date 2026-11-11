@@ -167,7 +167,7 @@ export default function MadaliQuizScreen() {
 
       // 2. Fetch teacher-added custom questions from API and append to the local bank
       try {
-        const res = await categoryService.getQuizQuestions(slug, 'madali');
+        const res = await categoryService.getQuizQuestions(slug, 'madali', user?.section_id);
         if (!mounted) return;
 
         if (res.is_locked) {
@@ -228,17 +228,36 @@ export default function MadaliQuizScreen() {
             } as MadaliQuestion;
           });
 
-          // Deduplicate: don't show questions already in the local bank (by target word)
-          const localWords = new Set(
-            localQuestions.map((q) => (q.questionFil || '').toLowerCase().trim())
+          // Deduplicate: identify custom questions by their answer or section_id, not by question text prompt
+          const localAnswers = new Set(
+            localQuestions.map((q) => {
+              const correctChoice = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
+              return (correctChoice || '').toLowerCase().trim();
+            })
           );
-          const newCustom = mappedApiQuestions.filter(
-            (q) => !localWords.has((q.questionFil || '').toLowerCase().trim())
-          );
+          const newCustom = mappedApiQuestions.filter((q, idx) => {
+            const rawApiQ = apiQuestions[idx];
+            if (rawApiQ?.section_id) return true; // explicitly teacher-created in this section
+            const correctChoice = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
+            const ans = (correctChoice || '').toLowerCase().trim();
+            return ans && !localAnswers.has(ans);
+          });
 
           if (newCustom.length > 0) {
             setQuestions(shuffleQuestions([...localQuestions, ...newCustom]));
-            storage.setItem(`@wikaplay_cached_madali_custom_${slug}`, JSON.stringify(newCustom)).catch(() => {});
+          }
+          // Always persist the full merged custom list for offline use
+          if (newCustom.length > 0) {
+            (async () => {
+              try {
+                const prevRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
+                const prevCached: MadaliQuestion[] = prevRaw ? JSON.parse(prevRaw) : [];
+                const mergedMap = new Map<string, MadaliQuestion>();
+                prevCached.forEach((q) => mergedMap.set(q.id, q));
+                newCustom.forEach((q) => mergedMap.set(q.id, q));
+                await storage.setItem(`@wikaplay_cached_madali_custom_${slug}`, JSON.stringify(Array.from(mergedMap.values())));
+              } catch {}
+            })();
           }
         }
       } catch (err) {

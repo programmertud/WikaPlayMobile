@@ -23,6 +23,7 @@ import * as Haptics from '@/utils/haptics';
 import { useAuth } from '../hooks/use-auth';
 import { ApiClient, authService, studentService } from '../services/api';
 import { getLatestCachedUser } from '../services/offline/offline-session-store';
+import { prefetchAndCacheOfflineContent } from '../services/offline/offline-content-sync';
 import { bgm } from '../services/audio/bgm-service';
 import { playWelcomeSound } from '../services/audio/sound-service';
 import { Colors, Gradients, Radius, Shadows, Typography } from '../theme';
@@ -185,6 +186,8 @@ export default function LoadingScreen() {
           userRole = meRes.user.role;
           if (userRole === 'student') {
             try { await studentService.getProfileStats(); } catch {}
+            // Prefetch all flashcards and quizzes in background for offline use
+            prefetchAndCacheOfflineContent(meRes.user.section_id).catch(() => {});
           }
           await refreshProfile();
         }

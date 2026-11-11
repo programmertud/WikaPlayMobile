@@ -26,6 +26,7 @@ import {
 } from '../services/offline/offline-session-store';
 import { getDatabase } from '../services/offline/database';
 import { setHealthCheckUrl } from '../services/offline/connectivity-service';
+import { storage } from '../utils/storage';
 
 interface AuthContextType {
   user: User | null;
@@ -63,6 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stars_balance_last_known: u.stars_balance ?? 0,
         cached_at: new Date().toISOString(),
       });
+      // Also cache full user object in storage so all fields (including section_id) are preserved
+      await storage.setItem('@wikaplay_cached_user_json', JSON.stringify(u));
     } catch (err) {
       console.warn('[AuthProvider] Failed to cache user info:', err);
     }
@@ -105,21 +108,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               await ApiClient.setToken(null);
               setUser(null);
             } else {
-              // Network error (offline mode) — restore from SQLite cache
+              // Network error (offline mode) — restore from storage or SQLite cache
               // Retain the token so when network reconnects, sync can proceed immediately
-              const cached = await getLatestCachedUser();
-              if (cached) {
-                setUser({
-                  id: cached.student_id,
-                  name: cached.name,
-                  role: (cached.role as 'student' | 'teacher' | 'admin') || 'student',
-                  avatar: cached.avatar ?? undefined,
-                  section: cached.section ?? undefined,
-                  stars_balance: cached.stars_balance_last_known,
-                } as User);
-              } else {
-                setUser(null);
+              let restoredUser: User | null = null;
+              try {
+                const userJson = await storage.getItem('@wikaplay_cached_user_json');
+                if (userJson) {
+                  const parsed = JSON.parse(userJson);
+                  if (parsed && parsed.id) restoredUser = parsed;
+                }
+              } catch {}
+
+              if (!restoredUser) {
+                const cached = await getLatestCachedUser();
+                if (cached) {
+                  restoredUser = {
+                    id: cached.student_id,
+                    name: cached.name,
+                    role: (cached.role as 'student' | 'teacher' | 'admin') || 'student',
+                    avatar: cached.avatar ?? undefined,
+                    section: cached.section ?? undefined,
+                    stars_balance: cached.stars_balance_last_known,
+                  } as User;
+                }
               }
+
+              setUser(restoredUser);
             }
           }
         } else {
@@ -241,6 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear user cache for this account before logging out
       if (user?.id) {
         await clearCachedUser(user.id);
+        await storage.removeItem('@wikaplay_cached_user_json').catch(() => {});
         // NOTE: We do NOT delete pending_sessions on logout — they belong to this student
         // and must be synced on next login. The student_id scoping prevents data leakage.
       }

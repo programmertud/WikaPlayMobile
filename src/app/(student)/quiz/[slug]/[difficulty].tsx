@@ -25,7 +25,7 @@ import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { ProgressIndicator } from '../../../../components/ProgressIndicator';
 import { ScreenHeader } from '../../../../components/ScreenHeader';
 import { resolveAvatarUrl } from '../../../../components/UserAvatar';
-import { getCategoryBySlug, getRandomVocabularyChoices, syncCategoryFlashcards } from '../../../../data/categories';
+import { getCategoryBySlug, getRandomVocabularyChoices, hydrateCategoryOverrides, syncCategoryFlashcards } from '../../../../data/categories';
 import { useAuth } from '../../../../hooks/use-auth';
 import { usePresence } from '../../../../hooks/use-presence';
 import { useQuiz, checkIsChoiceCorrect } from '../../../../hooks/use-quiz';
@@ -69,6 +69,31 @@ export default function QuizGameplayScreen() {
 
   const diffLabel = difficulty === 'madali' ? 'Madali' : difficulty === 'katamtaman' ? 'Katamtaman' : 'Mahirap';
   const isKatamtaman = difficulty === 'katamtaman';
+
+  // Pre-load cached questions immediately so they appear even before the API responds (offline support)
+  useEffect(() => {
+    if (!slug || !difficulty) return;
+    (async () => {
+      try {
+        const cachedRaw = await storage.getItem(`@wikaplay_cached_quiz_${slug}_${difficulty}`);
+        if (cachedRaw) {
+          const cachedList: QuizQuestion[] = JSON.parse(cachedRaw);
+          if (Array.isArray(cachedList) && cachedList.length > 0) {
+            const cat = getCategoryBySlug(slug);
+            if (cat) {
+              setCategoryName(cat.name);
+              setCategoryId(Number(cat.id.replace(/\D/g, '')) || 1);
+              setCategoryColor(cat.color || Colors.skyBlue);
+            }
+            // Show cached questions right away; they'll be replaced once API responds
+            setQuestions([...cachedList].sort(() => 0.5 - Math.random()));
+            setLoading(false);
+          }
+        }
+      } catch {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, difficulty]);
 
   const loadQuiz = async () => {
     if (!slug || !difficulty) return;
@@ -363,6 +388,7 @@ export default function QuizGameplayScreen() {
       } catch {}
 
       // 2. Fallback to bundled local items if no cache is present
+      await hydrateCategoryOverrides(slug);
       const cat = getCategoryBySlug(slug);
       if (cat && cat.items && cat.items.length > 0) {
         setCategoryName(cat.name);
