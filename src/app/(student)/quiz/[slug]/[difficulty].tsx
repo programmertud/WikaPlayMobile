@@ -214,19 +214,20 @@ export default function QuizGameplayScreen() {
               }
             }
 
-            if (localMatch && !hasCustomImage) {
+            if (localMatch) {
               return {
-                ...ch,
-                image_url: localMatch.imageUri || choiceImg,
+                id: String(ch.id),
+                image_url: choiceImg || localMatch.imageUri || '',
+                text: ch.text || localMatch.filipino || '',
                 vocabularyItem: localMatch,
-              };
+              } as ChoiceItem;
             }
 
             return {
-              ...ch,
-              image_url: choiceImg,
-              vocabularyItem: undefined, // Preserve custom uploaded images (e.g. eagle, robots)
-            };
+              id: String(ch.id),
+              image_url: choiceImg || '',
+              text: ch.text || '',
+            } as ChoiceItem;
           });
 
           // For Katamtaman, prioritize custom teacher audio if uploaded, then bundled audio, then filename
@@ -800,22 +801,33 @@ export default function QuizGameplayScreen() {
                       Shadows.soft,
                     ]}
                   >
-                    {/* Picture: Render teacher-uploaded image first if provided, else ItemVisual */}
-                    {choice.image_url && !choice.image_url.includes('wikaplay.app') && resolveAvatarUrl(choice.image_url) ? (
-                      <Image
-                        source={{ uri: resolveAvatarUrl(choice.image_url) }}
-                        style={styles.choiceImage}
-                        contentFit="contain"
-                      />
-                    ) : choice.vocabularyItem ? (
-                      <ItemVisual
-                        item={choice.vocabularyItem}
-                        size={CHOICE_WIDTH - 28}
-                        style={{ flex: 1 }}
-                      />
-                    ) : (
-                      <Text style={styles.choiceEmoji}>🖼️</Text>
-                    )}
+                    {/* Picture: Render with ItemVisual (handles remote URI + automatic fallback to bundled image if error) */}
+                    {(() => {
+                      const itemToRender: VocabularyItem = choice.vocabularyItem
+                        ? {
+                            ...choice.vocabularyItem,
+                            imageUri: choice.image_url && !choice.image_url.includes('wikaplay.app')
+                              ? resolveAvatarUrl(choice.image_url) || choice.image_url
+                              : choice.vocabularyItem.imageUri,
+                          }
+                        : {
+                            id: `choice_${choice.id || idx}`,
+                            categoryId: String(categoryId),
+                            filipino: choice.text || '',
+                            english: '',
+                            imageUri: choice.image_url && !choice.image_url.includes('wikaplay.app')
+                              ? resolveAvatarUrl(choice.image_url) || choice.image_url
+                              : undefined,
+                            emoji: '🖼️',
+                          };
+                      return (
+                        <ItemVisual
+                          item={itemToRender}
+                          size={CHOICE_WIDTH - 28}
+                          style={{ flex: 1 }}
+                        />
+                      );
+                    })()}
 
                     {/* Feedback badge icon on selection */}
                     {isAnswerLocked && isSelected && (

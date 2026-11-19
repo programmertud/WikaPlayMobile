@@ -18,11 +18,29 @@ import { VocabularyItem } from '../../types';
 
 let isSyncing = false;
 
+const CACHE_VERSION = '4';
+const CACHE_VERSION_KEY = '@wikaplay_madali_cache_v';
+
+/** One-time cache bust: removes stale madali caches written before section-isolation fix */
+async function bustStaleCachesIfNeeded() {
+  try {
+    const stored = await storage.getItem(CACHE_VERSION_KEY);
+    if (stored !== CACHE_VERSION) {
+      for (const cat of ['mga-hayop', 'mga-prutas', 'mga-gulay', 'mga-numero', 'mga-hugis', 'mga-kulay', 'bahagi-ng-katawan', 'mga-pagbati']) {
+        await storage.removeItem(`@wikaplay_cached_madali_full_${cat}`).catch(() => {});
+      }
+      await storage.setItem(CACHE_VERSION_KEY, CACHE_VERSION);
+    }
+  } catch {}
+}
+
 export async function prefetchAndCacheOfflineContent(sectionId?: number | null) {
   if (isSyncing) return;
   isSyncing = true;
 
   try {
+    // Clear stale caches from before section-isolation fix (one-time per device)
+    await bustStaleCachesIfNeeded();
     for (const cat of LEARNING_CATEGORIES) {
       const slug = cat.slug;
 
@@ -94,60 +112,63 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
         }
       } catch {}
 
-      // 2. Sync & cache Madali quiz — use ONLY API questions (teacher controls content)
+      // 2. Sync & cache Madali quiz: base curriculum + custom teacher questions
       try {
         const madaliRes = await categoryService.getQuizQuestions(slug, 'madali', sectionId);
-        if (madaliRes?.questions && Array.isArray(madaliRes.questions) && madaliRes.questions.length > 0) {
-          const letters = ['A', 'B', 'C', 'D'];
-          const mapped = madaliRes.questions.map((apiQ: any, idx: number) => {
-            const choices = (apiQ.choices || []).slice(0, 4);
-            const textChoices = choices.map((ch: any, cIdx: number) => ({
-              id: letters[cIdx],
-              text: typeof ch === 'string' ? ch : (ch?.text || ''),
-            }));
-            const correctIdx = choices.findIndex((ch: any) => {
-              const text = typeof ch === 'string' ? ch : (ch?.text || '');
-              const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
-              return (
-                text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
-                idStr === String(apiQ.correct_answer)
-              );
-            });
-            const hasPic = Boolean(apiQ.target_image_url && !apiQ.target_image_url.includes('wikaplay.app'));
-            const rawQText = apiQ.question_text || '';
-            let qFil = rawQText;
-            let qEn = (apiQ.question_text_en || (apiQ as any).questionEn || '').trim();
-            const isEnTop = Boolean(apiQ.english_on_top || (apiQ as any).englishOnTop);
+        const apiQuestions = (madaliRes?.questions || []).filter(
+          (q: any) => q.question_text !== 'Ano ang nasa larawan?'
+        );
+        const localQuestions = getMadaliQuestionsBySlug(slug);
 
-            if (!qEn && rawQText.includes(' ||| ')) {
-              const parts = rawQText.split(' ||| ');
-              qFil = parts[0].trim();
-              qEn = parts[1].trim();
-            }
-
-            if (qEn.toLowerCase().trim() === qFil.toLowerCase().trim()) {
-              qEn = '';
-            }
-
-            return {
-              id: `api_${apiQ.id || idx}`,
-              categoryId: `cat_${slug}`,
-              categorySlug: slug,
-              difficulty: 'madali',
-              type: hasPic ? 'picture-id' : 'multiple-choice',
-              questionFil: qFil || 'Piliin ang tamang sagot.',
-              questionEn: qEn,
-              englishOnTop: isEnTop,
-              textChoices,
-              correctTextId: (correctIdx >= 0 ? letters[correctIdx] : 'A'),
-              target_image_url: hasPic ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url) : undefined,
-              audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url } : undefined,
-            };
+        const letters = ['A', 'B', 'C', 'D'];
+        const mappedCustom = apiQuestions.map((apiQ: any, idx: number) => {
+          const choices = (apiQ.choices || []).slice(0, 4);
+          const textChoices = choices.map((ch: any, cIdx: number) => ({
+            id: letters[cIdx],
+            text: typeof ch === 'string' ? ch : (ch?.text || ''),
+          }));
+          const correctIdx = choices.findIndex((ch: any) => {
+            const text = typeof ch === 'string' ? ch : (ch?.text || '');
+            const idStr = typeof ch === 'object' && ch ? String(ch.id) : '';
+            return (
+              text.toLowerCase().trim() === (apiQ.correct_answer || '').toLowerCase().trim() ||
+              idStr === String(apiQ.correct_answer)
+            );
           });
+          const hasPic = Boolean(apiQ.target_image_url && !apiQ.target_image_url.includes('wikaplay.app'));
+          const rawQText = apiQ.question_text || '';
+          let qFil = rawQText;
+          let qEn = (apiQ.question_text_en || (apiQ as any).questionEn || '').trim();
+          const isEnTop = Boolean(apiQ.english_on_top || (apiQ as any).englishOnTop);
 
-          // Store ONLY the API questions — teacher fully controls the content
-          await storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(mapped));
-        }
+          if (!qEn && rawQText.includes(' ||| ')) {
+            const parts = rawQText.split(' ||| ');
+            qFil = parts[0].trim();
+            qEn = parts[1].trim();
+          }
+
+          if (qEn.toLowerCase().trim() === qFil.toLowerCase().trim()) {
+            qEn = '';
+          }
+
+          return {
+            id: `api_${apiQ.id || idx}`,
+            categoryId: `cat_${slug}`,
+            categorySlug: slug,
+            difficulty: 'madali',
+            type: hasPic ? 'picture-id' : 'multiple-choice',
+            questionFil: qFil || 'Piliin ang tamang sagot.',
+            questionEn: qEn,
+            englishOnTop: isEnTop,
+            textChoices,
+            correctTextId: (correctIdx >= 0 ? letters[correctIdx] : 'A'),
+            target_image_url: hasPic ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url) : undefined,
+            audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url } : undefined,
+          };
+        });
+
+        const combined = [...localQuestions, ...mappedCustom];
+        await storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(combined));
       } catch {}
 
       // 3. Sync & cache Katamtaman and Mahirap quizzes

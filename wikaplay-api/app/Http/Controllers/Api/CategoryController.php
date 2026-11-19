@@ -194,9 +194,16 @@ class CategoryController extends Controller
             ->with(['flashcard' => fn ($q) => $q->where('is_published', true)]);
 
         // If student belongs to a section, prefer section-specific quiz questions.
-        // If the teacher has created questions for this section, show ONLY those.
-        // Otherwise fall back to global (NULL section_id) questions.
-        if ($sectionId && Schema::hasColumn('quiz_questions', 'section_id')) {
+        // For Madali, base curriculum questions (20 questions) live in the mobile app.
+        // The API only returns teacher-created custom questions (section_id IS NOT NULL).
+        // Never return the dummy seeded questions (section_id IS NULL) which have 'Ano ang nasa larawan?'.
+        if ($difficulty === 'madali') {
+            if ($sectionId && Schema::hasColumn('quiz_questions', 'section_id')) {
+                $questionsQuery->where('section_id', $sectionId);
+            } else {
+                $questionsQuery->whereRaw('1 = 0');
+            }
+        } elseif ($sectionId && Schema::hasColumn('quiz_questions', 'section_id')) {
             $sectionQCount = (clone $questionsQuery)->where('section_id', $sectionId)->count();
             if ($sectionQCount > 0) {
                 // Teacher has questions for this section — show ONLY their questions
@@ -271,9 +278,9 @@ class CategoryController extends Controller
             ];
         });
 
-        // Ensure Katamtaman and Mahirap quizzes have 20 questions
-        $targetCount = ($difficulty === 'katamtaman' || $difficulty === 'mahirap') ? 20 : 10;
-        if ($formattedQuestions->count() < $targetCount) {
+        // Ensure Katamtaman and Mahirap quizzes have 20 questions (Madali uses the mobile curriculum bank)
+        if (($difficulty === 'katamtaman' || $difficulty === 'mahirap') && $formattedQuestions->count() < 20) {
+            $targetCount = 20;
             $fcQuery = $category->flashcards()->where('is_published', true);
             if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
                 $sectionFcCount2 = (clone $fcQuery)->where('section_id', $sectionId)->count();
