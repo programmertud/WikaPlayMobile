@@ -94,20 +94,12 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
         }
       } catch {}
 
-      // 2. Sync & cache Madali quiz
+      // 2. Sync & cache Madali quiz — use ONLY API questions (teacher controls content)
       try {
         const madaliRes = await categoryService.getQuizQuestions(slug, 'madali', sectionId);
-        if (madaliRes?.questions && Array.isArray(madaliRes.questions)) {
-          const localQuestions = getMadaliQuestionsBySlug(slug);
-          const customQuestions = madaliRes.questions.filter((q: any) => {
-            if (q.section_id) return true;
-            const targetWord = (q.target_item_name || q.correct_answer || '').toLowerCase().trim();
-            const isBase = cat.items.slice(0, 20).some((it) => it.filipino.toLowerCase().trim() === targetWord);
-            return !isBase;
-          });
-
+        if (madaliRes?.questions && Array.isArray(madaliRes.questions) && madaliRes.questions.length > 0) {
           const letters = ['A', 'B', 'C', 'D'];
-          const mapped = customQuestions.map((apiQ: any, idx: number) => {
+          const mapped = madaliRes.questions.map((apiQ: any, idx: number) => {
             const choices = (apiQ.choices || []).slice(0, 4);
             const textChoices = choices.map((ch: any, cIdx: number) => ({
               id: letters[cIdx],
@@ -153,17 +145,8 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
             };
           });
 
-          const fullMadaliList = [...localQuestions, ...mapped];
-          await storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(fullMadaliList));
-
-          if (customQuestions.length > 0) {
-            const prevRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
-            const prevList = prevRaw ? JSON.parse(prevRaw) : [];
-            const mergedMap = new Map<string, any>();
-            prevList.forEach((q: any) => mergedMap.set(q.id, q));
-            mapped.forEach((q: any) => mergedMap.set(q.id, q));
-            await storage.setItem(`@wikaplay_cached_madali_custom_${slug}`, JSON.stringify(Array.from(mergedMap.values())));
-          }
+          // Store ONLY the API questions — teacher fully controls the content
+          await storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(mapped));
         }
       } catch {}
 

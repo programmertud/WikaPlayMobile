@@ -153,19 +153,18 @@ export default function MadaliQuizScreen() {
             setQuestions(shuffleQuestions(fullList));
           }
         } else {
-          const cachedCustomRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
-          if (cachedCustomRaw && mounted) {
-            const cachedCustom: MadaliQuestion[] = JSON.parse(cachedCustomRaw);
-            if (Array.isArray(cachedCustom) && cachedCustom.length > 0) {
-              const localQuestions = getMadaliQuestionsBySlug(slug);
-              setQuestions(shuffleQuestions([...localQuestions, ...cachedCustom]));
-            }
+          // No full cache: start with local bundled questions only
+          const localQuestions = getMadaliQuestionsBySlug(slug);
+          if (localQuestions.length > 0 && mounted) {
+            setQuestions(shuffleQuestions(localQuestions));
           }
         }
       } catch {}
       if (mounted) setQuestions((prev) => [...prev]);
 
-      // 2. Fetch teacher-added custom questions from API and append to the local bank
+      // 2. Fetch ALL questions from API — if the API returns questions for this section,
+      //    USE ONLY the API questions (teacher controls the content).
+      //    Only fall back to bundled questions if the API returns nothing at all.
       try {
         const res = await categoryService.getQuizQuestions(slug, 'madali', user?.section_id);
         if (!mounted) return;
@@ -178,13 +177,9 @@ export default function MadaliQuizScreen() {
           return;
         }
 
-        const apiQuestions: any[] = (res.questions || []).filter(
-          // Only custom teacher questions — IDs below 10000 are real DB rows
-          (q: any) => q.id && Number(q.id) < 10000
-        );
+        const apiQuestions: any[] = (res.questions || []);
 
         if (apiQuestions.length > 0 && mounted) {
-          const localQuestions = getMadaliQuestionsBySlug(slug);
           const letters: AnswerId[] = ['A', 'B', 'C', 'D'];
 
           const mappedApiQuestions: MadaliQuestion[] = apiQuestions.map((apiQ: any, idx: number) => {
@@ -246,39 +241,20 @@ export default function MadaliQuizScreen() {
             } as MadaliQuestion;
           });
 
-          // Deduplicate: identify custom questions by their answer or section_id, not by question text prompt
-          const localAnswers = new Set(
-            localQuestions.map((q) => {
-              const correctChoice = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
-              return (correctChoice || '').toLowerCase().trim();
-            })
-          );
-          const newCustom = mappedApiQuestions.filter((q, idx) => {
-            const rawApiQ = apiQuestions[idx];
-            if (rawApiQ?.section_id) return true; // explicitly teacher-created in this section
-            const correctChoice = q.textChoices?.find((c) => c.id === q.correctTextId)?.text;
-            const ans = (correctChoice || '').toLowerCase().trim();
-            return ans && !localAnswers.has(ans);
-          });
+          // Use ONLY the API questions — do NOT merge with the bundled local bank.
+          // The teacher fully controls the quiz content via the portal.
+          setQuestions(shuffleQuestions(mappedApiQuestions));
 
-          const allMadaliQuestions = [...localQuestions, ...newCustom];
-          if (newCustom.length > 0) {
-            setQuestions(shuffleQuestions(allMadaliQuestions));
+          // Cache only the API questions for offline use
+          storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(mappedApiQuestions)).catch(() => {});
+        } else if (mounted) {
+          // API returned no questions — fall back to bundled local question bank
+          const localQuestions = getMadaliQuestionsBySlug(slug);
+          if (localQuestions.length > 0) {
+            setQuestions(shuffleQuestions(localQuestions));
           }
-          // Always persist the full combined question list for offline use
-          storage.setItem(`@wikaplay_cached_madali_full_${slug}`, JSON.stringify(allMadaliQuestions)).catch(() => {});
-          if (newCustom.length > 0) {
-            (async () => {
-              try {
-                const prevRaw = await storage.getItem(`@wikaplay_cached_madali_custom_${slug}`);
-                const prevCached: MadaliQuestion[] = prevRaw ? JSON.parse(prevRaw) : [];
-                const mergedMap = new Map<string, MadaliQuestion>();
-                prevCached.forEach((q) => mergedMap.set(q.id, q));
-                newCustom.forEach((q) => mergedMap.set(q.id, q));
-                await storage.setItem(`@wikaplay_cached_madali_custom_${slug}`, JSON.stringify(Array.from(mergedMap.values())));
-              } catch {}
-            })();
-          }
+          // Clear any stale cache so next online session fetches fresh
+          storage.removeItem(`@wikaplay_cached_madali_full_${slug}`).catch(() => {});
         }
       } catch (err) {
         console.warn('[MadaliQuiz] Failed to fetch API questions, using local bank only:', err);

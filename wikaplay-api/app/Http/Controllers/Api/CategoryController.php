@@ -118,22 +118,21 @@ class CategoryController extends Controller
         $flashcardsQuery = $category->flashcards()
             ->where('is_published', true);
 
-        // If student belongs to a section, show flashcards from their section OR global flashcards
+        // If student belongs to a section, prefer section-specific flashcards.
+        // If the teacher has created section-specific flashcards, show ONLY those.
+        // Otherwise fall back to global (NULL section_id) flashcards.
         if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
-            $flashcardsQuery->where(function ($q) use ($sectionId) {
-                $q->where('section_id', $sectionId)
-                    ->orWhereNull('section_id');
-            });
+            $sectionFcCount = (clone $flashcardsQuery)->where('section_id', $sectionId)->count();
+            if ($sectionFcCount > 0) {
+                // Teacher has flashcards for this section — show ONLY their flashcards
+                $flashcardsQuery->where('section_id', $sectionId);
+            } else {
+                // No section-specific flashcards — show global flashcards
+                $flashcardsQuery->whereNull('section_id');
+            }
         }
 
         $flashcards = $flashcardsQuery->orderBy('sort_order')->get();
-
-        // If in a section, ensure teacher's section-specific flashcards override global ones for the same word
-        if ($sectionId) {
-            $flashcards = $flashcards->sortByDesc(fn ($fc) => $fc->section_id ? 1 : 0)
-                ->unique(fn ($fc) => mb_strtolower(trim($fc->filipino_name ?: $fc->name), 'UTF-8'))
-                ->values();
-        }
 
         // Convert relative image URLs to full URLs
         $flashcards = $flashcards->map(function ($flashcard) {
@@ -194,22 +193,21 @@ class CategoryController extends Controller
             ->where('difficulty', $difficulty)
             ->with(['flashcard' => fn ($q) => $q->where('is_published', true)]);
 
-        // If student belongs to a section, show questions from their section OR global questions
+        // If student belongs to a section, prefer section-specific quiz questions.
+        // If the teacher has created questions for this section, show ONLY those.
+        // Otherwise fall back to global (NULL section_id) questions.
         if ($sectionId && Schema::hasColumn('quiz_questions', 'section_id')) {
-            $questionsQuery->where(function ($q) use ($sectionId) {
-                $q->where('section_id', $sectionId)
-                    ->orWhereNull('section_id');
-            });
+            $sectionQCount = (clone $questionsQuery)->where('section_id', $sectionId)->count();
+            if ($sectionQCount > 0) {
+                // Teacher has questions for this section — show ONLY their questions
+                $questionsQuery->where('section_id', $sectionId);
+            } else {
+                // No section-specific questions — show global questions
+                $questionsQuery->whereNull('section_id');
+            }
         }
 
         $questions = $questionsQuery->orderBy('sort_order')->get();
-
-        // If in a section, teacher's section-specific questions override base questions
-        if ($sectionId) {
-            $questions = $questions->sortByDesc(fn ($q) => $q->section_id ? 1 : 0)
-                ->unique(fn ($q) => ($q->target_item_name ?: $q->correct_answer ?: $q->id))
-                ->values();
-        }
 
         // Helper: resolve a relative storage path to an absolute URL
         $resolveUrl = function (?string $url): string {
@@ -278,10 +276,16 @@ class CategoryController extends Controller
         if ($formattedQuestions->count() < $targetCount) {
             $fcQuery = $category->flashcards()->where('is_published', true);
             if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
-                $fcQuery->where(function ($q) use ($sectionId) {
-                    $q->where('section_id', $sectionId)
-                        ->orWhereNull('section_id');
-                });
+                $sectionFcCount2 = (clone $fcQuery)->where('section_id', $sectionId)->count();
+                if ($sectionFcCount2 > 0) {
+                    $fcQuery->where('section_id', $sectionId);
+                } else {
+                    $fcQuery->whereNull('section_id');
+                }
+            }
+            // For image-choice quizzes, only use flashcards that have a valid image
+            if ($difficulty === 'katamtaman') {
+                $fcQuery->whereNotNull('image_url')->where('image_url', '!=', '');
             }
             $flashcards = $fcQuery->get();
             if ($sectionId) {
