@@ -15,6 +15,8 @@ class QuizQuestion extends Model
         'difficulty',
         'flashcard_id',
         'question_text',
+        'question_text_en',
+        'english_on_top',
         'target_item_name',
         'target_image_url',
         'audio_url',
@@ -28,6 +30,7 @@ class QuizQuestion extends Model
         'choices' => 'array',
         'points' => 'integer',
         'sort_order' => 'integer',
+        'english_on_top' => 'boolean',
     ];
 
     protected $appends = [

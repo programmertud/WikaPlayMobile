@@ -1065,6 +1065,8 @@ class TeacherController extends Controller
             'difficulty' => 'required|in:madali,katamtaman,mahirap',
             'flashcard_id' => 'nullable|exists:flashcards,id',
             'question_text' => 'nullable|string',
+            'question_text_en' => 'nullable|string',
+            'english_on_top' => 'nullable|boolean',
             'audio_url' => 'nullable|string',
             'correct_answer' => 'required|string',
             'points' => 'nullable|integer',
@@ -1138,6 +1140,12 @@ class TeacherController extends Controller
         $question->difficulty = $validated['difficulty'];
         $question->flashcard_id = $validated['flashcard_id'] ?? null;
         $question->question_text = $validated['question_text'] ?? '';
+        if (Schema::hasColumn('quiz_questions', 'question_text_en')) {
+            $question->question_text_en = $request->input('question_text_en');
+        }
+        if (Schema::hasColumn('quiz_questions', 'english_on_top')) {
+            $question->english_on_top = (bool) $request->input('english_on_top', false);
+        }
         // Use empty string instead of null to avoid PostgreSQL NOT NULL constraint violations
         $question->target_item_name = !empty($validated['target_item_name']) ? $validated['target_item_name'] : '';
         $question->target_image_url = !empty($targetImageUrl) ? $targetImageUrl : '';

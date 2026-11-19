@@ -61,6 +61,8 @@ export interface QuizQuestion {
   category_id?: number;
   flashcard_id?: number | null;
   question_text?: string;
+  question_text_en?: string | null;
+  english_on_top?: boolean;
   audio_url?: string | null;
   target_image_url: string;
   target_item_name?: string;

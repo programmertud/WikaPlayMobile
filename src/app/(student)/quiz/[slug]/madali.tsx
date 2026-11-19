@@ -213,14 +213,32 @@ export default function MadaliQuizScreen() {
               ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url)
               : undefined;
 
+            const rawQText = apiQ.question_text || '';
+            let qFil = rawQText;
+            let qEn = (apiQ.question_text_en || (apiQ as any).questionEn || '').trim();
+            const isEnTop = Boolean(apiQ.english_on_top || (apiQ as any).englishOnTop);
+
+            // Parse delimiter fallback if present (e.g. "Tagalog ||| English")
+            if (!qEn && rawQText.includes(' ||| ')) {
+              const parts = rawQText.split(' ||| ');
+              qFil = parts[0].trim();
+              qEn = parts[1].trim();
+            }
+
+            // CRUCIAL: Do NOT duplicate question text if English is empty or identical to Filipino
+            if (qEn.toLowerCase().trim() === qFil.toLowerCase().trim()) {
+              qEn = '';
+            }
+
             return {
               id: `api_${apiQ.id || idx}`,
               categoryId: `cat_${slug}`,
               categorySlug: slug,
               difficulty: 'madali',
               type: hasPic ? 'picture-id' : 'multiple-choice',
-              questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
-              questionEn: apiQ.question_text || '',
+              questionFil: qFil || 'Piliin ang tamang sagot.',
+              questionEn: qEn,
+              englishOnTop: isEnTop,
               textChoices,
               correctTextId,
               target_image_url: resolvedTargetImg,
@@ -731,8 +749,29 @@ export default function MadaliQuizScreen() {
           {/* Question text with interactive voice audio speaker */}
           <View style={styles.questionPromptRow}>
             <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text style={styles.questionText}>{currentQuestion?.questionFil}</Text>
-              <Text style={styles.questionTextEn}>{currentQuestion?.questionEn}</Text>
+              {currentQuestion?.englishOnTop && currentQuestion?.questionEn ? (
+                <>
+                  <Text style={[styles.questionText, styles.italicText]}>
+                    {currentQuestion.questionEn}
+                  </Text>
+                  {Boolean(currentQuestion?.questionFil) && (
+                    <Text style={styles.questionTextEn}>
+                      {currentQuestion.questionFil}
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.questionText}>
+                    {currentQuestion?.questionFil}
+                  </Text>
+                  {Boolean(currentQuestion?.questionEn) && (
+                    <Text style={[styles.questionTextEn, styles.italicText]}>
+                      {currentQuestion.questionEn}
+                    </Text>
+                  )}
+                </>
+              )}
             </View>
             <TouchableOpacity
               style={[styles.audioSpeakerBtn, isPlayingAudio && styles.audioSpeakerBtnActive]}
@@ -962,6 +1001,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 4,
+    fontStyle: 'italic',
+  },
+  italicText: {
+    fontStyle: 'italic',
   },
   picturePromptContainer: {
     marginVertical: 12,

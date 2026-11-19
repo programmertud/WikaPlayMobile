@@ -28,6 +28,8 @@ interface JumbleWordQuizProps {
   targetImageUri?: string;
   targetItem?: VocabularyItem;
   instruction?: string;
+  instructionEn?: string | null;
+  englishOnTop?: boolean;
   isLocked: boolean;
   feedbackState: 'idle' | 'correct' | 'wrong';
   onSubmit: (word: string) => void;
@@ -68,6 +70,8 @@ export const JumbleWordQuiz: React.FC<JumbleWordQuizProps> = ({
   targetImageUri,
   targetItem,
   instruction = 'Ayusin ang mga letra.',
+  instructionEn,
+  englishOnTop = false,
   isLocked,
   feedbackState,
   onSubmit,
@@ -171,7 +175,27 @@ export const JumbleWordQuiz: React.FC<JumbleWordQuizProps> = ({
         {/* Instruction Banner */}
         <View style={styles.instructionBanner}>
           <Ionicons name="sparkles" size={16} color={Colors.sunYellowDark} />
-          <Text style={styles.instructionText}>{instruction}</Text>
+          <View style={{ flex: 1 }}>
+            {englishOnTop && instructionEn ? (
+              <>
+                <Text style={[styles.instructionText, { fontStyle: 'italic' }]}>{instructionEn}</Text>
+                {Boolean(instruction) && (
+                  <Text style={[styles.instructionText, { fontSize: 11, opacity: 0.85, marginTop: 2 }]}>
+                    {instruction}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.instructionText}>{instruction || 'Ayusin ang mga letra.'}</Text>
+                {Boolean(instructionEn) && (
+                  <Text style={[styles.instructionText, { fontSize: 11, opacity: 0.85, fontStyle: 'italic', marginTop: 2 }]}>
+                    {instructionEn}
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
         </View>
       </View>
 

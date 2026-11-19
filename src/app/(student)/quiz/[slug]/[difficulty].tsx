@@ -236,7 +236,20 @@ export default function QuizGameplayScreen() {
           const rawTargetImg = q.target_image_url || '';
           const resolvedTargetImg = resolveAvatarUrl(rawTargetImg) || rawTargetImg || target?.imageUri || '';
           const targetName = q.target_item_name || target?.filipino || q.correct_answer || '';
-          let effectiveQText = q.question_text;
+          const rawQText = q.question_text || '';
+          let effectiveQText = rawQText;
+          let effectiveQTextEn = (q.question_text_en || '').trim();
+          const isEnTop = Boolean(q.english_on_top);
+
+          if (!effectiveQTextEn && rawQText.includes(' ||| ')) {
+            const parts = rawQText.split(' ||| ');
+            effectiveQText = parts[0].trim();
+            effectiveQTextEn = parts[1].trim();
+          }
+          if (effectiveQTextEn.toLowerCase().trim() === effectiveQText.toLowerCase().trim()) {
+            effectiveQTextEn = '';
+          }
+
           if (difficulty === 'katamtaman') {
             if (!effectiveQText || effectiveQText.toLowerCase().includes('pakinggan ang audio') || effectiveQText.trim() === '') {
               effectiveQText = targetName ? `Nasaan ang ${targetName}?` : 'Nasaan ang tamang larawan?';
@@ -246,6 +259,8 @@ export default function QuizGameplayScreen() {
           return {
             ...q,
             question_text: effectiveQText,
+            question_text_en: effectiveQTextEn,
+            english_on_top: isEnTop,
             targetItem: target ?? q.targetItem,
             target_image_url: resolvedTargetImg,
             audio_url: effectiveAudio,
@@ -672,6 +687,8 @@ export default function QuizGameplayScreen() {
             targetImageUri={currentQuestion.target_image_url}
             targetItem={currentQuestion.targetItem}
             instruction={currentQuestion.question_text || 'Ayusin ang mga letra.'}
+            instructionEn={currentQuestion.question_text_en || undefined}
+            englishOnTop={Boolean(currentQuestion.english_on_top)}
             isLocked={isAnswerLocked}
             feedbackState={
               isAnswerLocked
@@ -694,11 +711,31 @@ export default function QuizGameplayScreen() {
               {/* Prominent Question Heading */}
               <View style={styles.katamtamanQuestionHeader}>
                 <Ionicons name="help-circle" size={24} color={Colors.skyBlueDark} />
-                <Text style={styles.katamtamanQuestionTitle}>
-                  {currentQuestion?.question_text && !currentQuestion.question_text.toLowerCase().includes('pakinggan ang audio')
-                    ? currentQuestion.question_text
-                    : `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  {currentQuestion?.english_on_top && currentQuestion?.question_text_en ? (
+                    <>
+                      <Text style={[styles.katamtamanQuestionTitle, { fontStyle: 'italic' }]}>
+                        {currentQuestion.question_text_en}
+                      </Text>
+                      <Text style={styles.katamtamanQuestionSub}>
+                        {currentQuestion?.question_text || `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.katamtamanQuestionTitle}>
+                        {currentQuestion?.question_text && !currentQuestion.question_text.toLowerCase().includes('pakinggan ang audio')
+                          ? currentQuestion.question_text
+                          : `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
+                      </Text>
+                      {Boolean(currentQuestion?.question_text_en) && (
+                        <Text style={[styles.katamtamanQuestionSub, { fontStyle: 'italic' }]}>
+                          {currentQuestion.question_text_en}
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
               </View>
 
               <View style={styles.audioPrompt}>
@@ -862,6 +899,12 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.bold,
     color: Colors.skyBlueDark,
     textAlign: 'center',
+  },
+  katamtamanQuestionSub: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginTop: 2,
   },
   audioPrompt: {
     alignItems: 'center',

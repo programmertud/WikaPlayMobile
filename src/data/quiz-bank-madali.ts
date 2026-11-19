@@ -45,6 +45,7 @@ export interface MadaliQuestion {
   type: MadaliQuestionType;
   questionFil: string;
   questionEn: string;
+  englishOnTop?: boolean;
   /** Text choices — present only on type 'multiple-choice' | 'situational' */
   textChoices?: MadaliTextChoice[];
   /** Correct text-choice id (A/B/C/D) */

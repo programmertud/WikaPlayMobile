@@ -1362,6 +1362,15 @@ export default function ContentManagementScreen({
       }
 
       let initialQText = question.question_text || '';
+      let initialQTextEn = (question as any).question_text_en || (question as any).questionEn || '';
+      let initialEnOnTop = Boolean((question as any).english_on_top || (question as any).englishOnTop);
+
+      if (!initialQTextEn && initialQText.includes(' ||| ')) {
+        const parts = initialQText.split(' ||| ');
+        initialQText = parts[0].trim();
+        initialQTextEn = parts[1].trim();
+      }
+
       if (selectedDiff === 'katamtaman') {
         const targetWord = question.target_item_name || question.correct_answer || '';
         if (!initialQText || initialQText.toLowerCase().includes('pakinggan ang audio')) {
@@ -1374,6 +1383,8 @@ export default function ContentManagementScreen({
         question: {
           ...question,
           question_text: initialQText,
+          question_text_en: initialQTextEn,
+          english_on_top: initialEnOnTop,
           category_id: selectedCategory.id,
           difficulty: selectedDiff,
           choices: normChoices,
@@ -1392,6 +1403,8 @@ export default function ContentManagementScreen({
             difficulty: 'katamtaman',
             points: 2,
             question_text: '',
+            question_text_en: '',
+            english_on_top: false,
             target_item_name: '',
             audio_url: '',
             choices: [
@@ -1412,6 +1425,8 @@ export default function ContentManagementScreen({
             difficulty: 'mahirap',
             points: 3,
             question_text: 'Ayusin ang mga letra upang mabuo ang tamang salita.',
+            question_text_en: '',
+            english_on_top: false,
             target_item_name: '',
             target_image_url: '',
             correct_answer: '',
@@ -1427,6 +1442,8 @@ export default function ContentManagementScreen({
             difficulty: 'madali',
             points: 1,
             question_text: `Alin sa mga sumusunod ang ${selectedCategory.name.toLowerCase()}?`,
+            question_text_en: '',
+            english_on_top: false,
             target_item_name: '',
             choices: [
               { id: '1', text: '', image_url: '' },
@@ -1573,11 +1590,18 @@ export default function ContentManagementScreen({
 
       // Only send ID if editing an existing server question (not a mock/temporary client ID)
       const isRealServerId = questionModal.isEditing && q.id && Number(q.id) < 100000 && !(q as any).is_local;
+      const qFil = (q.question_text || '').trim();
+      const qEn = (q.question_text_en || '').trim();
+      const finalQText = qEn ? `${qFil} ||| ${qEn}` : qFil;
+
       const questionPayload = {
         ...q,
         id: isRealServerId ? q.id : undefined,
         category_id: selectedCategory.id,
         difficulty: selectedDiff,
+        question_text: finalQText,
+        question_text_en: qEn || null,
+        english_on_top: Boolean((q as any).english_on_top),
         choices: sanitizedChoices,
         // Strip local-only fields that must not be sent to the server
         targetItem: undefined,
@@ -1586,7 +1610,13 @@ export default function ContentManagementScreen({
       };
 
       const saveRes = await teacherService.saveQuizQuestion(questionPayload as any);
-      const savedQuestion = saveRes?.question || { ...q, id: q.id || Date.now() };
+      const rawSaved = saveRes?.question || { ...q, id: q.id || Date.now() };
+      const savedQuestion = {
+        ...rawSaved,
+        question_text: qFil || rawSaved.question_text,
+        question_text_en: qEn || rawSaved.question_text_en,
+        english_on_top: Boolean((q as any).english_on_top),
+      };
 
       // Instantly update local state so changes reflect immediately without waiting
       setQuizData((prev) => {
@@ -2167,9 +2197,14 @@ export default function ContentManagementScreen({
                       <View style={{ flex: 1 }}>
                         <Text style={styles.questionText}>
                           {selectedDiff === 'katamtaman' && (!q.question_text || q.question_text.toLowerCase().includes('pakinggan ang audio'))
-                            ? (q.target_item_name ? `Nasaan ang ${q.target_item_name}?` : (q.question_text || `Question #${idx + 1}`))
-                            : (q.question_text || `Question #${idx + 1}`)}
+                            ? (q.target_item_name ? `Nasaan ang ${q.target_item_name}?` : (q.question_text ? q.question_text.split(' ||| ')[0] : `Question #${idx + 1}`))
+                            : (q.question_text ? q.question_text.split(' ||| ')[0] : `Question #${idx + 1}`)}
                         </Text>
+                        {(Boolean(q.question_text_en) || (q.question_text && q.question_text.includes(' ||| '))) && (
+                          <Text style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic', marginTop: 2 }}>
+                            {q.question_text_en || (q.question_text ? q.question_text.split(' ||| ')[1] : '')}
+                          </Text>
+                        )}
                         <Text style={styles.targetItemText}>
                           Target: <Text style={{ fontWeight: 'bold' }}>{q.target_item_name || q.correct_answer}</Text>
                         </Text>
@@ -2749,7 +2784,7 @@ export default function ContentManagementScreen({
               {/* ── KATAMTAMAN (MEDIUM): Voice Audio + 4 Picture Choices ── */}
               {selectedDiff === 'katamtaman' && (
                 <>
-                  <Text style={styles.inputLabel}>Question / Instruction (Tanong):</Text>
+                  <Text style={styles.inputLabel}>Question / Instruction (Tanong sa Filipino):</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g. Nasaan ang agila? o Nasaan ang aso?"
@@ -2790,6 +2825,87 @@ export default function ContentManagementScreen({
                       </Text>
                     </TouchableOpacity>
                   )}
+
+                  <Text style={[styles.inputLabel, { marginTop: 4 }]}>English Translation (Optional):</Text>
+                  <TextInput
+                    style={[styles.modalInput, { fontStyle: 'italic' }]}
+                    placeholder="e.g. Where is the eagle? or Where is the dog?"
+                    value={questionModal.question.question_text_en || ''}
+                    onChangeText={(val) =>
+                      setQuestionModal((prev) => ({
+                        ...prev,
+                        question: { ...prev.question, question_text_en: val },
+                      }))
+                    }
+                  />
+
+                  {/* Display Order Selection */}
+                  <Text style={[styles.inputLabel, { marginTop: 2, fontSize: 11 }]}>Display Order (Student View):</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        paddingVertical: 8,
+                        paddingHorizontal: 10,
+                        borderRadius: Radius.md,
+                        borderWidth: 1.5,
+                        borderColor: !questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
+                        backgroundColor: !questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
+                        alignItems: 'center',
+                      }}
+                      onPress={() =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, english_on_top: false },
+                        }))
+                      }
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: !questionModal.question.english_on_top ? 'bold' : 'normal',
+                          color: !questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
+                        }}
+                      >
+                        🇵🇭 Tagalog sa Itaas
+                      </Text>
+                      <Text style={{ fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginTop: 2 }}>
+                        English sa Ibaba
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        paddingVertical: 8,
+                        paddingHorizontal: 10,
+                        borderRadius: Radius.md,
+                        borderWidth: 1.5,
+                        borderColor: questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
+                        backgroundColor: questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
+                        alignItems: 'center',
+                      }}
+                      onPress={() =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, english_on_top: true },
+                        }))
+                      }
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: questionModal.question.english_on_top ? 'bold' : 'normal',
+                          color: questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
+                        }}
+                      >
+                        🇬🇧 English sa Itaas
+                      </Text>
+                      <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
+                        Tagalog sa Ibaba
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
                   <Text style={styles.inputLabel}>Target Word (Filipino):</Text>
                   <TextInput
@@ -3128,7 +3244,7 @@ export default function ContentManagementScreen({
                       </View>
                     ) : null}
 
-                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>Instruction Text:</Text>
+                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>Instruction Text (Filipino):</Text>
                     <TextInput
                       style={styles.modalInput}
                       placeholder="Ayusin ang mga letra upang mabuo ang tamang salita."
@@ -3140,6 +3256,87 @@ export default function ContentManagementScreen({
                         }))
                       }
                     />
+
+                    <Text style={[styles.inputLabel, { marginTop: 6 }]}>English Translation (Optional):</Text>
+                    <TextInput
+                      style={[styles.modalInput, { fontStyle: 'italic' }]}
+                      placeholder="Arrange the letters to form the correct word."
+                      value={questionModal.question.question_text_en || ''}
+                      onChangeText={(val) =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, question_text_en: val },
+                        }))
+                      }
+                    />
+
+                    {/* Display Order Selection */}
+                    <Text style={[styles.inputLabel, { marginTop: 2, fontSize: 11 }]}>Display Order (Student View):</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          borderRadius: Radius.md,
+                          borderWidth: 1.5,
+                          borderColor: !questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
+                          backgroundColor: !questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
+                          alignItems: 'center',
+                        }}
+                        onPress={() =>
+                          setQuestionModal((prev) => ({
+                            ...prev,
+                            question: { ...prev.question, english_on_top: false },
+                          }))
+                        }
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: !questionModal.question.english_on_top ? 'bold' : 'normal',
+                            color: !questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
+                          }}
+                        >
+                          🇵🇭 Tagalog sa Itaas
+                        </Text>
+                        <Text style={{ fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginTop: 2 }}>
+                          English sa Ibaba
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          borderRadius: Radius.md,
+                          borderWidth: 1.5,
+                          borderColor: questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
+                          backgroundColor: questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
+                          alignItems: 'center',
+                        }}
+                        onPress={() =>
+                          setQuestionModal((prev) => ({
+                            ...prev,
+                            question: { ...prev.question, english_on_top: true },
+                          }))
+                        }
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: questionModal.question.english_on_top ? 'bold' : 'normal',
+                            color: questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
+                          }}
+                        >
+                          🇬🇧 English sa Itaas
+                        </Text>
+                        <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
+                          Tagalog sa Ibaba
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
                     {/* Voice Audio for Mahirap */}
                     <Text style={[styles.inputLabel, { marginTop: 12 }]}>🔊 Voice Audio (Optional):</Text>
@@ -3196,10 +3393,10 @@ export default function ContentManagementScreen({
                 );
                 return (
                   <>
-                    <Text style={styles.inputLabel}>Question Text:</Text>
+                    <Text style={styles.inputLabel}>Question Text (Filipino):</Text>
                     <TextInput
                       style={styles.modalInput}
-                      placeholder="Which of the following is...?"
+                      placeholder="e.g. Ano sa English ang dyirap? o Alin ang..."
                       value={questionModal.question.question_text || ''}
                       onChangeText={(val) =>
                         setQuestionModal((prev) => ({
@@ -3208,6 +3405,87 @@ export default function ContentManagementScreen({
                         }))
                       }
                     />
+
+                    <Text style={[styles.inputLabel, { marginTop: 10 }]}>English Translation (Optional):</Text>
+                    <TextInput
+                      style={[styles.modalInput, { fontStyle: 'italic' }]}
+                      placeholder='e.g. What is the English word for "dyirap"?'
+                      value={questionModal.question.question_text_en || ''}
+                      onChangeText={(val) =>
+                        setQuestionModal((prev) => ({
+                          ...prev,
+                          question: { ...prev.question, question_text_en: val },
+                        }))
+                      }
+                    />
+
+                    {/* Display Order Selection */}
+                    <Text style={[styles.inputLabel, { marginTop: 2, fontSize: 11 }]}>Display Order (Student View):</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          borderRadius: Radius.md,
+                          borderWidth: 1.5,
+                          borderColor: !questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
+                          backgroundColor: !questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
+                          alignItems: 'center',
+                        }}
+                        onPress={() =>
+                          setQuestionModal((prev) => ({
+                            ...prev,
+                            question: { ...prev.question, english_on_top: false },
+                          }))
+                        }
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: !questionModal.question.english_on_top ? 'bold' : 'normal',
+                            color: !questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
+                          }}
+                        >
+                          🇵🇭 Tagalog sa Itaas
+                        </Text>
+                        <Text style={{ fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginTop: 2 }}>
+                          English sa Ibaba
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          borderRadius: Radius.md,
+                          borderWidth: 1.5,
+                          borderColor: questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
+                          backgroundColor: questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
+                          alignItems: 'center',
+                        }}
+                        onPress={() =>
+                          setQuestionModal((prev) => ({
+                            ...prev,
+                            question: { ...prev.question, english_on_top: true },
+                          }))
+                        }
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: questionModal.question.english_on_top ? 'bold' : 'normal',
+                            color: questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
+                          }}
+                        >
+                          🇬🇧 English sa Itaas
+                        </Text>
+                        <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
+                          Tagalog sa Ibaba
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
                     {/* Picture preview & replace (especially for "Ano ang nasa larawan?" questions) */}
                     <Text style={[styles.inputLabel, { marginTop: 10 }]}>

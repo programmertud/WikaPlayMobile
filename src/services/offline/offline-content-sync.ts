@@ -122,14 +122,30 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
               );
             });
             const hasPic = Boolean(apiQ.target_image_url && !apiQ.target_image_url.includes('wikaplay.app'));
+            const rawQText = apiQ.question_text || '';
+            let qFil = rawQText;
+            let qEn = (apiQ.question_text_en || (apiQ as any).questionEn || '').trim();
+            const isEnTop = Boolean(apiQ.english_on_top || (apiQ as any).englishOnTop);
+
+            if (!qEn && rawQText.includes(' ||| ')) {
+              const parts = rawQText.split(' ||| ');
+              qFil = parts[0].trim();
+              qEn = parts[1].trim();
+            }
+
+            if (qEn.toLowerCase().trim() === qFil.toLowerCase().trim()) {
+              qEn = '';
+            }
+
             return {
               id: `api_${apiQ.id || idx}`,
               categoryId: `cat_${slug}`,
               categorySlug: slug,
               difficulty: 'madali',
               type: hasPic ? 'picture-id' : 'multiple-choice',
-              questionFil: apiQ.question_text || 'Piliin ang tamang sagot.',
-              questionEn: apiQ.question_text || '',
+              questionFil: qFil || 'Piliin ang tamang sagot.',
+              questionEn: qEn,
+              englishOnTop: isEnTop,
               textChoices,
               correctTextId: (correctIdx >= 0 ? letters[correctIdx] : 'A'),
               target_image_url: hasPic ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url) : undefined,

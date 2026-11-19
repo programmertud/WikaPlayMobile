@@ -261,6 +261,8 @@ class CategoryController extends Controller
                 'id' => $q->id,
                 'flashcard_id' => $q->flashcard_id,
                 'question_text' => $questionText,
+                'question_text_en' => $q->question_text_en ?? null,
+                'english_on_top' => (bool) ($q->english_on_top ?? false),
                 'audio_url' => $effectiveAudioUrl ?: null,
                 'target_image_url' => $effectiveTargetImg,
                 'target_item_name' => $targetName,
