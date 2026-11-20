@@ -177,17 +177,10 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
         try {
           const quizRes = await categoryService.getQuizQuestions(slug, diff, sectionId);
           if (quizRes?.questions && Array.isArray(quizRes.questions) && quizRes.questions.length > 0) {
-            // Deduplicate questions by target item name
-            const seen = new Map<string, any>();
-            quizRes.questions.forEach((q: any) => {
-              const key = (q.target_item_name || q.correct_answer || '').toLowerCase().trim();
-              if (!key) return;
-              if (!seen.has(key) || (q.section_id && !seen.get(key).section_id)) {
-                seen.set(key, q);
-              }
-            });
-            const dedupedQuestions = Array.from(seen.values());
-            await storage.setItem(`@wikaplay_cached_quiz_${slug}_${diff}`, JSON.stringify(dedupedQuestions));
+            // Store ALL questions as returned by the API — teacher-added questions are already
+            // section-scoped by the backend. Do NOT deduplicate here, since a teacher may
+            // legitimately have multiple questions targeting the same animal/item.
+            await storage.setItem(`@wikaplay_cached_quiz_${slug}_${diff}`, JSON.stringify(quizRes.questions));
           }
         } catch {}
       }

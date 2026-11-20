@@ -110,7 +110,10 @@ export default function QuizGameplayScreen() {
       setCategoryId(res.category.id);
       setCategoryColor(res.category.color || Colors.skyBlue);
       let fetchedQuestions = res.questions || [];
-      const targetCount = (difficulty === 'katamtaman' || difficulty === 'mahirap') ? 20 : 10;
+      // Use the actual count from the API — teachers may add more than 20 questions.
+      // The minimum target is 20 for katamtaman/mahirap and 10 for madali (for padding purposes only).
+      const minTarget = (difficulty === 'katamtaman' || difficulty === 'mahirap') ? 20 : 10;
+      const targetCount = Math.max(fetchedQuestions.length, minTarget);
 
       // Enrich API-fetched questions and choices with local VocabularyItem and flashcard mappings
       const cat = getCategoryBySlug(slug);
