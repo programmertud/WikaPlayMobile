@@ -156,9 +156,9 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
       // Check if question changed while waiting
       if (currentQuestionIdRef.current !== questionId) return;
 
-      // 3. Play question audio
+      // 3. Play question audio (prioritize question's effective audio_url over targetItem fallback)
       setIsPlayingAudio(true);
-      const audioToPlay = currentQuestion.targetItem?.audio || currentQuestion.audio_url || currentQuestion.target_item_name || '';
+      const audioToPlay = currentQuestion.audio_url || currentQuestion.targetItem?.audio || currentQuestion.target_item_name || '';
 
       playbackCleanupRef.current = await playSound(audioToPlay, () => {
         // Callback after audio finishes playing
@@ -248,7 +248,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     setIsPlayingAudio(true);
     setChoicesDisabled(true);
 
-    const audioToPlay = currentQuestion.targetItem?.audio || currentQuestion.audio_url || currentQuestion.target_item_name || '';
+    const audioToPlay = currentQuestion.audio_url || currentQuestion.targetItem?.audio || currentQuestion.target_item_name || '';
     playbackCleanupRef.current = await playSound(audioToPlay, () => {
       setIsPlayingAudio(false);
       if (!isAnswerLocked) {

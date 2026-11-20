@@ -357,6 +357,7 @@ class CategoryController extends Controller
                         'target_item_name' => strtoupper($targetFc->filipino_name),
                         'choices' => $choices,
                         'correct_answer' => $correctAnswer,
+                        'section_id' => $targetFc->section_id ?? null,
                         'points' => 1,
                         'difficulty' => $difficulty,
                     ]);

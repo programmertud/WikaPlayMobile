@@ -85,8 +85,20 @@ export default function QuizGameplayScreen() {
               setCategoryId(Number(cat.id.replace(/\D/g, '')) || 1);
               setCategoryColor(cat.color || Colors.skyBlue);
             }
+            // Sanitize cached questions' URLs through resolveAvatarUrl so old storage URLs work
+            const sanitizedCached = cachedList.map((cq) => ({
+              ...cq,
+              audio_url: typeof cq.audio_url === 'string' ? (resolveAvatarUrl(cq.audio_url) || cq.audio_url) : cq.audio_url,
+              target_image_url: typeof cq.target_image_url === 'string' ? (resolveAvatarUrl(cq.target_image_url) || cq.target_image_url) : cq.target_image_url,
+              choices: Array.isArray(cq.choices)
+                ? cq.choices.map((c: any) => ({
+                    ...c,
+                    image_url: typeof c?.image_url === 'string' ? (resolveAvatarUrl(c.image_url) || c.image_url) : c?.image_url,
+                  }))
+                : cq.choices,
+            }));
             // Show cached questions right away; they'll be replaced once API responds
-            setQuestions([...cachedList].sort(() => 0.5 - Math.random()));
+            setQuestions([...sanitizedCached].sort(() => 0.5 - Math.random()));
             setLoading(false);
           }
         }
@@ -233,13 +245,23 @@ export default function QuizGameplayScreen() {
             } as ChoiceItem;
           });
 
-          // For Katamtaman, prioritize authentic bundled vocabulary audio (e.g. Aso.mp3) for standard curriculum items.
-          // Only use remote audio if this is a custom section question created by a teacher with a valid custom recording,
-          // or if the target has no bundled local audio.
+          // For Katamtaman:
+          // 1. If teacher uploaded custom recording (filename contains audio_ or /api/media/audio/), use it!
+          // 2. If it's a standard curriculum item with no teacher audio, use authentic bundled audio (Aso.mp3, Pusa.mp3).
+          // 3. Fallback to remote audio or generated asset.
           const rawAudio = q.audio_url || '';
+          const isTeacherUploadedAudio = Boolean(
+            rawAudio && (
+              rawAudio.includes('audio_') ||
+              rawAudio.includes('/api/media/audio/') ||
+              rawAudio.startsWith('file://') ||
+              rawAudio.startsWith('content://') ||
+              (rawAudio.includes('/storage/audio/') && !rawAudio.includes('mga-'))
+            )
+          );
           // A custom teacher question has a section_id (assigned by the backend).
           // Local padding questions have IDs >= 20000 and no section_id.
-          const isCustomTeacherQuestion = Boolean((q as any).section_id && q.id < 20000);
+          const isCustomTeacherQuestion = Boolean(((q as any).section_id && q.id < 20000) || isTeacherUploadedAudio);
           const isCorruptedOrPlaceholder =
             !rawAudio ||
             rawAudio.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
@@ -248,7 +270,9 @@ export default function QuizGameplayScreen() {
             rawAudio.includes('storage/audio/mga-');
 
           let effectiveAudio: any = undefined;
-          if (isCustomTeacherQuestion && rawAudio && !isCorruptedOrPlaceholder) {
+          if (isTeacherUploadedAudio) {
+            effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
+          } else if (isCustomTeacherQuestion && rawAudio && !isCorruptedOrPlaceholder) {
             effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
           } else if (target?.audio) {
             // Authentic studio-recorded native pronunciation (Aso.mp3, Pusa.mp3, etc.)
@@ -427,6 +451,10 @@ export default function QuizGameplayScreen() {
               setCategoryColor(cat.color || Colors.skyBlue);
             }
             const rehydratedCached = cachedList.map((cq) => {
+              const isTeacherAudio = typeof cq.audio_url === 'string' && (cq.audio_url.includes('audio_') || cq.audio_url.includes('/api/media/audio/'));
+              if (isTeacherAudio) {
+                return cq;
+              }
               const targetName = (cq.target_item_name || cq.correct_answer || '').toLowerCase().trim();
               const matchedLocal = cat?.items?.find((it) => it.filipino.toLowerCase().trim() === targetName);
               if (matchedLocal?.audio) {

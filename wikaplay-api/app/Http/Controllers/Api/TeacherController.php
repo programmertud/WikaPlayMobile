@@ -1127,21 +1127,25 @@ class TeacherController extends Controller
             $question = new QuizQuestion;
         }
 
-        $targetImageUrl = $validated['target_image_url'] ?? null;
-        if (!empty($targetImageUrl) && str_contains($targetImageUrl, 'localhost/storage/')) {
-            $targetImageUrl = str_replace(['http://localhost/storage/', 'https://localhost/storage/'], 'https://wikaplay-api.onrender.com/storage/', $targetImageUrl);
-        }
+        $fixMediaUrl = function (?string $u): ?string {
+            if (empty($u)) return $u;
+            if (str_contains($u, 'localhost') || str_contains($u, '127.0.0.1')) {
+                $u = preg_replace('#https?://(?:localhost|127\.0\.0\.1)(?::\d+)?/#', 'https://wikaplay-api.onrender.com/', $u);
+            }
+            if (str_contains($u, '/storage/')) {
+                $u = str_replace('/storage/', '/api/media/', $u);
+            }
+            return $u;
+        };
 
-        $audioUrl = $validated['audio_url'] ?? null;
-        if (!empty($audioUrl) && str_contains($audioUrl, 'localhost/storage/')) {
-            $audioUrl = str_replace(['http://localhost/storage/', 'https://localhost/storage/'], 'https://wikaplay-api.onrender.com/storage/', $audioUrl);
-        }
+        $targetImageUrl = $fixMediaUrl($validated['target_image_url'] ?? null);
+        $audioUrl = $fixMediaUrl($validated['audio_url'] ?? null);
 
         $choices = $validated['choices'] ?? [];
         if (is_array($choices)) {
             foreach ($choices as &$choice) {
-                if (isset($choice['image_url']) && str_contains($choice['image_url'], 'localhost/storage/')) {
-                    $choice['image_url'] = str_replace(['http://localhost/storage/', 'https://localhost/storage/'], 'https://wikaplay-api.onrender.com/storage/', $choice['image_url']);
+                if (isset($choice['image_url'])) {
+                    $choice['image_url'] = $fixMediaUrl($choice['image_url']);
                 }
             }
         }

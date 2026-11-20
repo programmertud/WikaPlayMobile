@@ -687,9 +687,8 @@ export async function playSound(
         nativeSource = { uri: finalUrl };
       }
     }
-    player = createAudioPlayer(nativeSource, {
-      downloadFirst: true,
-    });
+    // Do not pass downloadFirst: true as it sets initialSource = null and fails immediate play()
+    player = createAudioPlayer(nativeSource);
     currentActivePlayer = player;
 
     let hasFinished = false;
@@ -716,6 +715,11 @@ export async function playSound(
       }
     }, 25000);
 
+    try {
+      if (typeof player.setVolume === 'function') {
+        player.setVolume(1.0);
+      }
+    } catch {}
     player.play();
 
     return cleanup;
