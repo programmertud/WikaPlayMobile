@@ -296,9 +296,29 @@ export default function QuizGameplayScreen() {
             !rawAudio ||
             isKnownBrokenHash ||
             rawAudio.includes('mga-hayop_') ||
-            rawAudio.includes('storage/audio/mga-');
+            rawAudio.includes('storage/audio/mga-') ||
+            rawAudio.startsWith('audio/') ||
+            (/(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/i.test(rawAudio) && !rawAudio.includes('audio_'));
 
-          const flashcardAudio = matchedFc?.audio_url ? (resolveAvatarUrl(matchedFc.audio_url) || matchedFc.audio_url) : undefined;
+          const flashcardAudio = (() => {
+            if (!matchedFc?.audio_url) return undefined;
+            const url = matchedFc.audio_url;
+            // Seeder-format placeholder paths (e.g. "audio/prutas-abukado.mp3" or converted api/media URLs)
+            // are dummy filenames not present on Render. Skip them so we fall through to authentic bundled audio!
+            const isSeededDummy =
+              /(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/i.test(url) &&
+              !url.includes('audio_');
+            if (isSeededDummy) return undefined;
+
+            // Only use flashcard audio if it is a genuine teacher-uploaded recording
+            const isRealTeacherAudio =
+              url.includes('audio_') ||
+              url.includes('supabase.co') ||
+              url.startsWith('file://') ||
+              url.startsWith('content://');
+            if (!isRealTeacherAudio) return undefined;
+            return resolveAvatarUrl(url) || url;
+          })();
 
           let effectiveAudio: any = undefined;
           if (isTeacherUploadedAudio && !isCorruptedOrPlaceholder) {

@@ -138,6 +138,25 @@ export default function MadaliQuizScreen() {
     };
   }, []);
 
+  // Stable session ID generated at quiz mount/restart
+  const sessionIdRef = useRef<string>(generateSessionId('quiz_madali'));
+
+  // ------------------------------------------------------------------
+  // State
+  // ------------------------------------------------------------------
+  const [questions, setQuestions] = useState<MadaliQuestion[]>(() =>
+    shuffleQuestions(getMadaliQuestionsBySlug(slug))
+  );
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<AnswerId | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(false);   // choices disabled until brief delay
+  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const [quizDone, setQuizDone] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [starsAwarded, setStarsAwarded] = useState<number>(0);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
   // Sync teacher flashcards and quiz questions from API
   useEffect(() => {
     let mounted = true;
@@ -257,7 +276,12 @@ export default function MadaliQuizScreen() {
             textChoices,
             correctTextId,
             target_image_url: resolvedTargetImg,
-            audio: apiQ.audio_url ? { uri: resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url } : undefined,
+            audio: (() => {
+              const resolvedAudioUri = apiQ.audio_url
+                ? (resolveAvatarUrl(apiQ.audio_url) || apiQ.audio_url)
+                : null;
+              return resolvedAudioUri ? { uri: resolvedAudioUri } : undefined;
+            })(),
           } as MadaliQuestion;
         });
 
@@ -281,25 +305,6 @@ export default function MadaliQuizScreen() {
       mounted = false;
     };
   }, [slug]);
-
-  // Stable session ID generated at quiz mount/restart
-  const sessionIdRef = useRef<string>(generateSessionId('quiz_madali'));
-
-  // ------------------------------------------------------------------
-  // State
-  // ------------------------------------------------------------------
-  const [questions, setQuestions] = useState<MadaliQuestion[]>(() =>
-    shuffleQuestions(getMadaliQuestionsBySlug(slug))
-  );
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedId, setSelectedId] = useState<AnswerId | null>(null);
-  const [isLocked, setIsLocked] = useState(false);
-  const [isEnabled, setIsEnabled] = useState(false);   // choices disabled until brief delay
-  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
-  const [quizDone, setQuizDone] = useState(false);
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [starsAwarded, setStarsAwarded] = useState<number>(0);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;

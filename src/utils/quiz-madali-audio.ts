@@ -428,7 +428,17 @@ export function getMadaliQuestionAudio(question: {
   audio?: any;
 }): any {
   if (!question) return HAYOP_PIC_PROMPT;
-  if (question.audio) return question.audio;
+  if (question.audio) {
+    // Guard: if audio is a URI object, only use it if the uri field is a non-empty string
+    if (typeof question.audio === 'object' && question.audio !== null) {
+      if (question.audio.uri && typeof question.audio.uri === 'string') {
+        return question.audio;
+      }
+      // { uri: null } or malformed — fall through to bundled audio
+    } else {
+      return question.audio;
+    }
+  }
 
   const id = question.id;
   if (ALL_MADALI_AUDIO[id]) {

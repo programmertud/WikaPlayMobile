@@ -70,6 +70,12 @@ class QuizQuestion extends Model
             str_contains($rawAudio, 'd2kSS9nMHwqvSVz2bEkWH1u5g51InlLgLXnNRLVS')
         );
 
+        // For Madali and non-Katamtaman questions: if the question has its own audio recording,
+        // it MUST take priority over the flashcard! (e.g. teacher asks "Ano ang nasa litrato?")
+        if ($this->difficulty !== 'katamtaman' && ! empty($rawAudio) && ! $isCorrupted) {
+            return $rawAudio;
+        }
+
         if (! $isCorrupted && $this->flashcard_id && $this->relationLoaded('flashcard') && $this->flashcard && ! empty($this->flashcard->audio_url)) {
             return $this->flashcard->audio_url;
         }

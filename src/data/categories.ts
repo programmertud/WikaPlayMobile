@@ -364,6 +364,24 @@ function normalizeWord(str?: string): string {
   return str.toLowerCase().trim().replace(/[^a-z0-9]/g, '').replace('kamusta', 'kumusta');
 }
 
+function isTeacherCustomAudio(url: any): boolean {
+  if (typeof url !== 'string' || !url.trim()) return false;
+  if (url.startsWith('blob:')) return false;
+  // Known seeded placeholder patterns that do NOT exist on the server
+  const isSeededPlaceholder =
+    /^(audio\/|https?:\/\/.*\/api\/media\/(audio\/)?|https?:\/\/.*\/storage\/audio\/)?(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/i.test(url) ||
+    url.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
+    url.includes('d2kSS9nMHwqvSVz2bEkWH1u5g51InlLgLXnNRLVS');
+  if (isSeededPlaceholder) return false;
+  // Must be an explicit custom teacher recording or storage URL
+  return (
+    url.includes('audio_') ||
+    url.includes('supabase.co') ||
+    url.startsWith('file://') ||
+    url.startsWith('content://')
+  );
+}
+
 export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
   const cat = LEARNING_CATEGORIES.find((c) => c.slug === slug);
   if (!cat || !Array.isArray(flashcards) || flashcards.length === 0) return;
@@ -392,9 +410,7 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
       const isPlaceholder = typeof normalizedImg === 'string' && (normalizedImg.includes('wikaplay.app') || normalizedImg.trim().length === 0);
       const customImage = normalizedImg && !isUnsplash && !isBlobUrl && !isPlaceholder ? normalizedImg : undefined;
 
-      const isRealRemoteAudio = typeof backendFc.audio_url === 'string' &&
-        (backendFc.audio_url.startsWith('http://') || backendFc.audio_url.startsWith('https://') || backendFc.audio_url.includes('/storage/'));
-      const customAudio = typeof backendFc.audio_url === 'string' && isRealRemoteAudio && !backendFc.audio_url.startsWith('blob:')
+      const customAudio = isTeacherCustomAudio(backendFc.audio_url)
         ? backendFc.audio_url
         : undefined;
 
@@ -428,9 +444,7 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
       const isPlaceholder = typeof normalizedFImg === 'string' && (normalizedFImg.includes('wikaplay.app') || normalizedFImg.trim().length === 0);
       const customImage = normalizedFImg && !isUnsplash && !isBlobUrl && !isPlaceholder ? normalizedFImg : undefined;
 
-      const isRealRemoteAudio = typeof f.audio_url === 'string' &&
-        (f.audio_url.startsWith('http://') || f.audio_url.startsWith('https://') || f.audio_url.includes('/storage/'));
-      const customAudio = typeof f.audio_url === 'string' && isRealRemoteAudio && !f.audio_url.startsWith('blob:')
+      const customAudio = isTeacherCustomAudio(f.audio_url)
         ? f.audio_url
         : undefined;
 

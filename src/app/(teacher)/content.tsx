@@ -2610,20 +2610,6 @@ export default function ContentManagementScreen({
                 }
               />
 
-              <Text style={styles.inputLabel}>Description / Sentence:</Text>
-              <TextInput
-                style={[styles.modalInput, { height: 60, textAlignVertical: 'top' }]}
-                multiline
-                placeholder="Brief explanation for learners..."
-                value={flashcardModal.card.description || ''}
-                onChangeText={(val) =>
-                  setFlashcardModal((prev) => ({
-                    ...prev,
-                    card: { ...prev.card, description: val },
-                  }))
-                }
-              />
-
               {/* Image Picker */}
               <Text style={styles.inputLabel}>Image:</Text>
               {getFlashcardImageSource(flashcardModal.card) ? (
@@ -2837,23 +2823,10 @@ export default function ContentManagementScreen({
                       }}
                     >
                       <Text style={{ fontSize: 11, color: '#0369A1', fontWeight: 'bold' }}>
-                        ✨ Gamitin: "Nasaan ang {questionModal.question.target_item_name?.trim()}?"
+                        {`✨ Gamitin: "Nasaan ang ${questionModal.question.target_item_name?.trim()}?"`}
                       </Text>
                     </TouchableOpacity>
                   )}
-
-                  <Text style={[styles.inputLabel, { marginTop: 4 }]}>English Translation:</Text>
-                  <TextInput
-                    style={[styles.modalInput, { fontStyle: 'italic' }]}
-                    placeholder="e.g. Where is the eagle? or Where is the dog?"
-                    value={questionModal.question.question_text_en || ''}
-                    onChangeText={(val) =>
-                      setQuestionModal((prev) => ({
-                        ...prev,
-                        question: { ...prev.question, question_text_en: val },
-                      }))
-                    }
-                  />
 
                   <Text style={styles.inputLabel}>Target Word (Filipino):</Text>
                   <TextInput
@@ -2881,46 +2854,13 @@ export default function ContentManagementScreen({
                     }
                   />
 
-                  {/* Audio upload/picker */}
-                  <Text style={[styles.inputLabel, { marginTop: 8 }]}>🔊 Voice Over Audio (what student hears):</Text>
-                  {questionModal.question.audio_url ? (
-                    <View style={styles.audioPickedRow}>
-                      <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
-                      <Text style={styles.audioPickedText} numberOfLines={1}>
-                        {questionModal.question.audio_url.split('/').pop() || 'voice_recording.mp3'}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => handlePlayAudioPreview(questionModal.question.audio_url || questionModal.question.target_item_name)}
-                        style={styles.audioPlayTestBtn}
-                      >
-                        <Ionicons name="play" size={14} color={Colors.white} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setQuestionModal((prev) => ({ ...prev, question: { ...prev.question, audio_url: '' } }))}
-                        style={styles.audioReplaceBtn}
-                      >
-                        <Text style={styles.audioReplaceBtnText}>Tanggalin</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <AudioRecorderButton
-                        onRecordingComplete={handleRecordQuizAudio}
-                        isUploading={isUploadingQAudio}
-                        disabled={isUploadingQAudio}
-                      />
-                      <TouchableOpacity
-                        style={[styles.pickMediaBtn, { flex: 1 }]}
-                        onPress={handlePickQuizAudio}
-                        disabled={isUploadingQAudio}
-                      >
-                        <Ionicons name="folder-open-outline" size={20} color={Colors.teacherPurple} />
-                        <Text style={styles.pickMediaBtnText}>
-                          {isUploadingQAudio ? 'Uploading...' : 'I-upload mula sa Device'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                  {/* Info: audio auto-inherited from flashcard */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF7EE', borderRadius: 8, padding: 10, marginTop: 8, gap: 8 }}>
+                    <Ionicons name="volume-high-outline" size={18} color={Colors.grassGreenDark} />
+                    <Text style={{ fontSize: 12, color: Colors.grassGreenDark, flex: 1 }}>
+                      Ang voice audio ay awtomatikong kinukuha mula sa flashcard ng tamang sagot.
+                    </Text>
+                  </View>
 
                   {/* 4 Picture Choices */}
                   <Text style={[styles.inputLabel, { marginTop: 14 }]}>
@@ -3205,59 +3145,7 @@ export default function ContentManagementScreen({
                       }
                     />
 
-                    <Text style={[styles.inputLabel, { marginTop: 6 }]}>English Translation:</Text>
-                    <TextInput
-                      style={[styles.modalInput, { fontStyle: 'italic' }]}
-                      placeholder="Arrange the letters to form the correct word."
-                      value={questionModal.question.question_text_en || ''}
-                      onChangeText={(val) =>
-                        setQuestionModal((prev) => ({
-                          ...prev,
-                          question: { ...prev.question, question_text_en: val },
-                        }))
-                      }
-                    />
-
-                    {/* Voice Audio for Mahirap */}
-                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>🔊 Voice Audio (Optional):</Text>
-                    {questionModal.question.audio_url ? (
-                      <View style={styles.audioPickedRow}>
-                        <Ionicons name="musical-note" size={18} color={Colors.grassGreenDark} />
-                        <Text style={styles.audioPickedText} numberOfLines={1}>
-                          {questionModal.question.audio_url.split('/').pop() || 'voice_recording.m4a'}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => handlePlayAudioPreview(questionModal.question.audio_url || questionModal.question.target_item_name)}
-                          style={styles.audioPlayTestBtn}
-                        >
-                          <Ionicons name="play" size={14} color={Colors.white} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => setQuestionModal((prev) => ({ ...prev, question: { ...prev.question, audio_url: '' } }))}
-                          style={styles.audioReplaceBtn}
-                        >
-                          <Text style={styles.audioReplaceBtnText}>Tanggalin</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <AudioRecorderButton
-                          onRecordingComplete={handleRecordQuizAudio}
-                          isUploading={isUploadingQAudio}
-                          disabled={isUploadingQAudio}
-                        />
-                        <TouchableOpacity
-                          style={[styles.pickMediaBtn, { flex: 1 }]}
-                          onPress={handlePickQuizAudio}
-                          disabled={isUploadingQAudio}
-                        >
-                          <Ionicons name="folder-open-outline" size={20} color={Colors.teacherPurple} />
-                          <Text style={styles.pickMediaBtnText}>
-                            {isUploadingQAudio ? 'Uploading...' : 'I-upload mula sa Device'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                    
                   </>
                 );
               })()}

@@ -338,13 +338,21 @@ export function resolveAudioSource(source: string | any): any {
     return 'https://wikaplay-api.onrender.com/api/media/audio/audio_6b001825a593b.m4a';
   }
 
+  // Check if string matches seeded placeholder patterns that do NOT exist on Render server
+  const isSeededPlaceholderAudio =
+    /(mga[-_])?(hayop|prutas|gulay|kulay|hugis|bilang|katawan|bahagi-ng-katawan|pagbati|numero)[-_]/i.test(rawTrim) &&
+    !rawTrim.includes('audio_');
+
   // 0. Teacher-uploaded custom voice recordings & remote storage URLs
   if (
-    rawTrim.includes('audio_') ||
-    rawTrim.includes('/api/media/') ||
-    rawTrim.includes('/storage/') ||
-    rawTrim.startsWith('file://') ||
-    rawTrim.startsWith('content://')
+    !isSeededPlaceholderAudio && (
+      rawTrim.includes('audio_') ||
+      rawTrim.includes('supabase.co') ||
+      rawTrim.startsWith('file://') ||
+      rawTrim.startsWith('content://') ||
+      (rawTrim.includes('/api/media/') && !isSeededPlaceholderAudio) ||
+      (rawTrim.includes('/storage/') && !isSeededPlaceholderAudio)
+    )
   ) {
     const resolved = resolveAvatarUrl(rawTrim);
     if (resolved) return resolved;
