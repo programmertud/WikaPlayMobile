@@ -158,7 +158,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
 
       // 3. Play question audio
       setIsPlayingAudio(true);
-      const audioToPlay = currentQuestion.audio_url || currentQuestion.target_item_name || '';
+      const audioToPlay = currentQuestion.targetItem?.audio || currentQuestion.audio_url || currentQuestion.target_item_name || '';
 
       playbackCleanupRef.current = await playSound(audioToPlay, () => {
         // Callback after audio finishes playing
@@ -248,7 +248,7 @@ export function useQuiz({ categoryId, difficulty, questions, onComplete }: UseQu
     setIsPlayingAudio(true);
     setChoicesDisabled(true);
 
-    const audioToPlay = currentQuestion.audio_url || currentQuestion.target_item_name || '';
+    const audioToPlay = currentQuestion.targetItem?.audio || currentQuestion.audio_url || currentQuestion.target_item_name || '';
     playbackCleanupRef.current = await playSound(audioToPlay, () => {
       setIsPlayingAudio(false);
       if (!isAnswerLocked) {

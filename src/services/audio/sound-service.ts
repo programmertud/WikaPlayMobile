@@ -331,8 +331,17 @@ export function resolveAudioSource(source: string | any): any {
 
   // Extract base filename if it has path elements (e.g. "https://wikaplay-api.../audio/mga-hayop_aso.mp3" -> "mga-hayop_aso.mp3")
   const rawTrim = source.trim();
+
+  // Known corrupted / legacy upload overrides (e.g. question 21 aso voice audio)
+  if (rawTrim.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E')) {
+    if (Platform.OS === 'web') {
+      return '/audio/HAYOP/Aso.mp3';
+    }
+    return LOCAL_AUDIO_ASSETS['aso'] || LOCAL_AUDIO_ASSETS['hayop_aso'] || null;
+  }
+
   const filename = rawTrim.split('/').pop()?.split('?')[0] || rawTrim;
-  const noExt = filename.replace(/\.(mp3|m4a|wav|ogg)$/i, '').toLowerCase().trim();
+  const noExt = filename.replace(/\.(mp3|m4a|wav|ogg|mp4)$/i, '').toLowerCase().trim();
 
   // If source already starts with /audio/ AND includes a known category subdirectory, return directly
   // e.g. /audio/HAYOP/Aso.mp3 → OK, but /audio/mga-hayop_aso.mp3 → must NOT short-circuit (needs remapping)

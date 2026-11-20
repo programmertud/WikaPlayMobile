@@ -233,10 +233,31 @@ export default function QuizGameplayScreen() {
             } as ChoiceItem;
           });
 
-          // For Katamtaman, prioritize custom teacher audio if uploaded, then bundled audio, then filename
+          // For Katamtaman, prioritize authentic bundled vocabulary audio (e.g. Aso.mp3) for standard curriculum items.
+          // Only use remote audio if this is a custom section question created by a teacher with a valid custom recording,
+          // or if the target has no bundled local audio.
           const rawAudio = q.audio_url || '';
-          const resolvedAudio = resolveAvatarUrl(rawAudio) || rawAudio || target?.audio || (target ? `${target.id}.mp3` : undefined);
-          const effectiveAudio = resolvedAudio;
+          const isCustomTeacherQuestion = Boolean((q as any).section_id && q.id >= 100000);
+          const isCorruptedOrPlaceholder =
+            !rawAudio ||
+            rawAudio.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
+            rawAudio.endsWith('.mp4') ||
+            rawAudio.includes('mga-hayop_') ||
+            rawAudio.includes('storage/audio/mga-');
+
+          let effectiveAudio: any = undefined;
+          if (isCustomTeacherQuestion && rawAudio && !isCorruptedOrPlaceholder) {
+            effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
+          } else if (target?.audio) {
+            // Authentic studio-recorded native pronunciation (Aso.mp3, Pusa.mp3, etc.)
+            effectiveAudio = target.audio;
+          } else if (rawAudio && !isCorruptedOrPlaceholder) {
+            effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
+          } else if (target) {
+            effectiveAudio = target.audio ?? `${target.id}.mp3`;
+          } else {
+            effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
+          }
           const rawTargetImg = q.target_image_url || '';
           const resolvedTargetImg = resolveAvatarUrl(rawTargetImg) || rawTargetImg || target?.imageUri || '';
           const targetName = q.target_item_name || target?.filipino || q.correct_answer || '';
@@ -403,7 +424,19 @@ export default function QuizGameplayScreen() {
               setCategoryId(Number(cat.id.replace(/\D/g, '')) || 1);
               setCategoryColor(cat.color || Colors.skyBlue);
             }
-            const shuffledCached = [...cachedList].sort(() => 0.5 - Math.random());
+            const rehydratedCached = cachedList.map((cq) => {
+              const targetName = (cq.target_item_name || cq.correct_answer || '').toLowerCase().trim();
+              const matchedLocal = cat?.items?.find((it) => it.filipino.toLowerCase().trim() === targetName);
+              if (matchedLocal?.audio) {
+                return {
+                  ...cq,
+                  targetItem: matchedLocal,
+                  audio_url: matchedLocal.audio,
+                };
+              }
+              return cq;
+            });
+            const shuffledCached = [...rehydratedCached].sort(() => 0.5 - Math.random());
             setQuestions(shuffledCached);
             return;
           }

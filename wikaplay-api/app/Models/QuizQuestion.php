@@ -64,15 +64,40 @@ class QuizQuestion extends Model
      */
     public function getEffectiveAudioUrlAttribute(): ?string
     {
-        if ($this->flashcard_id && $this->relationLoaded('flashcard') && $this->flashcard) {
+        $rawAudio = $this->audio_url;
+        $isCorrupted = ! empty($rawAudio) && (
+            str_contains($rawAudio, 'izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
+            str_ends_with(strtolower($rawAudio), '.mp4')
+        );
+
+        if (! $isCorrupted && $this->flashcard_id && $this->relationLoaded('flashcard') && $this->flashcard) {
             return $this->flashcard->audio_url ?: $this->audio_url;
         }
 
-        if ($this->flashcard_id) {
+        if (! $isCorrupted && $this->flashcard_id) {
             $flashcard = $this->flashcard;
             if ($flashcard && ! empty($flashcard->audio_url)) {
                 return $flashcard->audio_url;
             }
+        }
+
+        // Match by target_item_name in flashcards if flashcard_id is missing/broken or audio was corrupted
+        if ($this->target_item_name && $this->category_id) {
+            $norm = strtolower(trim($this->target_item_name));
+            $fc = Flashcard::where('category_id', $this->category_id)
+                ->where(function ($query) use ($norm) {
+                    $query->whereRaw('LOWER(filipino_name) = ?', [$norm])
+                        ->orWhereRaw('LOWER(name) = ?', [$norm]);
+                })
+                ->where('is_published', true)
+                ->first();
+            if ($fc && ! empty($fc->audio_url)) {
+                return $fc->audio_url;
+            }
+        }
+
+        if ($isCorrupted) {
+            return 'http://wikaplay-api.onrender.com/storage/audio/mga-hayop_aso.mp3';
         }
 
         return $this->audio_url;
