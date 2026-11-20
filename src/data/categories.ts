@@ -450,7 +450,12 @@ export function syncCategoryFlashcards(slug: string, flashcards: any[]) {
   // Add any custom teacher-added flashcards that don't match bundled items
   published.forEach((f) => {
     const norm = normalizeWord(f.filipino_name || f.name || '');
-    const exists = originalItems.some((it) => normalizeWord(it.filipino) === norm);
+    const exists = originalItems.some((it) => {
+      const itNorm = normalizeWord(it.filipino);
+      return itNorm === norm ||
+        (norm === 'buko' && itNorm === 'niyog') ||
+        (norm === 'niyog' && itNorm === 'buko');
+    });
     // Ignore test/duplicate cards with repeated letters (e.g. "agilasssss")
     const isTestCard = f.id === 155 || /s{3,}/i.test(norm) || /s{3,}/i.test(f.english_name || '');
     if (!exists && f.filipino_name && !isTestCard) {
