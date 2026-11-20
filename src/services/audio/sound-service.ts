@@ -333,6 +333,11 @@ export function resolveAudioSource(source: string | any): any {
   // Extract base filename if it has path elements (e.g. "https://wikaplay-api.../audio/mga-hayop_aso.mp3" -> "mga-hayop_aso.mp3")
   const rawTrim = source.trim();
 
+  // Known legacy ephemeral upload: question 1319 Pato audio was replaced by flashcard recording audio_6b001825a593b.m4a
+  if (rawTrim.includes('d2kSS9nMHwqvSVz2bEkWH1u5g51InlLgLXnNRLVS')) {
+    return 'https://wikaplay-api.onrender.com/api/media/audio/audio_6b001825a593b.m4a';
+  }
+
   // 0. Teacher-uploaded custom voice recordings & remote storage URLs
   if (
     rawTrim.includes('audio_') ||

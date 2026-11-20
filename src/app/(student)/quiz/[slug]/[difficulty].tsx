@@ -147,11 +147,39 @@ export default function QuizGameplayScreen() {
             ? localItems.find((it) => it.filipino.toLowerCase().trim() === normTargetName)
             : undefined;
 
-          if (!target && q.flashcard_id) {
-            const matchedFc = flashcardsList.find((f) => String(f.id) === String(q.flashcard_id));
-            if (matchedFc) {
-              const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+          let matchedFc: any = undefined;
+          if (q.flashcard_id) {
+            matchedFc = flashcardsList.find((f) => String(f.id) === String(q.flashcard_id));
+          }
+          if (!matchedFc && normTargetName) {
+            matchedFc = flashcardsList.find(
+              (f) => (f.filipino_name || f.name || '').toLowerCase().trim() === normTargetName
+            );
+          }
+          if (!matchedFc && q.correct_answer && isNaN(Number(q.correct_answer))) {
+            const normAns = String(q.correct_answer).toLowerCase().trim();
+            matchedFc = flashcardsList.find(
+              (f) => (f.filipino_name || f.name || '').toLowerCase().trim() === normAns
+            );
+          }
+
+          if (matchedFc) {
+            const fcName = (matchedFc.filipino_name || matchedFc.name || '').toLowerCase().trim();
+            if (!target) {
               target = localItems.find((it) => it.filipino.toLowerCase().trim() === fcName);
+            }
+            if (!target) {
+              const resolvedFcImg = matchedFc.image_url ? (resolveAvatarUrl(matchedFc.image_url) || matchedFc.image_url) : undefined;
+              const resolvedFcAudio = matchedFc.audio_url ? (resolveAvatarUrl(matchedFc.audio_url) || matchedFc.audio_url) : undefined;
+              target = {
+                id: `fc_${matchedFc.id}`,
+                categoryId: cat.id,
+                filipino: matchedFc.filipino_name || matchedFc.name,
+                english: matchedFc.english_name || '',
+                imageUri: resolvedFcImg,
+                audioUri: resolvedFcAudio,
+                audio: resolvedFcAudio,
+              };
             }
           }
 
@@ -247,11 +275,13 @@ export default function QuizGameplayScreen() {
 
           // For Katamtaman:
           // 1. If teacher uploaded custom recording (filename contains audio_ or /api/media/audio/), use it!
-          // 2. If it's a standard curriculum item with no teacher audio, use authentic bundled audio (Aso.mp3, Pusa.mp3).
-          // 3. Fallback to remote audio or generated asset.
+          // 2. If question audio is broken/missing, inherit valid audio from teacher's flashcard!
+          // 3. If standard curriculum item with no teacher audio, use authentic bundled audio (Aso.mp3, Pusa.mp3).
+          // 4. Fallback to remote audio or generated asset.
           const rawAudio = q.audio_url || '';
+          const isKnownBrokenHash = rawAudio.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E') || rawAudio.includes('d2kSS9nMHwqvSVz2bEkWH1u5g51InlLgLXnNRLVS');
           const isTeacherUploadedAudio = Boolean(
-            rawAudio && (
+            rawAudio && !isKnownBrokenHash && (
               rawAudio.includes('audio_') ||
               rawAudio.includes('/api/media/audio/') ||
               rawAudio.startsWith('file://') ||
@@ -264,19 +294,25 @@ export default function QuizGameplayScreen() {
           const isCustomTeacherQuestion = Boolean(((q as any).section_id && q.id < 20000) || isTeacherUploadedAudio);
           const isCorruptedOrPlaceholder =
             !rawAudio ||
-            rawAudio.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
-            rawAudio.endsWith('.mp4') ||
+            isKnownBrokenHash ||
             rawAudio.includes('mga-hayop_') ||
             rawAudio.includes('storage/audio/mga-');
 
+          const flashcardAudio = matchedFc?.audio_url ? (resolveAvatarUrl(matchedFc.audio_url) || matchedFc.audio_url) : undefined;
+
           let effectiveAudio: any = undefined;
-          if (isTeacherUploadedAudio) {
+          if (isTeacherUploadedAudio && !isCorruptedOrPlaceholder) {
             effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
+          } else if (flashcardAudio) {
+            // Inherit valid voice audio from teacher's flashcard!
+            effectiveAudio = flashcardAudio;
           } else if (isCustomTeacherQuestion && rawAudio && !isCorruptedOrPlaceholder) {
             effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
           } else if (target?.audio) {
             // Authentic studio-recorded native pronunciation (Aso.mp3, Pusa.mp3, etc.)
             effectiveAudio = target.audio;
+          } else if (target?.audioUri) {
+            effectiveAudio = resolveAvatarUrl(target.audioUri) || target.audioUri;
           } else if (rawAudio && !isCorruptedOrPlaceholder) {
             effectiveAudio = resolveAvatarUrl(rawAudio) || rawAudio;
           } else if (target) {

@@ -1597,11 +1597,24 @@ export default function ContentManagementScreen({
       const qEn = (q.question_text_en || '').trim();
       const finalQText = qEn ? `${qFil} ||| ${qEn}` : qFil;
 
+      // If question does not have an explicit audio recording, inherit it from the matching flashcard
+      let finalAudioUrl = q.audio_url || '';
+      if (!finalAudioUrl && (q.target_item_name || q.correct_answer)) {
+        const normTarget = (q.target_item_name || q.correct_answer || '').toLowerCase().trim();
+        const matchedFc = quizData?.available_flashcards?.find(
+          (f: any) => (f.filipino_name || f.name || '').toLowerCase().trim() === normTarget && f.audio_url
+        );
+        if (matchedFc?.audio_url) {
+          finalAudioUrl = matchedFc.audio_url;
+        }
+      }
+
       const questionPayload = {
         ...q,
         id: isRealServerId ? q.id : undefined,
         category_id: selectedCategory.id,
         difficulty: selectedDiff,
+        audio_url: finalAudioUrl,
         question_text: finalQText,
         question_text_en: qEn || null,
         english_on_top: Boolean((q as any).english_on_top),

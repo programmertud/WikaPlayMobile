@@ -67,11 +67,11 @@ class QuizQuestion extends Model
         $rawAudio = $this->audio_url;
         $isCorrupted = ! empty($rawAudio) && (
             str_contains($rawAudio, 'izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
-            str_ends_with(strtolower($rawAudio), '.mp4')
+            str_contains($rawAudio, 'd2kSS9nMHwqvSVz2bEkWH1u5g51InlLgLXnNRLVS')
         );
 
-        if (! $isCorrupted && $this->flashcard_id && $this->relationLoaded('flashcard') && $this->flashcard) {
-            return $this->flashcard->audio_url ?: $this->audio_url;
+        if (! $isCorrupted && $this->flashcard_id && $this->relationLoaded('flashcard') && $this->flashcard && ! empty($this->flashcard->audio_url)) {
+            return $this->flashcard->audio_url;
         }
 
         if (! $isCorrupted && $this->flashcard_id) {
@@ -84,13 +84,22 @@ class QuizQuestion extends Model
         // Match by target_item_name in flashcards if flashcard_id is missing/broken or audio was corrupted
         if ($this->target_item_name && $this->category_id) {
             $norm = strtolower(trim($this->target_item_name));
-            $fc = Flashcard::where('category_id', $this->category_id)
+            $fcQuery = Flashcard::where('category_id', $this->category_id)
                 ->where(function ($query) use ($norm) {
                     $query->whereRaw('LOWER(filipino_name) = ?', [$norm])
                         ->orWhereRaw('LOWER(name) = ?', [$norm]);
                 })
                 ->where('is_published', true)
-                ->first();
+                ->whereNotNull('audio_url')
+                ->where('audio_url', '!=', '');
+
+            if ($this->section_id) {
+                $fc = (clone $fcQuery)->where('section_id', $this->section_id)->first()
+                   ?: $fcQuery->first();
+            } else {
+                $fc = $fcQuery->first();
+            }
+
             if ($fc && ! empty($fc->audio_url)) {
                 return $fc->audio_url;
             }
