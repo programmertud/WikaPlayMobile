@@ -861,6 +861,16 @@ class TeacherController extends Controller
 
         $sectionId = $activeSection ? $activeSection->id : ($teacher->section_id ?? null);
 
+        // If still no section, auto-create one for this teacher to prevent cross-contamination
+        if (!$sectionId) {
+            $autoSection = Section::firstOrCreate(
+                ['name' => $teacher->name . "'s Section", 'school_year' => '2026-2027'],
+                ['status' => 'active', 'teacher_id' => $teacher->id]
+            );
+            $sectionId = $autoSection->id;
+            $teacher->update(['section_id' => $sectionId]);
+        }
+
         $flashcard = null;
         // If ID is provided, always update that specific flashcard
         if (! empty($validated['id'])) {

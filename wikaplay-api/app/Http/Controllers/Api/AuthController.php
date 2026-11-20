@@ -136,11 +136,14 @@ class AuthController extends Controller
                 'stars_balance' => 0,
             ]);
 
-            // If a section name was provided, create or retrieve that section
-            // and assign this teacher as its owner
-            if (!empty($validated['section_name']) && $role === 'teacher') {
+            // Always create or retrieve a section for every teacher
+            if ($role === 'teacher') {
+                $sectionName = !empty($validated['section_name'])
+                    ? $validated['section_name']
+                    : ($rawName . "'s Section");
+
                 $section = Section::firstOrCreate(
-                    ['name' => $validated['section_name'], 'school_year' => '2026-2027'],
+                    ['name' => $sectionName, 'school_year' => '2026-2027'],
                     ['status' => 'active', 'teacher_id' => $user->id]
                 );
 

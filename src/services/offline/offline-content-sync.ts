@@ -102,13 +102,9 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
 
           await storage.setItem(`@wikaplay_flashcards_${slug}`, JSON.stringify(overridesMap));
 
-          // Merge custom items with existing cache
-          const prevRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
-          const prevCustom: VocabularyItem[] = prevRaw ? JSON.parse(prevRaw) : [];
-          const mergedMap = new Map<string, VocabularyItem>();
-          prevCustom.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
-          customItems.forEach((item) => mergedMap.set(item.filipino.toLowerCase().trim(), item));
-          await storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(Array.from(mergedMap.values())));
+          // Write ONLY the current teacher's custom items — do NOT merge with previous
+          // cached items, as those may belong to a different teacher/section.
+          await storage.setItem(`@wikaplay_custom_items_${slug}`, JSON.stringify(customItems));
         }
       } catch {}
 

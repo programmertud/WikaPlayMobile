@@ -118,17 +118,24 @@ class CategoryController extends Controller
         $flashcardsQuery = $category->flashcards()
             ->where('is_published', true);
 
-        // If student belongs to a section, prefer section-specific flashcards.
-        // If the teacher has created section-specific flashcards, show ONLY those.
-        // Otherwise fall back to global (NULL section_id) flashcards.
-        if ($sectionId && Schema::hasColumn('flashcards', 'section_id')) {
-            $sectionFcCount = (clone $flashcardsQuery)->where('section_id', $sectionId)->count();
-            if ($sectionFcCount > 0) {
-                // Teacher has flashcards for this section — show ONLY their flashcards
-                $flashcardsQuery->where('section_id', $sectionId);
+        // Section-based flashcard isolation:
+        // - If student has a section: show ONLY that section's flashcards (teacher-customized).
+        //   If teacher hasn't added any yet, fall back to base curriculum (sort_order <= 20).
+        // - If student has NO section: show ONLY base curriculum (sort_order <= 20).
+        // This prevents cross-contamination between different teachers' sections.
+        if (Schema::hasColumn('flashcards', 'section_id')) {
+            if ($sectionId) {
+                $sectionFcCount = (clone $flashcardsQuery)->where('section_id', $sectionId)->count();
+                if ($sectionFcCount > 0) {
+                    // Teacher has flashcards for this section — show ONLY their flashcards
+                    $flashcardsQuery->where('section_id', $sectionId);
+                } else {
+                    // No section-specific flashcards yet — show ONLY base curriculum
+                    $flashcardsQuery->whereNull('section_id')->where('sort_order', '<=', 20);
+                }
             } else {
-                // No section-specific flashcards — show global flashcards
-                $flashcardsQuery->whereNull('section_id');
+                // Student has no section — show ONLY base curriculum (sort_order <= 20)
+                $flashcardsQuery->whereNull('section_id')->where('sort_order', '<=', 20);
             }
         }
 

@@ -70,8 +70,9 @@ export default function FlashcardsViewerScreen() {
           }
         } else {
           const cachedRaw = await storage.getItem(`@wikaplay_flashcards_${slug}`);
-          const customRaw = await storage.getItem(`@wikaplay_custom_items_${slug}`);
-          const customItems: VocabularyItem[] = customRaw ? JSON.parse(customRaw) : [];
+          // Note: Do NOT load custom_items here as a merge — they are already included
+          // in full_items (above). Loading them separately causes cross-section leaks.
+          const customItems: VocabularyItem[] = [];
 
           if ((cachedRaw || customItems.length > 0) && isMounted) {
             const cachedMap: Record<string, { imageUri?: string; audioUri?: string }> = cachedRaw ? JSON.parse(cachedRaw) : {};

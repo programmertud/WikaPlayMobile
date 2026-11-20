@@ -27,6 +27,7 @@ import {
 import { getDatabase } from '../services/offline/database';
 import { setHealthCheckUrl } from '../services/offline/connectivity-service';
 import { storage } from '../utils/storage';
+import { resetAllCategoryItems } from '../data/categories';
 
 interface AuthContextType {
   user: User | null;
@@ -259,6 +260,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // NOTE: We do NOT delete pending_sessions on logout — they belong to this student
         // and must be synced on next login. The student_id scoping prevents data leakage.
       }
+
+      // Reset in-memory LEARNING_CATEGORIES to base 20 items so the next
+      // teacher/student account never inherits the previous user's flashcards.
+      resetAllCategoryItems();
+
+      // Clear all section-scoped flashcard caches from storage so a new account
+      // starts fresh and fetches content for their own teacher/section.
+      try {
+        const slugs = ['mga-hayop', 'mga-prutas', 'mga-gulay', 'mga-kulay', 'mga-hugis',
+          'mga-numero', 'mga-bahagi-ng-katawan', 'mga-pagbati-at-parirala'];
+        for (const slug of slugs) {
+          await storage.removeItem(`@wikaplay_full_items_${slug}`).catch(() => {});
+          await storage.removeItem(`@wikaplay_custom_items_${slug}`).catch(() => {});
+          await storage.removeItem(`@wikaplay_flashcards_${slug}`).catch(() => {});
+        }
+      } catch {}
+
       await authService.logout();
     } catch {
       // Ignore network errors — always clear local token

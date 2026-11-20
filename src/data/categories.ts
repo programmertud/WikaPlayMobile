@@ -252,6 +252,26 @@ export const LEARNING_CATEGORIES: LearningCategory[] = [
   },
 ];
 
+// Frozen deep copy of original bundled items per slug — used to reset after account switch/logout
+const ORIGINAL_CATEGORY_ITEMS: Record<string, VocabularyItem[]> = {};
+LEARNING_CATEGORIES.forEach((cat) => {
+  ORIGINAL_CATEGORY_ITEMS[cat.slug] = cat.items.map((item) => ({ ...item }));
+});
+
+/**
+ * Resets all categories back to their original bundled 20 items.
+ * Call this on logout or when switching student accounts to prevent
+ * one teacher's flashcards leaking into another teacher's student view.
+ */
+export function resetAllCategoryItems() {
+  LEARNING_CATEGORIES.forEach((cat) => {
+    const originals = ORIGINAL_CATEGORY_ITEMS[cat.slug];
+    if (originals) {
+      cat.items = originals.map((item) => ({ ...item }));
+    }
+  });
+}
+
 export function getAllCategories(): LearningCategory[] {
   return LEARNING_CATEGORIES;
 }
