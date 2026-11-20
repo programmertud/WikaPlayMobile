@@ -294,8 +294,24 @@ export function getRandomVocabularyChoices(
   count = 4
 ): VocabularyItem[] {
   const allItems = getCategoryVocabulary(slug);
-  const others = allItems.filter((i) => i.id !== correctItem.id);
-  const shuffled = [...others].sort(() => 0.5 - Math.random()).slice(0, count - 1);
+  const correctNorm = (correctItem.filipino || '').toLowerCase().trim();
+
+  // Deduplicate items in the category by normalized Filipino name so no duplicate items exist in the pool
+  const uniqueItemsMap = new Map<string, VocabularyItem>();
+  for (const it of allItems) {
+    const norm = (it.filipino || '').toLowerCase().trim();
+    if (!norm) continue;
+    if (!uniqueItemsMap.has(norm)) {
+      uniqueItemsMap.set(norm, it);
+    }
+  }
+
+  // Distractors must NOT have the same name or ID as the correct answer
+  const distractors = Array.from(uniqueItemsMap.values()).filter(
+    (it) => it.id !== correctItem.id && (it.filipino || '').toLowerCase().trim() !== correctNorm
+  );
+
+  const shuffled = [...distractors].sort(() => 0.5 - Math.random()).slice(0, count - 1);
   const choices = [correctItem, ...shuffled].sort(() => 0.5 - Math.random());
   return choices;
 }

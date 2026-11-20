@@ -39,6 +39,125 @@ import { storage } from '../../../../utils/storage';
 const { width } = Dimensions.get('window');
 const CHOICE_WIDTH = (width - 48) / 2;
 
+/**
+ * Ensures that Katamtaman choices have NO duplicate images or words.
+ * If any choices show duplicate items (e.g. 2 Pagong, 2 Saging), the duplicate
+ * is replaced with an unused, unique item from the category vocabulary.
+ */
+function ensureUniqueKatamtamanChoices(
+  choices: ChoiceItem[],
+  correctAnswer: string | number | undefined,
+  targetItem: VocabularyItem | undefined,
+  targetItemName: string | undefined,
+  availableItems: VocabularyItem[]
+): ChoiceItem[] {
+  if (!choices || choices.length <= 1) return choices;
+
+  const targetNorm = (targetItem?.filipino || targetItemName || '').toLowerCase().trim();
+  const answerNorm = String(correctAnswer ?? '').toLowerCase().trim();
+
+  // Find the single correct choice index to protect it from being altered
+  let correctIdx = choices.findIndex((ch) => {
+    const chId = String(ch?.id ?? '').toLowerCase().trim();
+    const chText = String(ch?.text ?? ch?.vocabularyItem?.filipino ?? '').toLowerCase().trim();
+    return (
+      (answerNorm && chId === answerNorm) ||
+      (targetNorm && chText === targetNorm) ||
+      (answerNorm && chText === answerNorm)
+    );
+  });
+  if (correctIdx === -1) correctIdx = 0;
+
+  const correctChoice = choices[correctIdx];
+
+  // Key extractor representing visual & semantic identity of the choice
+  const getChoiceKey = (ch: ChoiceItem): string => {
+    const textKey = (ch.text || ch.vocabularyItem?.filipino || '').toLowerCase().trim();
+    if (textKey && !/^choice\s*#?\d+$/i.test(textKey)) {
+      return textKey;
+    }
+    const idKey = String(ch.id ?? '').toLowerCase().trim();
+    if (idKey && isNaN(Number(idKey))) {
+      return idKey;
+    }
+    if (ch.vocabularyItem?.id) {
+      return ch.vocabularyItem.id.toLowerCase().trim();
+    }
+    if (ch.image_url && ch.image_url.trim().length > 0) {
+      return ch.image_url.trim().split('/').pop()?.split('?')[0] || ch.image_url.trim();
+    }
+    return `item_${ch.id}`;
+  };
+
+  const correctKey = getChoiceKey(correctChoice);
+  const seenKeys = new Set<string>([correctKey]);
+  if (targetNorm) seenKeys.add(targetNorm);
+
+  // Pool of candidate vocabulary items for replacing duplicates
+  const pool = availableItems.filter((it) => {
+    const norm = (it.filipino || '').toLowerCase().trim();
+    return norm && norm !== correctKey && norm !== targetNorm;
+  });
+  let poolIdx = 0;
+
+  const result: ChoiceItem[] = [];
+
+  for (let i = 0; i < choices.length; i++) {
+    if (i === correctIdx) {
+      result.push(correctChoice);
+      continue;
+    }
+
+    const ch = choices[i];
+    const key = getChoiceKey(ch);
+
+    if (seenKeys.has(key)) {
+      // Duplicate choice image/name found! Replace with an unused item from the category pool
+      let replacement: VocabularyItem | undefined;
+      while (poolIdx < pool.length) {
+        const candidate = pool[poolIdx++];
+        const cKey = (candidate.filipino || '').toLowerCase().trim();
+        if (!seenKeys.has(cKey)) {
+          seenKeys.add(cKey);
+          replacement = candidate;
+          break;
+        }
+      }
+
+      if (replacement) {
+        result.push({
+          id: `uniq_${replacement.id}_${i}`,
+          image_url: replacement.imageUri || '',
+          text: replacement.filipino,
+          vocabularyItem: replacement,
+        });
+      } else {
+        result.push(ch);
+      }
+    } else {
+      seenKeys.add(key);
+      result.push(ch);
+    }
+  }
+
+  // Ensure we have 4 choices if available items allow
+  while (result.length < 4 && poolIdx < pool.length) {
+    const candidate = pool[poolIdx++];
+    const cKey = (candidate.filipino || '').toLowerCase().trim();
+    if (!seenKeys.has(cKey)) {
+      seenKeys.add(cKey);
+      result.push({
+        id: `uniq_${candidate.id}_${result.length}`,
+        image_url: candidate.imageUri || '',
+        text: candidate.filipino,
+        vocabularyItem: candidate,
+      });
+    }
+  }
+
+  return result;
+}
+
 export default function QuizGameplayScreen() {
   useBgmDuck();
   const { slug, difficulty } = useLocalSearchParams<{ slug: string; difficulty: QuizDifficulty }>();
@@ -86,17 +205,23 @@ export default function QuizGameplayScreen() {
               setCategoryColor(cat.color || Colors.skyBlue);
             }
             // Sanitize cached questions' URLs through resolveAvatarUrl so old storage URLs work
-            const sanitizedCached = cachedList.map((cq) => ({
-              ...cq,
-              audio_url: typeof cq.audio_url === 'string' ? (resolveAvatarUrl(cq.audio_url) || cq.audio_url) : cq.audio_url,
-              target_image_url: typeof cq.target_image_url === 'string' ? (resolveAvatarUrl(cq.target_image_url) || cq.target_image_url) : cq.target_image_url,
-              choices: Array.isArray(cq.choices)
+            const localCachedItems = cat?.items || [];
+            const sanitizedCached = cachedList.map((cq) => {
+              const mapped = Array.isArray(cq.choices)
                 ? cq.choices.map((c: any) => ({
                     ...c,
                     image_url: typeof c?.image_url === 'string' ? (resolveAvatarUrl(c.image_url) || c.image_url) : c?.image_url,
                   }))
-                : cq.choices,
-            }));
+                : cq.choices;
+              return {
+                ...cq,
+                audio_url: typeof cq.audio_url === 'string' ? (resolveAvatarUrl(cq.audio_url) || cq.audio_url) : cq.audio_url,
+                target_image_url: typeof cq.target_image_url === 'string' ? (resolveAvatarUrl(cq.target_image_url) || cq.target_image_url) : cq.target_image_url,
+                choices: difficulty === 'katamtaman' && Array.isArray(mapped)
+                  ? ensureUniqueKatamtamanChoices(mapped, cq.correct_answer, cq.targetItem, cq.target_item_name, localCachedItems)
+                  : mapped,
+              };
+            });
             // Show cached questions right away; they'll be replaced once API responds
             setQuestions([...sanitizedCached].sort(() => 0.5 - Math.random()));
             setLoading(false);
@@ -367,6 +492,16 @@ export default function QuizGameplayScreen() {
             }
           }
 
+          const finalChoices = difficulty === 'katamtaman'
+            ? ensureUniqueKatamtamanChoices(
+                enrichedChoices,
+                q.correct_answer,
+                target ?? q.targetItem,
+                targetName,
+                localItems
+              )
+            : enrichedChoices;
+
           return {
             ...q,
             question_text: effectiveQText,
@@ -375,7 +510,7 @@ export default function QuizGameplayScreen() {
             targetItem: target ?? q.targetItem,
             target_image_url: resolvedTargetImg,
             audio_url: effectiveAudio,
-            choices: enrichedChoices,
+            choices: finalChoices,
           };
         });
       }
@@ -401,6 +536,10 @@ export default function QuizGameplayScreen() {
               ? target.id
               : target.filipino.toUpperCase();
 
+            const finalMappedChoices = difficulty === 'katamtaman'
+              ? ensureUniqueKatamtamanChoices(mappedChoices, correctAnswer, target, target.filipino, items)
+              : mappedChoices;
+
             additional.push({
               id: 20000 + i,
               target_image_url: target.imageUri || '',
@@ -408,7 +547,7 @@ export default function QuizGameplayScreen() {
               targetItem: target,
               // Prefer bundled audio asset, then audioUri string, then id-based fallback
               audio_url: target.audio ?? target.audioUri ?? `${target.id}.mp3`,
-              choices: mappedChoices,
+              choices: finalMappedChoices,
               correct_answer: correctAnswer,
               points: 1,
               difficulty,
@@ -472,6 +611,11 @@ export default function QuizGameplayScreen() {
             const correctAnswer = difficulty === 'katamtaman'
               ? target.id
               : target.filipino.toUpperCase();
+
+            const finalMappedChoices = difficulty === 'katamtaman'
+              ? ensureUniqueKatamtamanChoices(mappedChoices, correctAnswer, target, target.filipino, localVocab)
+              : mappedChoices;
+
             return {
               id: 30000 + i,
               target_image_url: target.imageUri || '',
@@ -479,7 +623,7 @@ export default function QuizGameplayScreen() {
               targetItem: target,
               // Prefer bundled audio asset, then audioUri string, then id-based fallback
               audio_url: target.audio ?? target.audioUri ?? `${target.id}.mp3`,
-              choices: mappedChoices,
+              choices: finalMappedChoices,
               correct_answer: correctAnswer,
               points: 1,
               difficulty,

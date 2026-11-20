@@ -316,20 +316,37 @@ class CategoryController extends Controller
                 $fcQuery->whereNotNull('image_url')->where('image_url', '!=', '');
             }
             $flashcards = $fcQuery->get();
-            if ($sectionId) {
-                $flashcards = $flashcards->sortByDesc(fn ($fc) => $fc->section_id ? 1 : 0)
-                    ->unique(fn ($fc) => mb_strtolower(trim($fc->filipino_name ?: $fc->name), 'UTF-8'))
-                    ->values();
-            }
+            $flashcards = $flashcards->sortByDesc(fn ($fc) => $fc->section_id ? 1 : 0)
+                ->unique(fn ($fc) => mb_strtolower(trim($fc->filipino_name ?: $fc->name), 'UTF-8'))
+                ->values();
             if ($flashcards->isNotEmpty()) {
                 $allFlashcards = $flashcards->all();
                 $existingCount = $formattedQuestions->count();
                 $needed = $targetCount - $existingCount;
                 for ($i = 0; $i < $needed; $i++) {
                     $targetFc = $allFlashcards[$i % count($allFlashcards)];
-                    $otherFcs = array_values(array_filter($allFlashcards, fn ($f) => $f->id !== $targetFc->id));
+                    $targetNorm = mb_strtolower(trim($targetFc->filipino_name ?: $targetFc->name), 'UTF-8');
+                    $otherFcs = array_values(array_filter($allFlashcards, function ($f) use ($targetNorm) {
+                        $norm = mb_strtolower(trim($f->filipino_name ?: $f->name), 'UTF-8');
+                        return $norm !== $targetNorm;
+                    }));
                     shuffle($otherFcs);
-                    $choiceFcs = array_merge([$targetFc], array_slice($otherFcs, 0, min(3, count($otherFcs))));
+
+                    // Ensure all 3 distractors have distinct names and images (no duplicate choices)
+                    $selectedDistractors = [];
+                    $seenNames = [$targetNorm => true];
+                    foreach ($otherFcs as $candidate) {
+                        $cNorm = mb_strtolower(trim($candidate->filipino_name ?: $candidate->name), 'UTF-8');
+                        if (! isset($seenNames[$cNorm])) {
+                            $seenNames[$cNorm] = true;
+                            $selectedDistractors[] = $candidate;
+                            if (count($selectedDistractors) === 3) {
+                                break;
+                            }
+                        }
+                    }
+
+                    $choiceFcs = array_merge([$targetFc], $selectedDistractors);
                     shuffle($choiceFcs);
 
                     $choices = array_map(function ($f) use ($resolveUrl) {
