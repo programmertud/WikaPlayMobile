@@ -279,6 +279,7 @@ class CategoryController extends Controller
                 'target_item_name' => $targetName,
                 'choices' => $choices,
                 'correct_answer' => (string) $q->correct_answer,
+                'section_id' => $q->section_id,
                 'points' => 1,
                 'difficulty' => $q->difficulty,
             ];

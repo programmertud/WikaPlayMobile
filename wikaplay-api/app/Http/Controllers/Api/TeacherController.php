@@ -1229,16 +1229,43 @@ class TeacherController extends Controller
             $mimeType = $file->getMimeType() ?: 'audio/mpeg';
             $fileContent = file_get_contents($file->getRealPath());
 
-            // 1. Primary: Upload to Supabase Storage (permanent CDN)
+            // 1. Primary: Save to persistent database so it survives container restarts/deployments
+            try {
+                \App\Models\MediaFile::updateOrCreate(
+                    ['filename' => $filename],
+                    [
+                        'mime_type' => $mimeType,
+                        'data' => base64_encode($fileContent),
+                        'size' => strlen($fileContent),
+                    ]
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[UploadAudio] MediaFile DB save warning: ' . $e->getMessage());
+            }
+
+            // 2. Supabase Storage (permanent CDN if configured)
             $supabaseUrl = \App\Services\SupabaseStorage::upload($fileContent, $filename, $mimeType);
 
-            // 2. Fallback / local backup: Save to Laravel public disk
-            $path = $file->store('audio', 'public');
+            // 3. Fallback / local backup: Save to Laravel public disk
+            try {
+                $path = $file->store('audio', 'public');
+                if ($path && $path !== $filename) {
+                    \App\Models\MediaFile::updateOrCreate(
+                        ['filename' => $path],
+                        [
+                            'mime_type' => $mimeType,
+                            'data' => base64_encode($fileContent),
+                            'size' => strlen($fileContent),
+                        ]
+                    );
+                }
+            } catch (\Throwable $e) {}
+
             $baseUrl = config('app.url');
             if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                 $baseUrl = 'https://wikaplay-api.onrender.com';
             }
-            $localUrl = rtrim($baseUrl, '/').'/storage/'.$path;
+            $localUrl = rtrim($baseUrl, '/').'/storage/'.$filename;
 
             $finalUrl = $supabaseUrl ?: $localUrl;
 
@@ -1273,16 +1300,43 @@ class TeacherController extends Controller
             $mimeType = $file->getMimeType() ?: 'image/jpeg';
             $fileContent = file_get_contents($file->getRealPath());
 
-            // 1. Primary: Upload to Supabase Storage (permanent CDN)
+            // 1. Primary: Save to persistent database so it survives container restarts/deployments
+            try {
+                \App\Models\MediaFile::updateOrCreate(
+                    ['filename' => $filename],
+                    [
+                        'mime_type' => $mimeType,
+                        'data' => base64_encode($fileContent),
+                        'size' => strlen($fileContent),
+                    ]
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[UploadImage] MediaFile DB save warning: ' . $e->getMessage());
+            }
+
+            // 2. Supabase Storage (permanent CDN if configured)
             $supabaseUrl = \App\Services\SupabaseStorage::upload($fileContent, $filename, $mimeType);
 
-            // 2. Fallback / local backup: Save to Laravel public disk
-            $path = $file->store('images', 'public');
+            // 3. Fallback / local backup: Save to Laravel public disk
+            try {
+                $path = $file->store('images', 'public');
+                if ($path && $path !== $filename) {
+                    \App\Models\MediaFile::updateOrCreate(
+                        ['filename' => $path],
+                        [
+                            'mime_type' => $mimeType,
+                            'data' => base64_encode($fileContent),
+                            'size' => strlen($fileContent),
+                        ]
+                    );
+                }
+            } catch (\Throwable $e) {}
+
             $baseUrl = config('app.url');
             if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                 $baseUrl = 'https://wikaplay-api.onrender.com';
             }
-            $localUrl = rtrim($baseUrl, '/').'/storage/'.$path;
+            $localUrl = rtrim($baseUrl, '/').'/storage/'.$filename;
 
             $finalUrl = $supabaseUrl ?: $localUrl;
 
@@ -1303,11 +1357,26 @@ class TeacherController extends Controller
                 $filename = 'images/'.uniqid('img_').'.'.$type;
                 $mimeType = 'image/' . ($type === 'jpg' ? 'jpeg' : $type);
 
-                // 1. Primary: Upload to Supabase Storage
+                // 1. Primary: Save to persistent database
+                try {
+                    \App\Models\MediaFile::updateOrCreate(
+                        ['filename' => $filename],
+                        [
+                            'mime_type' => $mimeType,
+                            'data' => base64_encode($binary),
+                            'size' => strlen($binary),
+                        ]
+                    );
+                } catch (\Throwable $e) {}
+
+                // 2. Supabase Storage
                 $supabaseUrl = \App\Services\SupabaseStorage::upload($binary, $filename, $mimeType);
 
-                // 2. Local backup
-                Storage::disk('public')->put($filename, $binary);
+                // 3. Local backup
+                try {
+                    Storage::disk('public')->put($filename, $binary);
+                } catch (\Throwable $e) {}
+
                 $baseUrl = config('app.url');
                 if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                     $baseUrl = 'https://wikaplay-api.onrender.com';

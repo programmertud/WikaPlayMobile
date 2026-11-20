@@ -20,7 +20,8 @@ if [ -z "$APP_KEY" ]; then
     php artisan key:generate --force
 fi
 
-# Link storage
+# Link storage cleanly
+rm -rf /var/www/html/public/storage || true
 php artisan storage:link || true
 
 # Run database migrations in production

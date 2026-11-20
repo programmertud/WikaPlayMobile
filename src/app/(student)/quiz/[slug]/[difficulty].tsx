@@ -237,7 +237,9 @@ export default function QuizGameplayScreen() {
           // Only use remote audio if this is a custom section question created by a teacher with a valid custom recording,
           // or if the target has no bundled local audio.
           const rawAudio = q.audio_url || '';
-          const isCustomTeacherQuestion = Boolean((q as any).section_id && q.id >= 100000);
+          // A custom teacher question has a section_id (assigned by the backend).
+          // Local padding questions have IDs >= 20000 and no section_id.
+          const isCustomTeacherQuestion = Boolean((q as any).section_id && q.id < 20000);
           const isCorruptedOrPlaceholder =
             !rawAudio ||
             rawAudio.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E') ||
