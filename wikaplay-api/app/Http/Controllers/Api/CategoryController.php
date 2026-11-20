@@ -211,14 +211,13 @@ class CategoryController extends Controller
                 $questionsQuery->whereRaw('1 = 0');
             }
         } elseif ($sectionId && Schema::hasColumn('quiz_questions', 'section_id')) {
-            $sectionQCount = (clone $questionsQuery)->where('section_id', $sectionId)->count();
-            if ($sectionQCount > 0) {
-                // Teacher has questions for this section — show ONLY their questions
-                $questionsQuery->where('section_id', $sectionId);
-            } else {
-                // No section-specific questions — show global questions
-                $questionsQuery->whereNull('section_id');
-            }
+            // For Katamtaman & Mahirap: show both teacher's section questions AND global base questions
+            $questionsQuery->where(function ($sq) use ($sectionId) {
+                $sq->where('section_id', $sectionId)
+                    ->orWhereNull('section_id');
+            });
+        } else {
+            $questionsQuery->whereNull('section_id');
         }
 
         $questions = $questionsQuery->orderBy('sort_order')->get();
