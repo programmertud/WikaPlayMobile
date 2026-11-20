@@ -585,7 +585,7 @@ const prutasQuestions: MadaliQuestion[] = [
     "What fruit is in the picture?",
     ["prutas_langka", "prutas_durian", "prutas_balimbing", "prutas_buko"],
     0,
-    ["Langka", "Durian", "Balimbing", "Buko"],
+    ["Langka", "Durian", "Balimbing", "Niyog"],
   ),
 
   pic(
@@ -596,7 +596,7 @@ const prutasQuestions: MadaliQuestion[] = [
     "What fruit is in the picture?",
     ["prutas_buko", "prutas_kakao", "prutas_santol", "prutas_melon"],
     0,
-    ["Buko", "Kakao", "Santol", "Melon"],
+    ["Niyog", "Kakao", "Santol", "Melon"],
   ),
 ];
 
