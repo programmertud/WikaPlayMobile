@@ -176,25 +176,24 @@ export const JumbleWordQuiz: React.FC<JumbleWordQuizProps> = ({
         <View style={styles.instructionBanner}>
           <Ionicons name="sparkles" size={16} color={Colors.sunYellowDark} />
           <View style={{ flex: 1 }}>
-            {englishOnTop && instructionEn ? (
-              <>
-                <Text style={[styles.instructionText, { fontStyle: 'italic' }]}>{instructionEn}</Text>
-                {Boolean(instruction) && (
-                  <Text style={[styles.instructionText, { fontSize: 11, opacity: 0.85, marginTop: 2 }]}>
-                    {instruction}
-                  </Text>
-                )}
-              </>
-            ) : (
-              <>
-                <Text style={styles.instructionText}>{instruction || 'Ayusin ang mga letra.'}</Text>
-                {Boolean(instructionEn) && (
-                  <Text style={[styles.instructionText, { fontSize: 11, opacity: 0.85, fontStyle: 'italic', marginTop: 2 }]}>
-                    {instructionEn}
-                  </Text>
-                )}
-              </>
-            )}
+            {(() => {
+              const rawInst = instruction || 'Ayusin ang mga letra.';
+              const cleanInst = rawInst.includes(' ||| ') ? rawInst.split(' ||| ')[0].trim() : rawInst;
+              const fallbackEn = rawInst.includes(' ||| ') ? rawInst.split(' ||| ')[1].trim() : '';
+              const cleanEn = (instructionEn || fallbackEn).trim();
+              const shouldShowEn = Boolean(cleanEn && cleanEn.toLowerCase() !== cleanInst.toLowerCase());
+
+              return (
+                <>
+                  <Text style={styles.instructionText}>{cleanInst || 'Ayusin ang mga letra.'}</Text>
+                  {shouldShowEn && (
+                    <Text style={[styles.instructionText, { fontSize: 11, opacity: 0.85, fontStyle: 'italic', marginTop: 2 }]}>
+                      {cleanEn}
+                    </Text>
+                  )}
+                </>
+              );
+            })()}
           </View>
         </View>
       </View>

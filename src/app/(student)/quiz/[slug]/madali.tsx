@@ -226,13 +226,18 @@ export default function MadaliQuizScreen() {
           const rawQText = apiQ.question_text || '';
           let qFil = rawQText;
           let qEn = (apiQ.question_text_en || (apiQ as any).questionEn || '').trim();
-          const isEnTop = Boolean(apiQ.english_on_top || (apiQ as any).englishOnTop);
 
           // Parse delimiter fallback if present (e.g. "Tagalog ||| English")
-          if (!qEn && rawQText.includes(' ||| ')) {
+          if (rawQText.includes(' ||| ')) {
             const parts = rawQText.split(' ||| ');
             qFil = parts[0].trim();
-            qEn = parts[1].trim();
+            if (!qEn) {
+              qEn = parts[1].trim();
+            }
+          }
+
+          if (qFil.includes(' ||| ')) {
+            qFil = qFil.split(' ||| ')[0].trim();
           }
 
           // CRUCIAL: Do NOT duplicate question text if English is empty or identical to Filipino
@@ -248,7 +253,7 @@ export default function MadaliQuizScreen() {
             type: hasPic ? 'picture-id' : 'multiple-choice',
             questionFil: qFil || 'Piliin ang tamang sagot.',
             questionEn: qEn,
-            englishOnTop: isEnTop,
+            englishOnTop: false,
             textChoices,
             correctTextId,
             target_image_url: resolvedTargetImg,
@@ -734,29 +739,26 @@ export default function MadaliQuizScreen() {
           {/* Question text with interactive voice audio speaker */}
           <View style={styles.questionPromptRow}>
             <View style={{ flex: 1, paddingRight: 8 }}>
-              {currentQuestion?.englishOnTop && currentQuestion?.questionEn ? (
-                <>
-                  <Text style={[styles.questionText, styles.italicText]}>
-                    {currentQuestion.questionEn}
-                  </Text>
-                  {Boolean(currentQuestion?.questionFil) && (
-                    <Text style={styles.questionTextEn}>
-                      {currentQuestion.questionFil}
+              {(() => {
+                const rawFil = currentQuestion?.questionFil || '';
+                const cleanFil = rawFil.includes(' ||| ') ? rawFil.split(' ||| ')[0].trim() : rawFil;
+                const fallbackEn = rawFil.includes(' ||| ') ? rawFil.split(' ||| ')[1].trim() : '';
+                const cleanEn = (currentQuestion?.questionEn || fallbackEn).trim();
+                const shouldShowEn = Boolean(cleanEn && cleanEn.toLowerCase() !== cleanFil.toLowerCase());
+
+                return (
+                  <>
+                    <Text style={styles.questionText}>
+                      {cleanFil || 'Piliin ang tamang sagot.'}
                     </Text>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.questionText}>
-                    {currentQuestion?.questionFil}
-                  </Text>
-                  {Boolean(currentQuestion?.questionEn) && (
-                    <Text style={[styles.questionTextEn, styles.italicText]}>
-                      {currentQuestion.questionEn}
-                    </Text>
-                  )}
-                </>
-              )}
+                    {shouldShowEn && (
+                      <Text style={[styles.questionTextEn, styles.italicText]}>
+                        {cleanEn}
+                      </Text>
+                    )}
+                  </>
+                );
+              })()}
             </View>
             <TouchableOpacity
               style={[styles.audioSpeakerBtn, isPlayingAudio && styles.audioSpeakerBtnActive]}

@@ -135,12 +135,17 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
           const rawQText = apiQ.question_text || '';
           let qFil = rawQText;
           let qEn = (apiQ.question_text_en || (apiQ as any).questionEn || '').trim();
-          const isEnTop = Boolean(apiQ.english_on_top || (apiQ as any).englishOnTop);
 
-          if (!qEn && rawQText.includes(' ||| ')) {
+          if (rawQText.includes(' ||| ')) {
             const parts = rawQText.split(' ||| ');
             qFil = parts[0].trim();
-            qEn = parts[1].trim();
+            if (!qEn) {
+              qEn = parts[1].trim();
+            }
+          }
+
+          if (qFil.includes(' ||| ')) {
+            qFil = qFil.split(' ||| ')[0].trim();
           }
 
           if (qEn.toLowerCase().trim() === qFil.toLowerCase().trim()) {
@@ -155,7 +160,7 @@ export async function prefetchAndCacheOfflineContent(sectionId?: number | null) 
             type: hasPic ? 'picture-id' : 'multiple-choice',
             questionFil: qFil || 'Piliin ang tamang sagot.',
             questionEn: qEn,
-            englishOnTop: isEnTop,
+            englishOnTop: false,
             textChoices,
             correctTextId: (correctIdx >= 0 ? letters[correctIdx] : 'A'),
             target_image_url: hasPic ? (resolveAvatarUrl(apiQ.target_image_url) || apiQ.target_image_url) : undefined,

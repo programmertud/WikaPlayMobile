@@ -240,12 +240,16 @@ export default function QuizGameplayScreen() {
           const rawQText = q.question_text || '';
           let effectiveQText = rawQText;
           let effectiveQTextEn = (q.question_text_en || '').trim();
-          const isEnTop = Boolean(q.english_on_top);
 
-          if (!effectiveQTextEn && rawQText.includes(' ||| ')) {
+          if (rawQText.includes(' ||| ')) {
             const parts = rawQText.split(' ||| ');
             effectiveQText = parts[0].trim();
-            effectiveQTextEn = parts[1].trim();
+            if (!effectiveQTextEn) {
+              effectiveQTextEn = parts[1].trim();
+            }
+          }
+          if (effectiveQText.includes(' ||| ')) {
+            effectiveQText = effectiveQText.split(' ||| ')[0].trim();
           }
           if (effectiveQTextEn.toLowerCase().trim() === effectiveQText.toLowerCase().trim()) {
             effectiveQTextEn = '';
@@ -261,7 +265,7 @@ export default function QuizGameplayScreen() {
             ...q,
             question_text: effectiveQText,
             question_text_en: effectiveQTextEn,
-            english_on_top: isEnTop,
+            english_on_top: false,
             targetItem: target ?? q.targetItem,
             target_image_url: resolvedTargetImg,
             audio_url: effectiveAudio,
@@ -689,7 +693,7 @@ export default function QuizGameplayScreen() {
             targetItem={currentQuestion.targetItem}
             instruction={currentQuestion.question_text || 'Ayusin ang mga letra.'}
             instructionEn={currentQuestion.question_text_en || undefined}
-            englishOnTop={Boolean(currentQuestion.english_on_top)}
+            englishOnTop={false}
             isLocked={isAnswerLocked}
             feedbackState={
               isAnswerLocked
@@ -713,29 +717,30 @@ export default function QuizGameplayScreen() {
               <View style={styles.katamtamanQuestionHeader}>
                 <Ionicons name="help-circle" size={24} color={Colors.skyBlueDark} />
                 <View style={{ flex: 1 }}>
-                  {currentQuestion?.english_on_top && currentQuestion?.question_text_en ? (
-                    <>
-                      <Text style={[styles.katamtamanQuestionTitle, { fontStyle: 'italic' }]}>
-                        {currentQuestion.question_text_en}
-                      </Text>
-                      <Text style={styles.katamtamanQuestionSub}>
-                        {currentQuestion?.question_text || `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.katamtamanQuestionTitle}>
-                        {currentQuestion?.question_text && !currentQuestion.question_text.toLowerCase().includes('pakinggan ang audio')
-                          ? currentQuestion.question_text
-                          : `Nasaan ang ${currentQuestion?.target_item_name || ''}?`}
-                      </Text>
-                      {Boolean(currentQuestion?.question_text_en) && (
-                        <Text style={[styles.katamtamanQuestionSub, { fontStyle: 'italic' }]}>
-                          {currentQuestion.question_text_en}
+                  {(() => {
+                    const rawText = currentQuestion?.question_text || '';
+                    const cleanText = rawText.includes(' ||| ') ? rawText.split(' ||| ')[0].trim() : rawText;
+                    const fallbackEn = rawText.includes(' ||| ') ? rawText.split(' ||| ')[1].trim() : '';
+                    const cleanEn = (currentQuestion?.question_text_en || fallbackEn).trim();
+                    const mainTitle =
+                      cleanText && !cleanText.toLowerCase().includes('pakinggan ang audio')
+                        ? cleanText
+                        : `Nasaan ang ${currentQuestion?.target_item_name || ''}?`;
+                    const shouldShowEn = Boolean(cleanEn && cleanEn.toLowerCase() !== mainTitle.toLowerCase());
+
+                    return (
+                      <>
+                        <Text style={styles.katamtamanQuestionTitle}>
+                          {mainTitle}
                         </Text>
-                      )}
-                    </>
-                  )}
+                        {shouldShowEn && (
+                          <Text style={[styles.katamtamanQuestionSub, { fontStyle: 'italic' }]}>
+                            {cleanEn}
+                          </Text>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
               </View>
 

@@ -1365,10 +1365,12 @@ export default function ContentManagementScreen({
       let initialQTextEn = (question as any).question_text_en || (question as any).questionEn || '';
       let initialEnOnTop = Boolean((question as any).english_on_top || (question as any).englishOnTop);
 
-      if (!initialQTextEn && initialQText.includes(' ||| ')) {
+      if (initialQText.includes(' ||| ')) {
         const parts = initialQText.split(' ||| ');
         initialQText = parts[0].trim();
-        initialQTextEn = parts[1].trim();
+        if (!initialQTextEn) {
+          initialQTextEn = parts[1].trim();
+        }
       }
 
       if (selectedDiff === 'katamtaman') {
@@ -1590,7 +1592,8 @@ export default function ContentManagementScreen({
 
       // Only send ID if editing an existing server question (not a mock/temporary client ID)
       const isRealServerId = questionModal.isEditing && q.id && Number(q.id) < 100000 && !(q as any).is_local;
-      const qFil = (q.question_text || '').trim();
+      const rawFil = (q.question_text || '').trim();
+      const qFil = rawFil.includes(' ||| ') ? rawFil.split(' ||| ')[0].trim() : rawFil;
       const qEn = (q.question_text_en || '').trim();
       const finalQText = qEn ? `${qFil} ||| ${qEn}` : qFil;
 
