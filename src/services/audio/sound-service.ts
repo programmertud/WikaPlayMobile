@@ -5,6 +5,7 @@ import { bgm, useBgmDuck } from './bgm-service';
 import { LEARNING_CATEGORIES } from '../../data/categories';
 import { ALL_MADALI_AUDIO, ALL_MADALI_WEB_PATHS } from '../../utils/quiz-madali-audio';
 import { COLLECTIBLE_NARRATION_AUDIO, COLLECTIBLE_NARRATION_WEB_PATHS } from '../../data/collectible-audio';
+import { resolveAvatarUrl } from '../../components/UserAvatar';
 
 export { bgm, useBgmDuck };
 
@@ -332,6 +333,18 @@ export function resolveAudioSource(source: string | any): any {
   // Extract base filename if it has path elements (e.g. "https://wikaplay-api.../audio/mga-hayop_aso.mp3" -> "mga-hayop_aso.mp3")
   const rawTrim = source.trim();
 
+  // 0. Teacher-uploaded custom voice recordings & remote storage URLs
+  if (
+    rawTrim.includes('audio_') ||
+    rawTrim.includes('/api/media/') ||
+    rawTrim.includes('/storage/') ||
+    rawTrim.startsWith('file://') ||
+    rawTrim.startsWith('content://')
+  ) {
+    const resolved = resolveAvatarUrl(rawTrim);
+    if (resolved) return resolved;
+  }
+
   // Known corrupted / legacy upload overrides (e.g. question 21 aso voice audio)
   if (rawTrim.includes('izjlYBYRhXGpRLs4UVSc0n1rv5E')) {
     if (Platform.OS === 'web') {
@@ -417,10 +430,16 @@ export function resolveAudioSource(source: string | any): any {
     rawTrim.startsWith('./') ||
     rawTrim.startsWith('http://') ||
     rawTrim.startsWith('https://') ||
+    rawTrim.startsWith('file://') ||
+    rawTrim.startsWith('content://') ||
     rawTrim.startsWith('data:') ||
-    rawTrim.startsWith('blob:')
+    rawTrim.startsWith('blob:') ||
+    rawTrim.startsWith('storage/') ||
+    rawTrim.startsWith('api/media/') ||
+    rawTrim.startsWith('audio/')
   ) {
-    return rawTrim;
+    const resolved = resolveAvatarUrl(rawTrim);
+    return resolved || rawTrim;
   }
 
   return null;
@@ -655,10 +674,18 @@ export async function playSound(
     }
 
     // Native mobile playback using expo-audio
-    // createAudioPlayer requires { uri } object for remote HTTPS URLs — not a bare string
+    // createAudioPlayer requires { uri } object for remote HTTPS URLs and file/content URIs
     let nativeSource = resolvedSource;
-    if (typeof resolvedSource === 'string' && (resolvedSource.startsWith('http://') || resolvedSource.startsWith('https://'))) {
-      nativeSource = { uri: resolvedSource };
+    if (typeof resolvedSource === 'string') {
+      const finalUrl = resolveAvatarUrl(resolvedSource) || resolvedSource;
+      if (
+        finalUrl.startsWith('http://') ||
+        finalUrl.startsWith('https://') ||
+        finalUrl.startsWith('file://') ||
+        finalUrl.startsWith('content://')
+      ) {
+        nativeSource = { uri: finalUrl };
+      }
     }
     player = createAudioPlayer(nativeSource, {
       downloadFirst: true,

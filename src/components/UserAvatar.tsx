@@ -43,16 +43,52 @@ export const resolveAvatarUrl = (avatar?: string | null): string => {
   const baseUrl = ApiClient.getBaseUrl();
   const origin = baseUrl.replace(/\/api\/?$/, '');
 
-  if (trimmed.startsWith('/storage/')) {
-    return `${origin}${trimmed}`;
+  // 1. Preserve local device URIs and data URIs
+  if (
+    trimmed.startsWith('file://') ||
+    trimmed.startsWith('content://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
+  }
+
+  // 2. Rewrite any /storage/ (full URL or relative) to /api/media/ (persistent database storage)
+  if (trimmed.includes('/storage/')) {
+    const afterStorage = trimmed.split('/storage/').pop() || '';
+    return `${origin}/api/media/${afterStorage.replace(/^\/+/, '')}`;
   }
   if (trimmed.startsWith('storage/')) {
+    const afterStorage = trimmed.replace(/^storage\//, '');
+    return `${origin}/api/media/${afterStorage.replace(/^\/+/, '')}`;
+  }
+
+  // 3. Handle /api/media/ relative or full paths
+  if (trimmed.startsWith('/api/media/')) {
+    return `${origin}${trimmed}`;
+  }
+  if (trimmed.startsWith('api/media/')) {
     return `${origin}/${trimmed}`;
   }
-  if (trimmed.includes('localhost/storage/') || trimmed.includes('127.0.0.1/storage/')) {
+
+  // 4. Handle relative images/ or audio/ paths
+  if (trimmed.startsWith('images/') || trimmed.startsWith('audio/')) {
+    return `${origin}/api/media/${trimmed}`;
+  }
+  if (trimmed.startsWith('/images/') || trimmed.startsWith('/audio/')) {
+    return `${origin}/api/media${trimmed}`;
+  }
+
+  // 5. Handle localhost URLs
+  if (trimmed.includes('localhost') || trimmed.includes('127.0.0.1')) {
     const relativePath = trimmed.replace(/^https?:\/\/[^/]+/, '');
+    if (relativePath.includes('storage/')) {
+      const clean = relativePath.split('storage/').pop() || '';
+      return `${origin}/api/media/${clean.replace(/^\/+/, '')}`;
+    }
     return `${origin}${relativePath}`;
   }
+
   return trimmed;
 };
 

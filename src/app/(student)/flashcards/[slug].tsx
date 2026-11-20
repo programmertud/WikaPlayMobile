@@ -141,11 +141,12 @@ export default function FlashcardsViewerScreen() {
                 ? normalizedImg
                 : undefined;
 
+              const normalizedAudio = match.audio_url ? resolveAvatarUrl(match.audio_url) : undefined;
               const isRealRemoteAudio = typeof match.audio_url === 'string' &&
-                (match.audio_url.startsWith('http://') || match.audio_url.startsWith('https://') || match.audio_url.includes('/storage/'));
+                (match.audio_url.startsWith('http://') || match.audio_url.startsWith('https://') || match.audio_url.includes('/storage/') || match.audio_url.includes('/api/media/') || match.audio_url.includes('audio_'));
               const isLocalAudioFile = typeof match.audio_url === 'string' && match.audio_url.startsWith('file://');
-              const validAudio = typeof match.audio_url === 'string' && isRealRemoteAudio && !match.audio_url.startsWith('blob:') && !isLocalAudioFile
-                ? match.audio_url
+              const validAudio = typeof match.audio_url === 'string' && (normalizedAudio || isRealRemoteAudio) && !match.audio_url.startsWith('blob:') && !isLocalAudioFile
+                ? (normalizedAudio || match.audio_url)
                 : undefined;
 
               overridesMap[norm] = {
@@ -185,7 +186,7 @@ export default function FlashcardsViewerScreen() {
                 filipino: f.filipino_name,
                 english: f.english_name || '',
                 imageUri: normalizedFImg && !isUnsplash && !isBlobUrl && !isLocalFile && !isPlaceholder ? normalizedFImg : undefined,
-                audioUri: f.audio_url && !isLocalAudioFile ? f.audio_url : undefined,
+                audioUri: f.audio_url && !isLocalAudioFile ? (resolveAvatarUrl(f.audio_url) || f.audio_url) : undefined,
                 emoji: '⭐',
               };
 

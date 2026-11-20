@@ -141,13 +141,23 @@ class CategoryController extends Controller
 
         $flashcards = $flashcardsQuery->orderBy('sort_order')->get();
 
-        // Convert relative image URLs to full URLs
+        // Convert relative or storage URLs to reliable api/media URLs served from persistent database
         $flashcards = $flashcards->map(function ($flashcard) {
-            if ($flashcard->image_url && ! str_starts_with($flashcard->image_url, 'http')) {
-                $flashcard->image_url = url('storage/'.ltrim($flashcard->image_url, '/'));
+            if ($flashcard->image_url) {
+                if (! str_starts_with($flashcard->image_url, 'http')) {
+                    $cleanImg = ltrim(preg_replace('#^/?(?:storage|api/media)/?#', '', $flashcard->image_url), '/');
+                    $flashcard->image_url = url('api/media/'.$cleanImg);
+                } elseif (str_contains($flashcard->image_url, '/storage/')) {
+                    $flashcard->image_url = str_replace('/storage/', '/api/media/', $flashcard->image_url);
+                }
             }
-            if ($flashcard->audio_url && ! str_starts_with($flashcard->audio_url, 'http')) {
-                $flashcard->audio_url = url('storage/'.ltrim($flashcard->audio_url, '/'));
+            if ($flashcard->audio_url) {
+                if (! str_starts_with($flashcard->audio_url, 'http')) {
+                    $cleanAud = ltrim(preg_replace('#^/?(?:storage|api/media)/?#', '', $flashcard->audio_url), '/');
+                    $flashcard->audio_url = url('api/media/'.$cleanAud);
+                } elseif (str_contains($flashcard->audio_url, '/storage/')) {
+                    $flashcard->audio_url = str_replace('/storage/', '/api/media/', $flashcard->audio_url);
+                }
             }
 
             return $flashcard;
@@ -222,7 +232,7 @@ class CategoryController extends Controller
 
         $questions = $questionsQuery->orderBy('sort_order')->get();
 
-        // Helper: resolve a relative storage path to an absolute URL
+        // Helper: resolve a relative or storage path to an absolute persistent media URL
         $resolveUrl = function (?string $url): string {
             if (empty($url)) return '';
             if (str_contains($url, 'wikaplay.app')) return '';
@@ -231,10 +241,14 @@ class CategoryController extends Controller
                 if (str_contains($url, 'localhost') || str_contains($url, '127.0.0.1')) {
                     $url = preg_replace('#https?://(?:localhost|127\.0\.0\.1)(?::\d+)?/#', 'https://wikaplay-api.onrender.com/', $url);
                 }
+                if (str_contains($url, '/storage/')) {
+                    $url = str_replace('/storage/', '/api/media/', $url);
+                }
                 return $url;
             }
-            // Relative path: /storage/... or storage/...
-            return url('storage/'.ltrim(preg_replace('#^/?storage/?#', '', $url), '/'));
+            // Relative path: /storage/... or storage/... or audio/... or images/...
+            $clean = ltrim(preg_replace('#^/?(?:storage|api/media)/?#', '', $url), '/');
+            return url('api/media/'.$clean);
         };
 
         // 3. Format questions according to difficulty requirements

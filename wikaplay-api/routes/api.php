@@ -27,8 +27,8 @@ Route::prefix('auth')->group(function () {
 Route::get('/sections', [SectionController::class, 'publicIndex']);
 
 // Persistent Media Storage — serves uploaded images and audios for all devices
-Route::get('/media/{path}', [\App\Http\Controllers\Api\MediaController::class, 'serve'])->where('path', '.*');
-Route::get('/storage/{path}', [\App\Http\Controllers\Api\MediaController::class, 'serve'])->where('path', '.*');
+Route::any('/media/{path}', [\App\Http\Controllers\Api\MediaController::class, 'serve'])->where('path', '.*');
+Route::any('/storage/{path}', [\App\Http\Controllers\Api\MediaController::class, 'serve'])->where('path', '.*');
 
 // Public / Cached Content (Accessible to students without requiring heavy auth token, or with token)
 Route::prefix('categories')->group(function () {

@@ -14,19 +14,39 @@ class MediaController extends Controller
      */
     public function serve(Request $request, string $path)
     {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 204, [
+                'Access-Control-Allow-Origin' => '*',
+                'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+                'Access-Control-Allow-Headers' => '*',
+            ]);
+        }
+
         $cleanPath = ltrim($path, '/');
         // Strip common prefixes
-        $cleanPath = preg_replace('#^(?:storage/|api/media/)?#', '', $cleanPath);
+        $cleanPath = preg_replace('#^(?:storage/|api/media/|api/storage/|media/)?#', '', $cleanPath);
+        $baseName = basename($cleanPath);
 
         // 1. Look up in persistent database storage
         $media = MediaFile::where('filename', $cleanPath)
-            ->orWhere('filename', 'like', '%' . basename($cleanPath))
+            ->orWhere('filename', 'audio/' . $baseName)
+            ->orWhere('filename', 'images/' . $baseName)
+            ->orWhere('filename', 'like', '%' . $baseName)
             ->first();
 
         if ($media && ! empty($media->data)) {
             $binary = base64_decode($media->data);
             $mimeType = $media->mime_type ?: 'application/octet-stream';
             $size = strlen($binary);
+
+            if ($request->isMethod('HEAD')) {
+                return response('', 200, [
+                    'Content-Type' => $mimeType,
+                    'Content-Length' => $size,
+                    'Access-Control-Allow-Origin' => '*',
+                    'Accept-Ranges' => 'bytes',
+                ]);
+            }
 
             return response($binary, 200, [
                 'Content-Type' => $mimeType,

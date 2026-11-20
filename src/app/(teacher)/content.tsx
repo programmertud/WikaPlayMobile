@@ -4120,11 +4120,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 4,
     position: 'relative',
+    backgroundColor: '#F1F5F9',
   },
   previewImage: {
     width: '100%',
     height: 140,
     borderRadius: Radius.md,
+    backgroundColor: '#F1F5F9',
   },
   changeMediaBtn: {
     position: 'absolute',

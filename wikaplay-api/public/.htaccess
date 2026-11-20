@@ -18,6 +18,12 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
+    # Explicitly route /storage/* and /media/* requests that do not exist physically on disk to index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^storage/(.*)$ index.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^media/(.*)$ index.php [L]
+
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f

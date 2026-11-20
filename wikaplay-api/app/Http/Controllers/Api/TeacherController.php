@@ -1265,7 +1265,7 @@ class TeacherController extends Controller
             if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                 $baseUrl = 'https://wikaplay-api.onrender.com';
             }
-            $localUrl = rtrim($baseUrl, '/').'/storage/'.$filename;
+            $localUrl = rtrim($baseUrl, '/').'/api/media/'.$filename;
 
             $finalUrl = $supabaseUrl ?: $localUrl;
 
@@ -1336,7 +1336,7 @@ class TeacherController extends Controller
             if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                 $baseUrl = 'https://wikaplay-api.onrender.com';
             }
-            $localUrl = rtrim($baseUrl, '/').'/storage/'.$filename;
+            $localUrl = rtrim($baseUrl, '/').'/api/media/'.$filename;
 
             $finalUrl = $supabaseUrl ?: $localUrl;
 
@@ -1381,7 +1381,7 @@ class TeacherController extends Controller
                 if (empty($baseUrl) || str_contains($baseUrl, 'localhost')) {
                     $baseUrl = 'https://wikaplay-api.onrender.com';
                 }
-                $localUrl = rtrim($baseUrl, '/').'/storage/'.$filename;
+                $localUrl = rtrim($baseUrl, '/').'/api/media/'.$filename;
 
                 $finalUrl = $supabaseUrl ?: $localUrl;
 
