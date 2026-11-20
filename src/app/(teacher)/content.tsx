@@ -2829,7 +2829,7 @@ export default function ContentManagementScreen({
                     </TouchableOpacity>
                   )}
 
-                  <Text style={[styles.inputLabel, { marginTop: 4 }]}>English Translation (Optional):</Text>
+                  <Text style={[styles.inputLabel, { marginTop: 4 }]}>English Translation:</Text>
                   <TextInput
                     style={[styles.modalInput, { fontStyle: 'italic' }]}
                     placeholder="e.g. Where is the eagle? or Where is the dog?"
@@ -2841,74 +2841,6 @@ export default function ContentManagementScreen({
                       }))
                     }
                   />
-
-                  {/* Display Order Selection */}
-                  <Text style={[styles.inputLabel, { marginTop: 2, fontSize: 11 }]}>Display Order (Student View):</Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                    <TouchableOpacity
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        paddingHorizontal: 10,
-                        borderRadius: Radius.md,
-                        borderWidth: 1.5,
-                        borderColor: !questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
-                        backgroundColor: !questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
-                        alignItems: 'center',
-                      }}
-                      onPress={() =>
-                        setQuestionModal((prev) => ({
-                          ...prev,
-                          question: { ...prev.question, english_on_top: false },
-                        }))
-                      }
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: !questionModal.question.english_on_top ? 'bold' : 'normal',
-                          color: !questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
-                        }}
-                      >
-                        🇵🇭 Tagalog sa Itaas
-                      </Text>
-                      <Text style={{ fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginTop: 2 }}>
-                        English sa Ibaba
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        paddingHorizontal: 10,
-                        borderRadius: Radius.md,
-                        borderWidth: 1.5,
-                        borderColor: questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
-                        backgroundColor: questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
-                        alignItems: 'center',
-                      }}
-                      onPress={() =>
-                        setQuestionModal((prev) => ({
-                          ...prev,
-                          question: { ...prev.question, english_on_top: true },
-                        }))
-                      }
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: questionModal.question.english_on_top ? 'bold' : 'normal',
-                          color: questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
-                        }}
-                      >
-                        🇬🇧 English sa Itaas
-                      </Text>
-                      <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
-                        Tagalog sa Ibaba
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
 
                   <Text style={styles.inputLabel}>Target Word (Filipino):</Text>
                   <TextInput
@@ -3260,7 +3192,7 @@ export default function ContentManagementScreen({
                       }
                     />
 
-                    <Text style={[styles.inputLabel, { marginTop: 6 }]}>English Translation (Optional):</Text>
+                    <Text style={[styles.inputLabel, { marginTop: 6 }]}>English Translation:</Text>
                     <TextInput
                       style={[styles.modalInput, { fontStyle: 'italic' }]}
                       placeholder="Arrange the letters to form the correct word."
@@ -3272,74 +3204,6 @@ export default function ContentManagementScreen({
                         }))
                       }
                     />
-
-                    {/* Display Order Selection */}
-                    <Text style={[styles.inputLabel, { marginTop: 2, fontSize: 11 }]}>Display Order (Student View):</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          paddingVertical: 8,
-                          paddingHorizontal: 10,
-                          borderRadius: Radius.md,
-                          borderWidth: 1.5,
-                          borderColor: !questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
-                          backgroundColor: !questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
-                          alignItems: 'center',
-                        }}
-                        onPress={() =>
-                          setQuestionModal((prev) => ({
-                            ...prev,
-                            question: { ...prev.question, english_on_top: false },
-                          }))
-                        }
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: !questionModal.question.english_on_top ? 'bold' : 'normal',
-                            color: !questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
-                          }}
-                        >
-                          🇵🇭 Tagalog sa Itaas
-                        </Text>
-                        <Text style={{ fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginTop: 2 }}>
-                          English sa Ibaba
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          paddingVertical: 8,
-                          paddingHorizontal: 10,
-                          borderRadius: Radius.md,
-                          borderWidth: 1.5,
-                          borderColor: questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
-                          backgroundColor: questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
-                          alignItems: 'center',
-                        }}
-                        onPress={() =>
-                          setQuestionModal((prev) => ({
-                            ...prev,
-                            question: { ...prev.question, english_on_top: true },
-                          }))
-                        }
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: questionModal.question.english_on_top ? 'bold' : 'normal',
-                            color: questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
-                          }}
-                        >
-                          🇬🇧 English sa Itaas
-                        </Text>
-                        <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
-                          Tagalog sa Ibaba
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
 
                     {/* Voice Audio for Mahirap */}
                     <Text style={[styles.inputLabel, { marginTop: 12 }]}>🔊 Voice Audio (Optional):</Text>
@@ -3409,7 +3273,7 @@ export default function ContentManagementScreen({
                       }
                     />
 
-                    <Text style={[styles.inputLabel, { marginTop: 10 }]}>English Translation (Optional):</Text>
+                    <Text style={[styles.inputLabel, { marginTop: 10 }]}>English Translation:</Text>
                     <TextInput
                       style={[styles.modalInput, { fontStyle: 'italic' }]}
                       placeholder='e.g. What is the English word for "dyirap"?'
@@ -3421,74 +3285,6 @@ export default function ContentManagementScreen({
                         }))
                       }
                     />
-
-                    {/* Display Order Selection */}
-                    <Text style={[styles.inputLabel, { marginTop: 2, fontSize: 11 }]}>Display Order (Student View):</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          paddingVertical: 8,
-                          paddingHorizontal: 10,
-                          borderRadius: Radius.md,
-                          borderWidth: 1.5,
-                          borderColor: !questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
-                          backgroundColor: !questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
-                          alignItems: 'center',
-                        }}
-                        onPress={() =>
-                          setQuestionModal((prev) => ({
-                            ...prev,
-                            question: { ...prev.question, english_on_top: false },
-                          }))
-                        }
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: !questionModal.question.english_on_top ? 'bold' : 'normal',
-                            color: !questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
-                          }}
-                        >
-                          🇵🇭 Tagalog sa Itaas
-                        </Text>
-                        <Text style={{ fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginTop: 2 }}>
-                          English sa Ibaba
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          paddingVertical: 8,
-                          paddingHorizontal: 10,
-                          borderRadius: Radius.md,
-                          borderWidth: 1.5,
-                          borderColor: questionModal.question.english_on_top ? Colors.teacherPurple : '#E2E8F0',
-                          backgroundColor: questionModal.question.english_on_top ? '#F5F3FF' : Colors.white,
-                          alignItems: 'center',
-                        }}
-                        onPress={() =>
-                          setQuestionModal((prev) => ({
-                            ...prev,
-                            question: { ...prev.question, english_on_top: true },
-                          }))
-                        }
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: questionModal.question.english_on_top ? 'bold' : 'normal',
-                            color: questionModal.question.english_on_top ? Colors.teacherPurple : Colors.textMuted,
-                          }}
-                        >
-                          🇬🇧 English sa Itaas
-                        </Text>
-                        <Text style={{ fontSize: 10, color: Colors.textMuted, marginTop: 2 }}>
-                          Tagalog sa Ibaba
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
 
                     {/* Picture preview & replace (especially for "Ano ang nasa larawan?" questions) */}
                     <Text style={[styles.inputLabel, { marginTop: 10 }]}>
