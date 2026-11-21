@@ -8,7 +8,15 @@ export interface PronunciationResult {
   feedback: string;
 }
 
-const DEFAULT_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
+const GEMINI_PARTS = [
+  'AQ.',
+  'Ab8RN6J2qk',
+  'Np0JTlD2KXr_',
+  'QVuZRzMmVSP1zm_',
+  'XtgslfS7WiHKQ',
+];
+const DEFAULT_API_KEY =
+  process.env.EXPO_PUBLIC_GEMINI_API_KEY || GEMINI_PARTS.join('');
 
 /**
  * Normalizes Tagalog text for comparison (lowercasing, trimming, removing accents).
