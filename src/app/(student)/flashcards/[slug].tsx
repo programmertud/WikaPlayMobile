@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   StyleSheet,
@@ -20,6 +20,7 @@ import { AudioButton } from '../../../components/AudioButton';
 import { ItemVisual } from '../../../components/ItemVisual';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { PressableScale } from '../../../components/PressableScale';
+import { PronunciationAssessmentBar } from '../../../components/PronunciationAssessmentBar';
 import { resolveAvatarUrl } from '../../../components/UserAvatar';
 import { getCategoryBySlug, hydrateCategoryOverrides, syncCategoryFlashcards } from '../../../data/categories';
 import { useAuth } from '../../../hooks/use-auth';
@@ -287,17 +288,45 @@ export default function FlashcardsViewerScreen() {
     });
   };
 
+  const [passedIndices, setPassedIndices] = useState<Set<number>>(new Set());
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isCurrentCardPassed = passedIndices.has(currentIndex);
+
+  const handlePronunciationSuccess = () => {
+    setPassedIndices((prev) => {
+      const nextSet = new Set(prev);
+      nextSet.add(currentIndex);
+      return nextSet;
+    });
+
+    if (!isLast) {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        transitionTo(currentIndex + 1, 'left');
+      }, 2200);
+    }
+  };
+
   const handlePrev = () => {
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
     if (!isFirst) {
       transitionTo(currentIndex - 1, 'right');
     }
   };
 
   const handleNext = () => {
-    if (!isLast) {
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+    if (!isLast && isCurrentCardPassed) {
       transitionTo(currentIndex + 1, 'left');
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+    };
+  }, []);
 
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     opacity: cardOpacity.value,
@@ -315,7 +344,7 @@ export default function FlashcardsViewerScreen() {
         {/* Main Flashcard with Slide/Flip Animation */}
         <Animated.View style={[styles.flashcard, Shadows.card, cardAnimatedStyle]}>
           {/* Card Visual / Illustration */}
-          <ItemVisual item={currentItem} size={CARD_SIZE * 0.7} style={styles.visualContainer} />
+          <ItemVisual item={currentItem} size={CARD_SIZE * 0.52} style={styles.visualContainer} />
 
           {/* Filipino Name */}
           <Text style={[styles.filipinoName, { color: category.color || Colors.skyBlueDark }]}>
@@ -330,7 +359,7 @@ export default function FlashcardsViewerScreen() {
           {/* Audio Play Button — supports both URI strings and bundled require assets */}
           {(currentItem.audioUri || currentItem.audio) ? (
             <View style={styles.audioContainer}>
-              <AudioButton audioUrl={currentItem.audioUri ?? currentItem.audio} size={54} />
+              <AudioButton audioUrl={currentItem.audioUri ?? currentItem.audio} size={48} />
             </View>
           ) : (
             <PressableScale
@@ -343,6 +372,16 @@ export default function FlashcardsViewerScreen() {
               </Text>
             </PressableScale>
           )}
+
+          {/* Pronunciation Assessment Module */}
+          <PronunciationAssessmentBar
+            expectedWord={currentItem.filipino}
+            categoryColor={category.color}
+            categoryName={category.name}
+            isPassed={isCurrentCardPassed}
+            onSuccess={handlePronunciationSuccess}
+            onReplayAudio={() => playVocabularyItem(currentItem)}
+          />
 
           {/* Counter Badge */}
           <View style={styles.counterBadge}>
@@ -392,26 +431,26 @@ export default function FlashcardsViewerScreen() {
 
           <PressableScale
             onPress={handleNext}
-            disabled={isLast}
+            disabled={!isCurrentCardPassed || isLast}
             style={[
               styles.navButton,
               styles.nextButton,
-              isLast && styles.disabledButton,
+              (!isCurrentCardPassed || isLast) && styles.disabledButton,
               Shadows.colored(Colors.skyBlueDark, 0.2),
             ]}
           >
             <LinearGradient
-              colors={isLast ? ['#CBD5E1', '#94A3B8'] : Gradients.sky}
+              colors={(!isCurrentCardPassed || isLast) ? ['#CBD5E1', '#94A3B8'] : Gradients.sky}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <Text style={[styles.nextButtonText, isLast && styles.disabledText]}>
-              Susunod
+            <Text style={[styles.nextButtonText, (!isCurrentCardPassed || isLast) && styles.disabledText]}>
+              {isCurrentCardPassed ? 'Susunod' : 'Sabihin muna'}
             </Text>
             <Ionicons
-              name="chevron-forward"
-              size={22}
+              name={isCurrentCardPassed ? 'chevron-forward' : 'lock-closed'}
+              size={isCurrentCardPassed ? 22 : 18}
               color={Colors.white}
             />
           </PressableScale>
@@ -437,20 +476,20 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.06)',
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
     position: 'relative',
   },
   visualContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   filipinoName: {
-    fontSize: 32,
+    fontSize: 30,
     fontFamily: Typography.family.display,
     fontWeight: Typography.weights.bold,
     textAlign: 'center',
     textTransform: 'lowercase',
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: 0.5,
   },
   englishName: {
@@ -458,10 +497,10 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weights.semibold,
     color: Colors.textLight,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   audioContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   audioPill: {
     flexDirection: 'row',
