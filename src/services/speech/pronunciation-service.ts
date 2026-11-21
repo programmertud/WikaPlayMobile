@@ -89,7 +89,10 @@ Task:
 2. Determine if the student spoke and pronounced the expected Tagalog word "${expectedWord}".
 - Be warm and tolerant of typical Kindergarten speech characteristics (e.g. slight articulation differences, e/i or o/u vowel shifts, child pitch).
 - Strict Rule: Do NOT mark as correct if the student spoke a completely different word, made unrelated sounds, or remained silent. Do NOT mark correct merely because sound or noise was detected.
-3. Respond ONLY in valid JSON with this exact schema:
+3. Feedback rules:
+- If correct: Praise the student warmly in Tagalog (e.g. "Tama! Magaling ang iyong pagbigkas!").
+- If incorrect: Encourage the student in Tagalog to try pronouncing the word "${expectedWord}" again (e.g. "Subukan nating muli! Bigkasin ang '${expectedWord}'. Kaya mo 'yan!"). CRITICAL: ALWAYS refer ONLY to the expected word "${expectedWord}". Never mention any other vocabulary word.
+4. Respond ONLY in valid JSON with this exact schema:
 {
   "is_correct": boolean,
   "recognized_text": "the word or phrase recognized from student speech",
@@ -161,6 +164,14 @@ Task:
       parsed.feedback = 'Tama! Magaling!';
     } else if (normRecognized && normRecognized.includes(normExpected)) {
       parsed.is_correct = true;
+    }
+
+    // Guarantee that wrong answer feedback ALWAYS references the exact expected word
+    if (!parsed.is_correct) {
+      const capExpected = expectedWord.charAt(0).toUpperCase() + expectedWord.slice(1);
+      if (!parsed.feedback || !parsed.feedback.toLowerCase().includes(expectedWord.toLowerCase())) {
+        parsed.feedback = `Magaling ang iyong pagsubok! Subukan nating bigkasin ang '${capExpected}'. Kaya mo 'yan!`;
+      }
     }
 
     return parsed;

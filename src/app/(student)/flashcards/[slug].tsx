@@ -278,7 +278,20 @@ export default function FlashcardsViewerScreen() {
   const cardOpacity = useSharedValue(1);
   const cardTranslateX = useSharedValue(0);
 
+  const [passedIndices, setPassedIndices] = useState<Set<number>>(new Set());
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentIndexRef = useRef(currentIndex);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
   const transitionTo = (newIndex: number, direction: 'left' | 'right') => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    currentIndexRef.current = newIndex;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const exitX = direction === 'left' ? -60 : 60;
     const enterX = direction === 'left' ? 60 : -60;
@@ -292,37 +305,50 @@ export default function FlashcardsViewerScreen() {
     });
   };
 
-  const [passedIndices, setPassedIndices] = useState<Set<number>>(new Set());
-  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const isCurrentCardPassed = passedIndices.has(currentIndex);
 
   const handlePronunciationSuccess = () => {
+    const activeIndex = currentIndexRef.current;
     setPassedIndices((prev) => {
       const nextSet = new Set(prev);
-      nextSet.add(currentIndex);
+      nextSet.add(activeIndex);
       return nextSet;
     });
 
-    if (!isLast) {
-      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+
+    if (activeIndex < items.length - 1) {
       autoAdvanceTimerRef.current = setTimeout(() => {
-        transitionTo(currentIndex + 1, 'left');
+        const targetNext = currentIndexRef.current + 1;
+        if (targetNext < items.length) {
+          transitionTo(targetNext, 'left');
+        }
       }, 2400);
     }
   };
 
   const handlePrev = () => {
-    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
-    if (!isFirst) {
-      transitionTo(currentIndex - 1, 'right');
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    const current = currentIndexRef.current;
+    if (current > 0) {
+      transitionTo(current - 1, 'right');
     }
   };
 
   const handleNext = () => {
-    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
-    if (!isLast && isCurrentCardPassed) {
-      transitionTo(currentIndex + 1, 'left');
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    const current = currentIndexRef.current;
+    if (current < items.length - 1 && passedIndices.has(current)) {
+      transitionTo(current + 1, 'left');
     }
   };
 
@@ -379,6 +405,7 @@ export default function FlashcardsViewerScreen() {
 
           {/* Pronunciation Assessment Module */}
           <PronunciationAssessmentBar
+            key={`assessment_${currentItem.id || currentIndex}_${currentIndex}`}
             expectedWord={currentItem.filipino}
             categoryColor={category.color}
             categoryName={category.name}

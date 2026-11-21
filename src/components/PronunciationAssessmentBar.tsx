@@ -52,6 +52,20 @@ export function PronunciationAssessmentBar({
   const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const expectedWordRef = useRef(expectedWord);
+  expectedWordRef.current = expectedWord;
+
+  const categoryNameRef = useRef(categoryName);
+  categoryNameRef.current = categoryName;
+
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+
+  const onReplayAudioRef = useRef(onReplayAudio);
+  onReplayAudioRef.current = onReplayAudio;
+
+  const stopRecordingRef = useRef<() => Promise<void>>(async () => {});
+
   // Pulse animation for recording and mic idle
   const pulseScale = useSharedValue(1);
 
@@ -88,6 +102,60 @@ export function PronunciationAssessmentBar({
     };
   }, []);
 
+  const stopRecording = useCallback(async () => {
+    try {
+      if (autoStopTimerRef.current) {
+        clearTimeout(autoStopTimerRef.current);
+        autoStopTimerRef.current = null;
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+
+      await recorder.stop();
+      setIsRecording(false);
+
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      bgm.resumeAfterRecording();
+
+      const uri = recorder.uri;
+      if (!uri) {
+        Alert.alert('Error', 'Walang narinig na boses. Pakisubukan muli.');
+        return;
+      }
+
+      // Analyze pronunciation via AI
+      setIsAnalyzing(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+      const targetWord = expectedWordRef.current;
+      const targetCategory = categoryNameRef.current;
+
+      const evalResult = await evaluatePronunciation(uri, targetWord, targetCategory);
+      setIsAnalyzing(false);
+      setResult(evalResult);
+
+      if (evalResult.is_correct) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+        playFeedbackSound('tama').catch(() => {});
+        onSuccessRef.current();
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+        playFeedbackSound('mali').catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('stopRecording error:', err);
+      setIsRecording(false);
+      setIsAnalyzing(false);
+      bgm.resumeAfterRecording();
+    }
+  }, [recorder]);
+
+  stopRecordingRef.current = stopRecording;
+
   const startRecording = useCallback(async () => {
     try {
       const perm = await requestRecordingPermissionsAsync();
@@ -123,7 +191,7 @@ export function PronunciationAssessmentBar({
 
       // Auto-stop after 3.2 seconds (ideal for Kindergarten 1-word speech)
       autoStopTimerRef.current = setTimeout(() => {
-        stopRecording();
+        stopRecordingRef.current();
       }, 3200);
     } catch (err: any) {
       console.error('startRecording error:', err);
@@ -131,55 +199,6 @@ export function PronunciationAssessmentBar({
       Alert.alert('Error', 'Hindi makapag-record. Subukan muli.');
     }
   }, [recorder]);
-
-  const stopRecording = useCallback(async () => {
-    try {
-      if (autoStopTimerRef.current) {
-        clearTimeout(autoStopTimerRef.current);
-        autoStopTimerRef.current = null;
-      }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-
-      await recorder.stop();
-      setIsRecording(false);
-
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      bgm.resumeAfterRecording();
-
-      const uri = recorder.uri;
-      if (!uri) {
-        Alert.alert('Error', 'Walang narinig na boses. Pakisubukan muli.');
-        return;
-      }
-
-      // Analyze pronunciation via AI
-      setIsAnalyzing(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-
-      const evalResult = await evaluatePronunciation(uri, expectedWord, categoryName);
-      setIsAnalyzing(false);
-      setResult(evalResult);
-
-      if (evalResult.is_correct) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-        playFeedbackSound('tama').catch(() => {});
-        onSuccess();
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-        playFeedbackSound('mali').catch(() => {});
-      }
-    } catch (err: any) {
-      console.error('stopRecording error:', err);
-      setIsRecording(false);
-      setIsAnalyzing(false);
-      bgm.resumeAfterRecording();
-    }
-  }, [recorder, expectedWord, categoryName, onSuccess]);
 
   return (
     <View style={styles.container}>
@@ -222,7 +241,7 @@ export function PronunciationAssessmentBar({
               style={styles.listenAgainBtn}
               onPress={async () => {
                 await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-                onReplayAudio();
+                onReplayAudioRef.current();
               }}
               activeOpacity={0.8}
             >
