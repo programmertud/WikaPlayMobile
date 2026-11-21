@@ -146,7 +146,7 @@ export function PronunciationAssessmentBar({
       await recorder.stop();
       setIsRecording(false);
 
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       bgm.resumeAfterRecording();
 
       const uri = recorder.uri;
@@ -165,11 +165,13 @@ export function PronunciationAssessmentBar({
 
       if (evalResult.is_correct) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         playFeedbackSound('tama').catch(() => {});
         onSuccess();
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-        playFeedbackSound('oopsmali').catch(() => {});
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+        playFeedbackSound('mali').catch(() => {});
       }
     } catch (err: any) {
       console.error('stopRecording error:', err);
@@ -218,7 +220,10 @@ export function PronunciationAssessmentBar({
           <View style={styles.retryActions}>
             <TouchableOpacity
               style={styles.listenAgainBtn}
-              onPress={onReplayAudio}
+              onPress={async () => {
+                await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+                onReplayAudio();
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="volume-high" size={18} color="#EA580C" />

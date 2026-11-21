@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { setAudioModeAsync } from 'expo-audio';
 import * as Haptics from '@/utils/haptics';
 
 import { AudioButton } from '../../../components/AudioButton';
@@ -261,9 +262,12 @@ export default function FlashcardsViewerScreen() {
   useEffect(() => {
     if (!currentItem) return;
     stopCurrentSound();
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      try {
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      } catch {}
       playVocabularyItem(currentItem).catch(() => {});
-    }, 400);
+    }, 450);
     return () => {
       clearTimeout(timer);
       stopCurrentSound();
@@ -304,7 +308,7 @@ export default function FlashcardsViewerScreen() {
       if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
       autoAdvanceTimerRef.current = setTimeout(() => {
         transitionTo(currentIndex + 1, 'left');
-      }, 2200);
+      }, 2400);
     }
   };
 
